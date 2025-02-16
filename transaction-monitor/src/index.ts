@@ -376,15 +376,7 @@ async function processPhoneServerTransactions() {
 
   logAndPersistLogUpdate("Getting phone sessions")
 
-  const allPhoneSessions = await getAllPhoneSessions()
-
-  // TODO: Remove this block
-  const phoneSessions = []
-  for (const session of allPhoneSessions) {
-    if (session.sessionStatus !== sessionStatusEnum.NEEDS_PAYMENT) {
-      phoneSessions.push(session)
-    }
-  }
+  const phoneSessions = await getAllPhoneSessions()
 
   logAndPersistLogUpdate('phoneSessions.length', phoneSessions.length)
 
