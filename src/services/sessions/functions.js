@@ -26,11 +26,11 @@ import {
 } from "../../utils/onfido.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 
-async function handleIdvSessionCreation(res, session, logger) {
+async function handleIdvSessionCreation(session, logger) {
   if (session.idvProvider === "veriff") {
     const veriffSession = await createVeriffSession();
     if (!veriffSession) {
-      return res.status(500).json({ error: "Error creating Veriff session" });
+      throw new Error("Error creating Veriff session");
     }
 
     session.sessionId = veriffSession.verification.id;
@@ -42,14 +42,14 @@ async function handleIdvSessionCreation(res, session, logger) {
       "Created Veriff session"
     );
 
-    return res.status(200).json({
+    return {
       url: veriffSession.verification.url,
       id: veriffSession.verification.id,
-    });
+    };
   } else if (session.idvProvider === "idenfy") {
     const tokenData = await createIdenfyToken(session.sigDigest);
     if (!tokenData) {
-      return res.status(500).json({ error: "Error creating iDenfy token" });
+      throw new Error("Error creating iDenfy token");
     }
 
     session.scanRef = tokenData.scanRef;
@@ -61,14 +61,14 @@ async function handleIdvSessionCreation(res, session, logger) {
       "Created iDenfy session"
     );
 
-    return res.status(200).json({
+    return {
       url: `https://ivs.idenfy.com/api/v2/redirect?authToken=${tokenData.authToken}`,
       scanRef: tokenData.scanRef,
-    });
+    };
   } else if (session.idvProvider === "onfido") {
     const applicant = await createOnfidoApplicant();
     if (!applicant) {
-      return res.status(500).json({ error: "Error creating Onfido applicant" });
+      throw new Error("Error creating Onfido applicant");
     }
 
     session.applicant_id = applicant.id;
@@ -80,26 +80,26 @@ async function handleIdvSessionCreation(res, session, logger) {
 
     const sdkTokenData = await createOnfidoSdkToken(applicant.id);
     if (!sdkTokenData) {
-      return res.status(500).json({ error: "Error creating Onfido SDK token" });
+      throw new Error("Error creating Onfido SDK token");
     }
 
     session.onfido_sdk_token = sdkTokenData.token;
     await session.save();
 
-    return res.status(200).json({
+    return {
       applicant_id: applicant.id,
       sdk_token: sdkTokenData.token,
-    });
+    };
   } else if (session.idvProvider === "facetec") {
     session.num_facetec_liveness_checks = 0;
 
     await session.save();
 
-    return res.status(200).json({
+    return {
       message: 'todo: integrate facetec in backend',
-    });
+    };
   } else {
-    return res.status(500).json({ error: "Invalid idvProvider" });
+    throw new Error("Invalid idvProvider");
   }
 }
 
