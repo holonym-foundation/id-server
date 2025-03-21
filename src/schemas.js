@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { OrderSchema } from "./schemas/orders.js";
 dotenv.config();
 
 const { Schema } = mongoose;
@@ -496,4 +497,5 @@ export {
   amlChecksSessionSchema,
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,
+  OrderSchema,
 };

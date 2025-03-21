@@ -23,6 +23,7 @@ import {
   amlChecksSessionSchema,
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,
+  OrderSchema,
 } from "./schemas.js";
 import dotenv from "dotenv";
 dotenv.config();
@@ -235,6 +236,8 @@ async function initializeMongoDb() {
   );
   await initializeDailyVerificationCount(DailyVerificationCount);
   await initializeDailyVerificationDeletions(DailyVerificationDeletions);
+
+  const Order = mongoose.model("Order", OrderSchema);
   return {
     UserVerifications,
     IDVSessions,
@@ -251,6 +254,7 @@ async function initializeMongoDb() {
     AMLChecksSession,
     GalxeCampaignZeroUser,
     SilkPeanutCampaignsMetadata,
+    Order,
   };
 }
 
@@ -270,7 +274,8 @@ let UserVerifications,
   VerificationCollisionMetadata,
   AMLChecksSession,
   GalxeCampaignZeroUser,
-  SilkPeanutCampaignsMetadata;
+  SilkPeanutCampaignsMetadata,
+  Order;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -289,6 +294,7 @@ initializeMongoDb().then((result) => {
     AMLChecksSession = result.AMLChecksSession;
     GalxeCampaignZeroUser = result.GalxeCampaignZeroUser;
     SilkPeanutCampaignsMetadata = result.SilkPeanutCampaignsMetadata;
+    Order = result.Order;
   } else {
     logger.error("MongoDB initialization failed");
   }
@@ -317,5 +323,6 @@ export {
   AMLChecksSession,
   GalxeCampaignZeroUser,
   SilkPeanutCampaignsMetadata,
+  Order,
   zokProvider,
 };
