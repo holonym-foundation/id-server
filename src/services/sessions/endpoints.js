@@ -93,6 +93,18 @@ const createOnfidoCheckLogger = logger.child({
 // - Gets a session or array of sessions.
 // - Helpful for frontend to check whether a session has been paid for
 
+// POST /sessions
+// - Creates a session
+// - body: { sigDigest, idvProvider }
+
+// POST /sessions/:_id/idv-session
+// - Allows a user to create an IDV session by associating a transaction with an id-server session
+
+// GET /sessions?id=<id>&sigDigest=<sigDigest>
+// - id or sigDigest or both must be provided.
+// - Gets a session or array of sessions.
+// - Helpful for frontend to check whether a session has been paid for
+
 /**
  * Creates a session.
  */
@@ -143,6 +155,83 @@ async function postSession(req, res) {
       ipCountry: ipCountry,
     });
     await session.save();
+
+    return res.status(201).json({ session });
+  } catch (err) {
+    console.log("POST /sessions: Error encountered", err.message);
+    return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
+/**
+ * Creates a session V2.
+ * allows Skip Payment
+ */
+async function postSessionV2(req, res) {
+  try {
+    const sigDigest = req.body.sigDigest;
+    const idvProvider = req.body.idvProvider;
+    const skipPayment = req.body.skipPayment;
+    if (!sigDigest) {
+      return res.status(400).json({ error: "sigDigest is required" });
+    }
+    if (!idvProvider || ["veriff", "onfido", "facetec"].indexOf(idvProvider) === -1) {
+      return res
+        .status(400)
+        .json({ error: "idvProvider must be one of 'veriff' or 'onfido'" });
+    }
+
+    let domain = null;
+    if (req.body.domain === "app.holonym.id") {
+      domain = "app.holonym.id";
+    } else if (req.body.domain === "silksecure.net") {
+      domain = "silksecure.net";
+    }
+
+    let silkDiffWallet = null;
+    if (req.body.silkDiffWallet === "silk") {
+      silkDiffWallet = "silk";
+    } else if (req.body.silkDiffWallet === "diff-wallet") {
+      silkDiffWallet = "diff-wallet";
+    }
+
+    // Get country from IP address
+    const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    const resp = await axios.get(
+      `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
+    );
+    const ipCountry = resp?.data?.country;
+
+    if (!ipCountry && process.env.NODE_ENV != 'development') {
+      return res.status(500).json({ error: "Could not determine country from IP" });
+    }
+
+    const session = new Session({
+      sigDigest: sigDigest,
+      idvProvider: idvProvider,
+      status: skipPayment ? sessionStatusEnum.IN_PROGRESS : sessionStatusEnum.NEEDS_PAYMENT,
+      frontendDomain: domain,
+      silkDiffWallet,
+      ipCountry: ipCountry,
+    });
+
+    if (skipPayment) {
+      // session is only saved if idvSessionCreation is successful
+      const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+
+      if (idvSession.id && idvSession.url) {
+        session.sessionId = idvSession.id;
+        session.veriffUrl = idvSession.url;
+      }
+
+      if (idvSession.applicant_id && idvSession.sdk_token) {
+        session.applicant_id = idvSession.applicant_id;
+        session.onfido_sdk_token = idvSession.sdk_token;
+      }
+
+    } else {
+      await session.save();
+    }
 
     return res.status(201).json({ session });
   } catch (err) {
@@ -296,7 +385,8 @@ async function createIdvSession(req, res) {
     session.chainId = chainId;
     session.txHash = txHash;
 
-    return handleIdvSessionCreation(res, session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    return res.status(201).json(idvSession);
   } catch (err) {
     if (err.response) {
       createIdvSessionLogger.error(
@@ -402,7 +492,8 @@ async function createIdvSessionV2(req, res) {
     // of this function executes successfully.
     session.status = sessionStatusEnum.IN_PROGRESS;
 
-    return handleIdvSessionCreation(res, session, createIdvSessionV2Logger);
+    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    return res.status(201).json(idvSession);
   } catch (err) {
     if (err.response) {
       createIdvSessionV2Logger.error(
@@ -513,7 +604,8 @@ async function createIdvSessionV3(req, res) {
     session.chainId = chainId;
     session.txHash = txHash;
 
-    return handleIdvSessionCreation(res, session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    return res.status(201).json(idvSession);
   } catch (err) {
     console.log("err.message", err.message);
     if (err.response) {
@@ -560,7 +652,7 @@ async function setIdvProvider(req, res) {
 
     // check the session status of current idvProvider,
     // only proceed with if it is "VERIFICATION_FAILED"
-    if(session.status !== "VERIFICATION_FAILED") {
+    if (session.status !== "VERIFICATION_FAILED") {
       return res.status(400).json({ error: "Another IDV can be set only when current verification has failed" });
     }
 
@@ -571,7 +663,7 @@ async function setIdvProvider(req, res) {
     }
 
     // if setting to onfido, session.onfido_sdk_token and session.applicant_id must be undefined
-    if(idvProvider === "onfido" && session.onfido_sdk_token && session.applicant_id) {
+    if (idvProvider === "onfido" && session.onfido_sdk_token && session.applicant_id) {
       return res.status(400).json({ error: "Onfido IDV session has already been tried" });
     }
 
@@ -583,8 +675,8 @@ async function setIdvProvider(req, res) {
     // set session.status to IN_PROGRESS for the "new" session with the requested provider
     session.status = "IN_PROGRESS";
 
-    return handleIdvSessionCreation(res, session, createIdvSessionLogger);
-
+    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    return res.status(201).json(idvSession);
   } catch (err) {
     if (err.response) {
       createIdvSessionLogger.error(
@@ -882,6 +974,7 @@ async function getSessions(req, res) {
 
 export {
   postSession,
+  postSessionV2,
   createPayPalOrder,
   createIdvSession,
   createIdvSessionV2,
