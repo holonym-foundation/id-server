@@ -197,6 +197,87 @@ async function getCredentialsV3(req, res) {
     // as facetec is used for deduplication
     // there is no need for saveCollisionMetadata logic
 
+    // search for duplicates first /3d-db/search
+    try {
+      const faceDbSearchResponse = await axios.post(
+        `${facetecServerBaseURL}/3d-db/search`,
+        {
+          externalDatabaseRefID: session.externalDatabaseRefID,
+          minMatchLevel: 15,
+          groupName: groupName,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Device-Key": req.headers["x-device-key"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
+            "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
+          },
+        }
+      );
+      console.log("faceDbSearchResponse.data", faceDbSearchResponse.data);
+
+      if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
+        console.log("Fresh/empty groupName detected, continuing with enrollment flow");
+        // Continue with the flow instead of returning an error
+      } else {
+        if (faceDbSearchResponse.data?.results?.length > 0) {
+
+          if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
+            // Continue
+            // search returns 1 result which is the same, so it is not a duplicate
+          } else {
+            // duplicates found, return error
+            console.log(
+              "duplicate check: found duplicates",
+              faceDbSearchResponse.data.results.length,
+              faceDbSearchResponse.data.results
+            );
+            await updateSessionStatus(
+              session,
+              sessionStatusEnum.VERIFICATION_FAILED,
+              `Face scan failed as highly matching duplicates are found.`
+            );
+
+            return res.status(400).json({
+              error: true,
+              errorMessage: "duplicate check: found duplicates",
+              triggerRetry: false,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error during /3d-db/search:", err.message);
+
+      if (err.request) {
+        console.error("No response received from the server during duplicate check");
+        return res.status(502).json({
+          error: true,
+          errorMessage: "Did not receive a response from the server during duplicate check",
+          triggerRetry: true,
+        });
+      } else if (err.response) {
+        console.error(
+          { error: err.response.data },
+          "(err.response) Error during duplicate check"
+        );
+        return res.status(err.response.status).json({
+          error: true,
+          errorMessage: "Server returned an error during duplicate check",
+          data: err.response.data,
+          triggerRetry: true,
+        });
+      } else {
+        console.error("Unknown error:", err);
+        return res.status(500).json({
+          error: true,
+          errorMessage: "An unknown error occurred during duplicate check",
+          triggerRetry: true,
+        });
+      }
+    }
+
     // do /3d-db/enroll (verify page only did /3d-db/search)
     console.log("/3d-db/enroll for biometrics", {
       externalDatabaseRefID: session.externalDatabaseRefID,
@@ -214,7 +295,7 @@ async function getCredentialsV3(req, res) {
           headers: {
             "Content-Type": "application/json",
             "X-Device-Key": req.headers["x-device-key"],
-            "X-User-Agent": req.headers["x-user-agent"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }
@@ -292,7 +373,7 @@ async function getCredentialsV3(req, res) {
     });
     await newNullifierAndCreds.save();
 
-    console.log({ uuidV2: uuidNew, sessionId: sid }, "Issuing credentials");
+    console.log("Issuing credentials", { uuidV2: uuidNew, externalDatabaseRefID: session.externalDatabaseRefID });
 
     await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
 

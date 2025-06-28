@@ -95,7 +95,7 @@ export async function match3d2dIdScan(req, res) {
           headers: {
             "Content-Type": "application/json",
             "X-Device-Key": req.headers["x-device-key"],
-            "X-User-Agent": req.headers["x-user-agent"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }
@@ -299,7 +299,7 @@ export async function match3d2dIdScan(req, res) {
           headers: {
             "Content-Type": "application/json",
             "X-Device-Key": req.headers["x-device-key"],
-            "X-User-Agent": req.headers["x-user-agent"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }

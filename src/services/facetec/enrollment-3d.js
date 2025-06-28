@@ -137,9 +137,12 @@ export async function enrollment3d(req, res) {
       );
     }
 
+    // console.log('device key', req.headers["x-device-key"])
+    // console.log('x-user-agent', req.headers["x-user-agent"])
+    // console.log('enrollment-3d faceTecParams', faceTecParams)
     try {
       if (sessionType === "biometrics") faceTecParams.storeAsFaceVector = true;
-      // console.log('enrollment-3d faceTecParams', faceTecParams)
+      
       req.app.locals.sseManager.sendToClient(sid, {
         status: "in_progress",
         message: "liveness check: sending to server",
@@ -152,7 +155,7 @@ export async function enrollment3d(req, res) {
           headers: {
             "Content-Type": "application/json",
             "X-Device-Key": req.headers["x-device-key"],
-            "X-User-Agent": req.headers["x-user-agent"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }
@@ -164,22 +167,30 @@ export async function enrollment3d(req, res) {
       if (!enrollmentResponse.data.success) {
         // YES, session is still IN_PROGRESS
         // TODO: facetec: user should be able to retry enrollment
-        let falseChecks = Object.values(
-          enrollmentResponse.data.faceScanSecurityChecks
-        ).filter((value) => value === false).length;
+        let falseChecks = 0;
+        
+        if (enrollmentResponse.data.faceScanSecurityChecks) {
+          falseChecks = Object.values(
+            enrollmentResponse.data.faceScanSecurityChecks
+          ).filter((value) => value === false).length;
+        }
 
         if (falseChecks > 0) {
           return res.status(400).json({
             error: true,
             errorMessage: `liveness check failed. ${falseChecks} out of ${
-              Object.keys(enrollmentResponse.data.faceScanSecurityChecks).length
+              enrollmentResponse.data.faceScanSecurityChecks 
+                ? Object.keys(enrollmentResponse.data.faceScanSecurityChecks).length 
+                : 0
             } checks failed`,
             triggerRetry: true,
           });
+        } else if (enrollmentResponse.data.errorMessage.includes("enrollment already exists")) {
+          // just do nothing, continue with the flow
         } else {
           return res.status(400).json({
             error: true,
-            errorMessage: "liveness enrollment failed",
+            errorMessage: `liveness enrollment failed. ${enrollmentResponse.data.errorMessage}`,
             triggerRetry: true,
           });
         }
@@ -196,7 +207,7 @@ export async function enrollment3d(req, res) {
       if (err.request) {
         console.error(
           { error: err.request.data },
-          "(err.request) Error during facetec enrollment-3d"
+          "(err.request) Error during enrollment-3d"
         );
 
         return res.status(502).json({
@@ -207,7 +218,7 @@ export async function enrollment3d(req, res) {
       } else if (err.response) {
         console.error(
           { error: err.response.data },
-          "(err.response) Error during facetec enrollment-3d"
+          "(err.response) Error during enrollment-3d"
         );
 
         return res.status(err.response.status).json({
@@ -254,40 +265,45 @@ export async function enrollment3d(req, res) {
           headers: {
             "Content-Type": "application/json",
             "X-Device-Key": req.headers["x-device-key"],
-            "X-User-Agent": req.headers["x-user-agent"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }
       );
       console.log("faceDbSearchResponse.data", faceDbSearchResponse.data);
 
-      if (faceDbSearchResponse.data.results.length > 0) {
-        // duplicates found, return error
-        console.log(
-          "duplicate check: found duplicates",
-          faceDbSearchResponse.data.results.length,
-          faceDbSearchResponse.data.results
-        );
-        await updateSessionStatus(
-          session,
-          sessionStatusEnum.VERIFICATION_FAILED,
-          `Face scan failed as highly matching duplicates are found.`
-        );
+      if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
+        console.log("Fresh/empty groupName detected, continuing with enrollment flow");
+        // Continue with the flow instead of returning an error
+      } else {
+        if (faceDbSearchResponse.data?.results?.length > 0) {
+          if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
+            // Continue
+            // search returns 1 result which is the same, so it is not a duplicate
+          } else {
+            // duplicates found, return error
+            console.log(
+              "duplicate check: found duplicates",
+              faceDbSearchResponse.data.results.length,
+              faceDbSearchResponse.data.results
+            );
+            await updateSessionStatus(
+              session,
+              sessionStatusEnum.VERIFICATION_FAILED,
+              `Face scan failed as highly matching duplicates are found.`
+            );
 
-        // as this ends the session, send SSE error event to client
-        req.app.locals.sseManager.sendToClient(sid, {
-          status: "error",
-          message: `Face scan failed as highly matching duplicates are found.`,
-        });
-
-        return res.status(400).json({
-          error: true,
-          errorMessage: "duplicate check: found duplicates",
-          triggerRetry: false,
-        });
+            return res.status(400).json({
+              error: true,
+              errorMessage: "duplicate check: found duplicates",
+              triggerRetry: false,
+            });
+          }
+        }
       }
     } catch (err) {
       console.error("Error during /3d-db/search:", err.message);
+
       if (err.request) {
         console.error("No response received from the server during duplicate check");
         return res.status(502).json({
@@ -298,7 +314,7 @@ export async function enrollment3d(req, res) {
       } else if (err.response) {
         console.error(
           { error: err.response.data },
-          "(err.response) Error during /3d-db/search"
+          "(err.response) Error during duplicate check"
         );
         return res.status(err.response.status).json({
           error: true,

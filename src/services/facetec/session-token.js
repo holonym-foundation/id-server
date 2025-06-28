@@ -60,14 +60,13 @@ export async function sessionToken(req, res) {
         message: 'starting verification session'
       });
 
-      console.log("facetecServerBaseURL", facetecServerBaseURL);
       const resp = await axios.get(
         `${facetecServerBaseURL}/session-token`,
         {
           headers: {
             "Content-Type": "application/json",
-            'X-Device-Key': req.headers['x-device-key'],
-            // 'X-User-Agent': req.headers['x-user-agent'],
+            "X-Device-Key": req.headers["x-device-key"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
             "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
           },
         }
