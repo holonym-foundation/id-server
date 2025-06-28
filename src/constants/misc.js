@@ -33,11 +33,9 @@ export const relayerURL =
 export const facetecServerBaseURL = 
   process.env.NODE_ENV === "development"
     // ? "http://localhost:8080"
-    // : "https://facetec-server.holonym.io"
-        // ? "http://localhost:8080"
-    // : "https://facetec-server.holonym.io"
-    ? "https://api.facetec.com/api/v3.1/biometrics"
-    : "https://api.facetec.com/api/v3.1/biometrics";
+    // ? "https://api.facetec.com/api/v3.1/biometrics"
+    ? "https://face-server.up.railway.app"
+    : "https://facetec-server.holonym.io"
 
 const supportedChainIds = [
   1, // Ethereum
