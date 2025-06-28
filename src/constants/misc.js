@@ -114,10 +114,8 @@ export const phoneIssuerAddress =
 //   process.env.NODE_ENV === "production"
 //     ? "0x40b8810cbaed9647b54d18cc98b720e1e8876be5d8e7089d3c079fc61c30a4"
 //     : "0x2998cab3d07a64315f1e8399ecef60a19f478231663f8740703bd30a42a91ed4";
-export const biometricsIssuerAddress =
-  process.env.NODE_ENV === "production"
-    ? "0x39d18b4a7826440e58e05c67204913eb3b348e0cfc84ed3aec669da8a3105ea4"
-    : "0xd486eec6abaee92f402247f0f645d533a8aebe48b713d847fa9e3df29f792438";
+export const biometricsIssuerAddress = 
+  "0x0d4f849df782fb9e68d525fbda10b73e59180e59cb2a21ce5d70ccc45dbfd922";
 
 export const v3KYCSybilResistanceCircuitId =
   "0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b";
@@ -126,7 +124,7 @@ export const v3PhoneSybilResistanceCircuitId =
 export const v3EPassportSybilResistanceCircuitId =
   "0xf2ce248b529343e105f7b3c16459da619281c5f81cf716d28f7df9f87667364d";
 export const v3BiometricsSybilResistanceCircuitId =
-  "0x26c2be776e0a17b8233e88c0b74e58c2e74605a741c19748f312fbc6bca990f8";
+  "0x0b5121226395e3b6c76eb8ddfb0bf2f2075e7f2c6956567e84b38a223c3a3d15"; // even
 
 // ---------------- Stellar stuff ----------------
 export const horizonServer = new StellarSdk.Horizon.Server("https://horizon.stellar.org");
