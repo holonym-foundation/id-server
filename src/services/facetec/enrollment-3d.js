@@ -178,11 +178,13 @@ export async function enrollment3d(req, res) {
         if (falseChecks > 0) {
           return res.status(400).json({
             error: true,
-            errorMessage: `liveness check failed. ${falseChecks} out of ${
-              enrollmentResponse.data.faceScanSecurityChecks 
-                ? Object.keys(enrollmentResponse.data.faceScanSecurityChecks).length 
-                : 0
-            } checks failed`,
+            // errorMessage: `liveness check failed. ${falseChecks} out of ${
+            //   enrollmentResponse.data.faceScanSecurityChecks 
+            //     ? Object.keys(enrollmentResponse.data.faceScanSecurityChecks).length 
+            //     : 0
+            // } checks failed`,
+            errorMessage: `Liveness check failed`,
+            instructions: "Retry verification with good lighting and changes in facial expression.\nIf liveness check keeps on failing, try doing verification on a mobile device.",
             triggerRetry: true,
           });
         } else if (enrollmentResponse.data.errorMessage.includes("enrollment already exists")) {
