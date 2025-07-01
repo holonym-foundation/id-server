@@ -150,7 +150,7 @@ async function getOrderTransactionStatus(req, res) {
 async function setOrderFulfilled(req, res) {
   try {
     const { externalOrderId } = req.params;
-    const { fulfillmentReceipt } = req.query; // Optional
+    const { fulfillmentReceipt } = req.query;
 
     // Check for API key in header
     const apiKey = req.headers["x-api-key"];
