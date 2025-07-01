@@ -287,6 +287,13 @@ export async function enrollment3d(req, res) {
               faceDbSearchResponse.data.results.length,
               faceDbSearchResponse.data.results
             );
+
+            // send event to user client
+            req.app.locals.sseManager.sendToClient(sid, {
+              status: "error",
+              message: "found duplicates! verification has failed.",
+            });
+
             await updateSessionStatus(
               session,
               sessionStatusEnum.VERIFICATION_FAILED,
