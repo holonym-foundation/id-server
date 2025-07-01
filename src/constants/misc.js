@@ -128,3 +128,6 @@ export const v3BiometricsSybilResistanceCircuitId =
 export const horizonServer = new StellarSdk.Horizon.Server("https://horizon.stellar.org");
 
 export const idServerStellarPaymentAddress = "GCJCFGPSKP2D6I4KU3PGA6NUKPUHKYT7XECMU5SGIATX6374WI4OX24B";
+
+export const krakenXLMAddress = "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM";
+export const krakenXLMMemo = new StellarSdk.Memo.text("1742822151996056872");

@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import {
   ethereumProvider,
   optimismProvider,
@@ -11,6 +12,9 @@ import {
   companyAddressFTM,
   companyAddressAVAX,
   companyAddressBase,
+  horizonServer,
+  krakenXLMAddress,
+  krakenXLMMemo,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
@@ -144,6 +148,34 @@ async function transferFunds(req, res) {
       });
 
       txReceipts["aurora"] = await tx.wait();
+    }
+
+    // Transfer ETH on Stellar \\
+    const stellarKeypair = StellarSdk.Keypair.fromSecret(
+      process.env.STELLAR_PAYMENTS_SECRET_KEY
+    );
+    const stellarAccount = await horizonServer.loadAccount(stellarKeypair.publicKey());
+    const xlmBalance = stellarAccount.balances.filter(x => x.asset_type === 'native')[0].balance;
+    if (xlmBalance >= 2000) {
+      const stellarTx = new StellarSdk.TransactionBuilder(
+        stellarAccount,
+        {
+          memo: krakenXLMMemo,
+          networkPassphrase: StellarSdk.Networks.PUBLIC,
+          fee: '100'
+        }
+      )
+      .addOperation(StellarSdk.Operation.payment({
+        destination: krakenXLMAddress,
+        amount: '1700',
+        asset: StellarSdk.Asset.native()
+      }))
+      .setTimeout(180)
+      .build();
+      stellarTx.sign(stellarKeypair);
+
+      const tx = await horizonServer.submitTransaction(stellarTx);
+      txReceipts["stellar"] = tx.hash;
     }
 
     return res.status(200).json(txReceipts);
