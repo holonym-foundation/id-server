@@ -305,6 +305,7 @@ export async function enrollment3d(req, res) {
             return res.status(400).json({
               error: true,
               errorMessage: "duplicate check: found duplicates",
+              instructions: "Verification has failed as highly matching duplicates are found.",
               triggerRetry: false,
             });
           }
