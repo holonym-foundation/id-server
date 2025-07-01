@@ -9,7 +9,8 @@ import {
 import {
   createOrder as createStellarOrder,
   getOrderTransactionStatus as getStellarOrderTransactionStatus,
-  setOrderFulfilled as setStellarOrderFulfilled
+  setOrderFulfilled as setStellarOrderFulfilled,
+  refundOrder as refundStellarOrder
 } from "../services/orders/stellar/endpoints.js"
 const router = express.Router();
 
@@ -31,5 +32,6 @@ router.post("/admin/refund", refundOrder);
 router.post("/stellar", createStellarOrder);
 router.get("/stellar/:externalOrderId/transaction/status", getStellarOrderTransactionStatus);
 router.get("/stellar/:externalOrderId/fulfilled", setStellarOrderFulfilled); // gated by ORDERS_API_KEY
+router.post("/stellar/admin/refund", refundStellarOrder);
 
 export default router;

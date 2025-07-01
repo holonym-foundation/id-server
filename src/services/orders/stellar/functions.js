@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import * as StellarSdk from "@stellar/stellar-sdk";
 import { retry } from "../../../utils/utils.js";
 import {
   idvSessionUSDPrice,
@@ -84,103 +85,83 @@ async function validateTx(txHash, externalOrderId, desiredAmount) {
   return tx;
 }
 
-// /**
-//  * Refund 69.1% of the transaction denoted by order.txHash on chain order.chainId.
-//  * started off with refundMintFeeOnChain from utils/transactions.js
-//  * Sets order.refundTxHash and order.status after successful refund.
-//  */
-// async function handleRefund(order) {
-//   const tx = await getTransaction(order.chainId, order.txHash);
-//   const provider = getProvider(order.chainId);
+/**
+ * Validate the order and the transaction, and refund the order.
+ */
+async function handleRefund(order) {
+  const validTx = await validateTx(
+    order.stellar.txHash,
+    order.externalOrderId,
+    idvSessionUSDPrice
+  );
 
-//   if (!tx) {
-//     return {
-//       status: 404,
-//       data: {
-//         error: "Could not find transaction with given txHash.",
-//       },
-//     };
-//   }
+  // check if tx is already fulfilled
+  if (order.fulfilled) {
+    return {
+      status: 400,
+      data: {
+        error: "The order has already been fulfilled, cannot refund.",
+      },
+    };
+  }
 
-//   const validTx = await validateTx(
-//     order.chainId,
-//     order.txHash,
-//     order.externalOrderId,
-//     idvSessionUSDPrice
-//   );
-//   const validTxConfirmation = await validateTxConfirmation(validTx);
+  // check if tx is already refunded
+  if (order.refunded) {
+    return {
+      status: 400,
+      data: {
+        error: "The order has already been refunded, cannot refund again.",
+      },
+    };
+  }
 
-//   // check if tx is already fulfilled
-//   if (order.fulfilled) {
-//     return {
-//       status: 400,
-//       data: {
-//         error: "The order has already been fulfilled, cannot refund.",
-//       },
-//     };
-//   }
+  const operations = await validTx.operations()
+  const amount = operations?.records?.[0]?.amount
+  const userAddress = operations?.records?.[0]?.from
 
-//   // check if tx is already refunded
-//   if (order.refunded) {
-//     return {
-//       status: 400,
-//       data: {
-//         error: "The order has already been refunded, cannot refund again.",
-//       },
-//     };
-//   }
+  const stellarKeypair = StellarSdk.Keypair.fromSecret(
+    process.env.STELLAR_PAYMENTS_SECRET_KEY
+  );
+  const stellarAccount = await horizonServer.loadAccount(stellarKeypair.publicKey());
+  const xlmBalance = stellarAccount.balances.filter(x => x.asset_type === 'native')[0].balance;
+  if (xlmBalance < amount) {
+    return {
+      status: 500,
+      data: {
+        error:
+          "Wallet does not have enough funds to refund.",
+      },
+    };
+  }
 
-//   const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY, provider);
+  const stellarTx = new StellarSdk.TransactionBuilder(
+    stellarAccount,
+    {
+      networkPassphrase: StellarSdk.Networks.PUBLIC,
+      fee: '100'
+    }
+  )
+  .addOperation(StellarSdk.Operation.payment({
+    destination: userAddress,
+    amount: amount,
+    asset: StellarSdk.Asset.native()
+  }))
+  .setTimeout(180)
+  .build();
+  stellarTx.sign(stellarKeypair);
 
-//   // Refund 50% of the transaction amount. This approximates the mint cost.
-//   // const refundAmount = tx.value.mul(5).div(10);
-//   // In Feb 2025, we changed the refund amount be the full tx amount.
-//   const refundAmount = tx.value
-
-//   // Ensure wallet has enough funds to refund
-//   const balance = await wallet.getBalance();
-//   if (balance.lt(refundAmount)) {
-//     return {
-//       status: 500,
-//       data: {
-//         error:
-//           "Wallet does not have enough funds to refund. Please contact support.",
-//       },
-//     };
-//   }
-
-//   const txReq = await wallet.populateTransaction({
-//     to: tx.from,
-//     value: refundAmount,
-//   });
-
-//   // For some reason gas estimates from Fantom are way off. We manually increase
-//   // gas to avoid "transaction underpriced" error. Hopefully this is unnecessary
-//   // in the future. The following values happened to be sufficient at the time
-//   // of adding this block.
-//   if (order.chainId === 250) {
-//     txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
-//     txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
-
-//     if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
-//       txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
-//     }
-//   }
-
-//   const txResponse = await wallet.sendTransaction(txReq);
-
-//   const receipt = await txResponse.wait();
-
-//   return {
-//     status: 200,
-//     data: {
-//       txReceipt: receipt,
-//     },
-//   };
-// }
+  const tx = await horizonServer.submitTransaction(stellarTx);
+  
+  return {
+    status: 200,
+    data: {
+      txHash: tx.hash,
+    },
+  };
+}
 
 export {
   getTransaction,
   validateTx,
-  // handleRefund,
+  handleRefund,
 };
