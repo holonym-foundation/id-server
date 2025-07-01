@@ -164,22 +164,39 @@ async function setOrderFulfilled(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // Fulfillment receipt, if present, must be a string. 
-    if (fulfillmentReceipt) {
-      if (typeof fulfillmentReceipt != 'string') {
-        return res.status(400).json({
-          error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
-        })
-      }
-
-      // Right now, fulfillment receipt must be a JSON object with a hex string as the value.
-      const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[0-9a-fA-F]+)"\s*\}/;
-      if (!pattern.test(fulfillmentReceipt)) {
-        return res.status(400).json({
-          error: `Invalid fulfillment receipt. If present, it must be a JSON object with a hex string value. Received '${fulfillmentReceipt}'`
-        })
-      }
+    const loggerCtx = {
+      fulfillmentReceipt,
+      externalOrderId,
     }
+
+    if (!fulfillmentReceipt) {
+      ordersLogger.info(
+        loggerCtx,
+        "Received request to set order fulfilled without fulfillmentReceipt"
+      )
+      return res.status(400).json({
+        error: "fulfillmentReceipt query param is required"
+      })
+    }
+
+    if (typeof fulfillmentReceipt != 'string') {
+      return res.status(400).json({
+        error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
+      })
+    }
+
+    // Right now, fulfillment receipt must be a JSON object with a hex string as the value.
+    const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[0-9a-fA-F]+)"\s*\}/;
+    if (!pattern.test(fulfillmentReceipt)) {
+      ordersLogger.info(
+        loggerCtx,
+        "Received request to set order fulfilled with invalid fulfillmentReceipt"
+      )
+      return res.status(400).json({
+        error: `Invalid fulfillment receipt. If present, it must be a JSON object with a hex string value. Received '${fulfillmentReceipt}'`
+      })
+    }
+  
 
     // Query the DB for the order
     const order = await Order.findOne({ externalOrderId });
@@ -202,10 +219,7 @@ async function setOrderFulfilled(req, res) {
       order.fulfillmentReceipt = fulfillmentReceipt
     } else {
       ordersLogger.info(
-        {
-          fulfillmentReceipt,
-          externalOrderId,
-        },
+        loggerCtx,
         "Marking order fulfilled without fulfillmentReceipt"
       )
     }
