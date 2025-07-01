@@ -1,6 +1,6 @@
 import {
   validateTx,
-  // handleRefund,
+  handleRefund,
 } from "./functions.js";
 import { idvSessionUSDPrice } from "../../../constants/misc.js";
 import { pinoOptions, logger } from "../../../utils/logger.js";
@@ -181,66 +181,55 @@ async function setOrderFulfilled(req, res) {
   }
 }
 
+// POST /:externalOrderId/refund.
+// Refunds an unfulfilled order.
+// Gated by admin API key. Why? Because if an order is unfulfilled, a user could trigger
+// SBT minting and a refund at the same time, to effectively not pay for the SBT.
+async function refundOrder(req, res) {
+  try {
+    const { txHash, chainId } = req.body;
 
-// TODO: Implement this endpoints
-// // GET /:externalOrderId/refund.
-// // Refunds an unfulfilled order.
-// // Gated by admin API key. Why? Because if an order is unfulfilled, a user could trigger
-// // SBT minting and a refund at the same time, to effectively not pay for the SBT.
-// async function refundOrder(req, res) {
-//   try {
-//     const { txHash, chainId } = req.body;
+    if (!txHash || !chainId) {
+      return res
+        .status(400)
+        .json({ error: "txHash and chainId are required for refund" });
+    }
 
-//     if (!txHash || !chainId) {
-//       return res
-//         .status(400)
-//         .json({ error: "txHash and chainId are required for refund" });
-//     }
+    const apiKey = req.headers["x-api-key"];
 
-//     const apiKey = req.headers["x-api-key"];
+    if (apiKey !== process.env.ADMIN_API_KEY_LOW_PRIVILEGE) {
+      return res.status(401).json({ error: "Invalid API key." });
+    }
 
-//     if (apiKey !== process.env.ADMIN_API_KEY_LOW_PRIVILEGE) {
-//       return res.status(401).json({ error: "Invalid API key." });
-//     }
+    // Query the DB for the order
+    const order = await Order.findOne({ txHash, chainId });
 
-//     // Query the DB for the order
-//     const order = await Order.findOne({ txHash, chainId });
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
 
-//     if (!order) {
-//       return res.status(404).json({ error: "Order not found" });
-//     }
+    // Refund the order
+    try {
+      const response = await handleRefund(order);
 
-//     // Refund the order
-//     try {
-//       // Validate TX (check tx.data, tx.to, tx.value, etc)
-//       const validTx = await validateTx(
-//         order.chainId,
-//         order.txHash,
-//         order.externalOrderId,
-//         idvSessionUSDPrice
-//       );
+      if (response.status === 200) {
+        // Update the order refundTxHash and refunded
+        order.stellar.refundTxHash = response.data.txReceipt.transactionHash;
+        await order.save();
+      }
 
-//       const response = await handleRefund(order);
-
-//       if (response.status === 200) {
-//         // Update the order refundTxHash and refunded
-//         order.refundTxHash = response.data.txReceipt.transactionHash;
-//         order.refunded = true;
-//         await order.save();
-//       }
-
-//       return res.status(response.status).json(response.data);
-//     } catch (error) {
-//       return res.status(400).json({ error: error.message });
-//     }
-//   } catch (error) {
-//     return res.status(500).json({ error: error.message });
-//   }
-// }
+      return res.status(response.status).json(response.data);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
 
 export {
   createOrder,
   getOrderTransactionStatus,
   setOrderFulfilled,
-  // refundOrder,
+  refundOrder,
 };
