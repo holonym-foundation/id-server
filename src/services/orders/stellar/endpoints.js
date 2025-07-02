@@ -143,7 +143,10 @@ async function getOrderTransactionStatus(req, res) {
 // Sets order.fulfilled to true.
 async function setOrderFulfilled(req, res) {
   try {
+    // TODO: Reduce code duplication between this function and the setOrderFulfilled function for EVM orders.
+
     const { externalOrderId } = req.params;
+    const { fulfillmentReceipt } = req.query;
 
     // Check for API key in header
     const apiKey = req.headers["x-api-key"];
@@ -155,6 +158,20 @@ async function setOrderFulfilled(req, res) {
 
     if (apiKey !== process.env.ORDERS_API_KEY) {
       return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (typeof fulfillmentReceipt != 'string') {
+      return res.status(400).json({
+        error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
+      })
+    }
+
+    // Right now, fulfillment receipt must be a JSON object with a hex string as the value.
+    const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[0-9a-fA-F]+)"\s*\}/;
+    if (!pattern.test(fulfillmentReceipt)) {
+      return res.status(400).json({
+        error: `Invalid fulfillment receipt. If present, it must be a JSON object with a hex string value. Received '${fulfillmentReceipt}'`
+      })
     }
 
     // Query the DB for the order
@@ -173,6 +190,17 @@ async function setOrderFulfilled(req, res) {
 
     // Update the order to fulfilled
     order.fulfilled = true;
+    if (fulfillmentReceipt) {
+      order.fulfillmentReceipt = fulfillmentReceipt
+    } else {
+      ordersLogger.info(
+        {
+          fulfillmentReceipt,
+          externalOrderId,
+        },
+        "Marking order fulfilled without fulfillmentReceipt"
+      )
+    }
     await order.save();
 
     return res.status(200).json({ message: "Order set to fulfilled" });
