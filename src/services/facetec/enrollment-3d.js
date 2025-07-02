@@ -184,7 +184,7 @@ export async function enrollment3d(req, res) {
             //     : 0
             // } checks failed`,
             errorMessage: `Liveness check failed`,
-            instructions: "Retry verification with good lighting and changes in facial expression.\nIf liveness check keeps on failing, try doing verification on a mobile device.",
+            instructions: "Try again with better lighting and face clearly visible.\nStill having trouble? Use mobile instead.",
             triggerRetry: true,
           });
         } else if (enrollmentResponse.data.errorMessage.includes("enrollment already exists")) {
