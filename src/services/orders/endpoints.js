@@ -169,35 +169,34 @@ async function setOrderFulfilled(req, res) {
       externalOrderId,
     }
 
-    if (!fulfillmentReceipt) {
-      ordersLogger.info(
-        loggerCtx,
-        "Received request to set order fulfilled without fulfillmentReceipt"
-      )
-      return res.status(400).json({
-        error: "fulfillmentReceipt query param is required"
-      })
-    }
+    // if (!fulfillmentReceipt) {
+    //   ordersLogger.info(
+    //     loggerCtx,
+    //     "Received request to set order fulfilled without fulfillmentReceipt"
+    //   )
+    //   return res.status(400).json({
+    //     error: "fulfillmentReceipt query param is required"
+    //   })
+    // }
 
-    if (typeof fulfillmentReceipt != 'string') {
-      return res.status(400).json({
-        error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
-      })
-    }
+    // if (typeof fulfillmentReceipt != 'string') {
+    //   return res.status(400).json({
+    //     error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
+    //   })
+    // }
 
-    // Right now, fulfillment receipt must be a JSON object with a hex string as the value.
-    const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[0-9a-fA-F]+)"\s*\}/;
-    if (!pattern.test(fulfillmentReceipt)) {
-      ordersLogger.info(
-        loggerCtx,
-        "Received request to set order fulfilled with invalid fulfillmentReceipt"
-      )
-      return res.status(400).json({
-        error: `Invalid fulfillment receipt. If present, it must be a JSON object with a hex string value. Received '${fulfillmentReceipt}'`
-      })
-    }
+    // // Right now, fulfillment receipt must be a JSON object with a hex string as the value.
+    // const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[0-9a-fA-F]+)"\s*\}/;
+    // if (!pattern.test(fulfillmentReceipt)) {
+    //   ordersLogger.info(
+    //     loggerCtx,
+    //     "Received request to set order fulfilled with invalid fulfillmentReceipt"
+    //   )
+    //   return res.status(400).json({
+    //     error: `Invalid fulfillment receipt. If present, it must be a JSON object with a hex string value. Received '${fulfillmentReceipt}'`
+    //   })
+    // }
   
-
     // Query the DB for the order
     const order = await Order.findOne({ externalOrderId });
 
