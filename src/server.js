@@ -1,6 +1,7 @@
 import { mongoose } from "./init.js";
 import { app } from "./index.js";
 import logger from "./utils/logger.js";
+import { valkeyClient } from "./utils/valkey-glide.js";
 
 const PORT = process.env.ENVIRONMENT == "dev" ? 3031 : 3000;
 const server = app.listen(PORT, (err) => {
@@ -16,6 +17,15 @@ async function terminate() {
     logger.error(
       { error: err },
       "An error occurred while attempting to close the MongoDB connection"
+    );
+  }
+  try {
+    await valkeyClient.close();
+    logger.info("Closed valkey connection");
+  } catch (err) {
+    logger.error(
+      { error: err },
+      "An error occurred while attempting to close the valkey connection"
     );
   }
   logger.info("Closing server");
