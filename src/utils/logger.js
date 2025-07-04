@@ -13,10 +13,10 @@ if (process.env.NODE_ENV === "development") {
   // Send logs to Datadog
   pinoOptions.transport = {
     targets: [
-      // NOTE for future: We output logs using both pino-pretty and
+      // NOTE for future: We output logs using both pino/file (for stdout) and
       // pino-datadog-transport so that logs get sent to both AWS CloudWatch
       // and Datadog. Perhaps in the future, we should send logs to one place.
-      { target: "pino-pretty", options: { colorize: false } },
+      { target: 'pino/file', options: { destination: 1 } },
       {
         // target: "pino-datadog-transport",
         target: "./pino-datadog-logger",
