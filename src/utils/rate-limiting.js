@@ -1,6 +1,6 @@
 import { valkeyClient } from './valkey-glide.js'
 
-const MAX_REQUESTS_PER_30_DAYS = 10
+const MAX_REQUESTS_PER_30_DAYS = 15
 const THIRTY_DAYS_IN_SECS = 60 * 60 * 24 * 30
 
 /**
@@ -19,11 +19,13 @@ async function rateLimit(ip, subKey) {
   }
   if (count > MAX_REQUESTS_PER_30_DAYS) {
     return {
+      count,
       limitExceeded: true
     }
   }
 
   return {
+    count,
     limitExceeded: false
   }
 }

@@ -22,15 +22,16 @@ import {
   handleIdvSessionCreation,
   campaignIdToWorkflowId,
 } from "./functions.js";
+import { rateLimit } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
 
-// const postSessionsLogger = logger.child({
-//   msgPrefix: "[POST /sessions] ",
-//   base: {
-//     ...pinoOptions.base,
-//   },
-// });
+const postSessionsV2Logger = logger.child({
+  msgPrefix: "[POST /sessions/v2] ",
+  base: {
+    ...pinoOptions.base,
+  },
+});
 const createIdvSessionLogger = logger.child({
   msgPrefix: "[POST /sessions/:_id/idv-session] ",
   base: {
@@ -205,10 +206,28 @@ async function postSessionV2(req, res) {
       return res.status(500).json({ error: "Could not determine country from IP" });
     }
 
+    // Rate limiting
+    const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress
+    const rateLimitKey = 'kyc-sessions'
+    const { count, limitExceeded } = await rateLimit(ip, rateLimitKey)
+    if (limitExceeded) {
+      postSessionsV2Logger.warn(
+        {
+          ip,
+          rateLimitKey,
+          count,
+        },
+        'Rate limit exceeded'
+      )
+      return res.status(429).json({
+        error: 'This device has reached the maximum number of allowed KYC sessions (10). Please try again in 30 days.'
+      })
+    }
+
     const campaignId = req.body.campaignId;
     const workflowId = campaignIdToWorkflowId(campaignId);
 
-    console.log("postSessionV2:", campaignId, workflowId);
+    // console.log("postSessionV2:", campaignId, workflowId);
 
     const session = new Session({
       sigDigest: sigDigest,
