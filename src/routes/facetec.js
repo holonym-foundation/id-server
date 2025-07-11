@@ -5,6 +5,7 @@ import { enrollment3d } from "../services/facetec/enrollment-3d.js";
 import { match3d2dIdScan } from "../services/facetec/match-3d-2d-idscan.js";
 import { testOCRDateParsing } from "../services/facetec/functions-date.js";
 import { getCredentialsV3 } from "../services/facetec/credentials.js";
+import { getProductionEncryptionKeyText } from "../services/facetec/encryption-key.js";
 
 const router = express.Router();
 
@@ -57,5 +58,7 @@ router.post("/match-3d-2d-idscan/:nullifier", match3d2dIdScan);
 // router.post("/match-3d-2d-idscan-and-get-creds/:nullifier", match3d2dIdScanAndGetCreds);
 
 router.get("/credentials/v3/:_id/:nullifier/:sessionType", getCredentialsV3);
+
+router.get("/production-encryption-key-text", getProductionEncryptionKeyText);
 
 export default router;
