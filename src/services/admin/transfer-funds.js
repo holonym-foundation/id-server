@@ -61,12 +61,11 @@ async function transferFunds(req, res) {
       optimismProvider
     );
     const balanceOptimism = await optimismWallet.getBalance();
-    // If balance is less than 0.2 ETH, don't transfer. Otherwise, send 0.15 ETH.
-    // We keep some ETH to pay for refunds.
+    // If balance is less than 0.2 ETH, don't transfer. Otherwise, send (balance - 0.05) ETH.
     if (balanceOptimism.gte(ethers.utils.parseEther("0.2"))) {
       const tx = await optimismWallet.sendTransaction({
         to: companyAddressOP,
-        value: ethers.utils.parseEther("0.15"),
+        value: balanceOptimism.sub(ethers.utils.parseEther("0.05")),
       });
 
       txReceipts["optimism"] = await tx.wait();
@@ -105,12 +104,12 @@ async function transferFunds(req, res) {
       baseProvider
     );
     const balanceBase = await baseWallet.getBalance();
-    // If balance is less than 0.2 ETH, don't transfer. Otherwise, send 0.15 ETH.
+    // If balance is less than 0.2 ETH, don't transfer. Otherwise, send (balance - 0.05) ETH.
     // We keep some ETH to pay for refunds.
     if (balanceBase.gte(ethers.utils.parseEther("0.4"))) {
       const tx = await baseWallet.sendTransaction({
         to: companyAddressBase,
-        value: ethers.utils.parseEther("0.15"),
+        value: balanceBase.sub(ethers.utils.parseEther("0.05")),
       });
 
       txReceipts["base"] = await tx.wait();
@@ -122,12 +121,12 @@ async function transferFunds(req, res) {
       avalancheProvider
     );
     const balanceAvalanche = await avalancheWallet.getBalance();
-    // If balance is less than 20 AVAX, don't transfer. Otherwise, send 15 AVAX.
+    // If balance is less than 20 AVAX, don't transfer. Otherwise, send (balance - 5) AVAX.
     // We keep some AVAX to pay for refunds.
     if (balanceAvalanche.gte(ethers.utils.parseEther("20"))) {
       const tx = await avalancheWallet.sendTransaction({
         to: companyAddressAVAX,
-        value: ethers.utils.parseEther("15"),
+        value: balanceAvalanche.sub(ethers.utils.parseEther("5")),
       });
 
       txReceipts["avalanche"] = await tx.wait();
@@ -167,7 +166,7 @@ async function transferFunds(req, res) {
       )
       .addOperation(StellarSdk.Operation.payment({
         destination: krakenXLMAddress,
-        amount: '1700',
+        amount: (xlmBalance - 300).toString(),
         asset: StellarSdk.Asset.native()
       }))
       .setTimeout(180)
