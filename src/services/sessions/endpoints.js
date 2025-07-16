@@ -242,7 +242,7 @@ async function postSessionV2(req, res) {
 
     console.log("session", session);
 
-    // Only allow a user to create up to 3 sessions
+    // Only allow a user to create up to 6 sessions
     const existingSessions = await Session.find({
       sigDigest: sigDigest,
       status: {
@@ -254,9 +254,9 @@ async function postSessionV2(req, res) {
       }
     }).exec();
 
-    if (existingSessions.length >= 3) {
+    if (existingSessions.length >= 6) {
       return res.status(400).json({
-        error: "User has reached the maximum number of sessions (3)"
+        error: "User has reached the maximum number of sessions (6)"
       });
     }
 
