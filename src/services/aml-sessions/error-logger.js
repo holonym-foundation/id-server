@@ -17,5 +17,14 @@ export function upgradeLogger(logger) {
     );
   }
 
+  logger.sanctionsMatchFound = (sanctionsioResults) => {
+    logger.error(
+      {
+        sanctionsioResults
+      },
+      'Sanctions match found'
+    )
+  }
+
   return logger
 }

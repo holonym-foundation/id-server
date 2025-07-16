@@ -1077,6 +1077,7 @@ async function issueCredsV2(req, res) {
     const data = await resp.json()
 
     if (data.count > 0) {
+      issueCredsV2Logger.sanctionsMatchFound(data.results);
       return res.status(400).json({ error: 'Sanctions match found' });
     }
   
