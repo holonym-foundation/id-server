@@ -61,8 +61,25 @@ async function whitelistCleanHandsSession(req, res) {
 
     const MAX_ALLOWED_CONFIDENCE_SCORE = 0.95;
     if (maxScore > MAX_ALLOWED_CONFIDENCE_SCORE) {
+      endpointLogger.error(
+        {
+          sessionId: session._id,
+          maxConfidenceScoreInSession: maxScore,
+          MAX_ALLOWED_CONFIDENCE_SCORE
+        },
+        'Cannot whitelist clean hands session.'
+      );
       return res.status(400).json({ error: `Cannot whitelist session. Max confidence score is greater than ${MAX_ALLOWED_CONFIDENCE_SCORE}` });
     }
+
+    endpointLogger.info(
+      {
+        sessionId: session._id,
+        maxConfidenceScoreInSession: maxScore,
+        MAX_ALLOWED_CONFIDENCE_SCORE
+      },
+      'Whitelisting clean hands session.'
+    );
 
     const whitelistItem = new CleanHandsSessionWhitelist({
       sessionId: session._id,
