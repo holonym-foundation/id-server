@@ -184,15 +184,16 @@ function validateReports(reports, metaSession) {
           },
         };
       }
+      const maxAllowedDeviceFingerprintReuse = 6;
       if (
         typeof report?.properties?.device?.device_fingerprint_reuse ===
           "number" &&
-        report?.properties?.device?.device_fingerprint_reuse > 3
+        report?.properties?.device?.device_fingerprint_reuse > maxAllowedDeviceFingerprintReuse
       ) {
         return {
           error: `Verification failed. device_fingerprint_reuse is ${report?.properties?.device?.device_fingerprint_reuse}.`,
           log: {
-            msg: "device_fingerprint_reuse is greater than 5",
+            msg: `device_fingerprint_reuse is greater than ${maxAllowedDeviceFingerprintReuse}`,
             data: {
               ip: report?.properties?.device?.device_fingerprint_reuse,
             },
