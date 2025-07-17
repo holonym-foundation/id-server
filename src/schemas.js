@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import { OrderSchema } from "./schemas/orders.js";
-import { HumanIDPaymentGateWhitelistSchema } from "./schemas/whitelists.js";
+import {
+  HumanIDPaymentGateWhitelistSchema,
+  CleanHandsSessionWhitelistSchema
+} from "./schemas/whitelists.js";
 dotenv.config();
 
 const { Schema } = mongoose;
@@ -631,4 +634,5 @@ export {
   SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
+  CleanHandsSessionWhitelistSchema,
 };

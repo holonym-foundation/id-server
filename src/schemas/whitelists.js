@@ -12,3 +12,8 @@ export const HumanIDPaymentGateWhitelistSchema = new Schema({
   // The reason this address is on the Human ID payment gate whitelist
   reason: { type: String, required: true }
 });
+
+export const CleanHandsSessionWhitelistSchema = new Schema({
+  sessionId: { type: String, required: true },
+  reason: { type: String, required: true }
+});

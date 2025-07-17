@@ -8,7 +8,8 @@ import {
   UserVerifications, 
   AMLChecksSession, 
   SessionRefundMutex,
-  CleanHandsNullifierAndCreds
+  CleanHandsNullifierAndCreds,
+  CleanHandsSessionWhitelist
 } from "../../init.js";
 import { 
   getAccessToken as getPayPalAccessToken,
@@ -1076,22 +1077,27 @@ async function issueCredsV2(req, res) {
     const data = await resp.json()
 
     if (data.count > 0) {
-      issueCredsV2Logger.sanctionsMatchFound(data.results);
-      const confidenceScores = data?.results?.map(result => {
-        return `(${result.data_source?.name}: ${result?.confidence_score})`
-      }).join(', ')
-      await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
-      return res.status(400).json({ error: 'Sanctions match found' });
+      const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
+      if (!whitelistItem) {
+        issueCredsV2Logger.sanctionsMatchFound(data.results);
+        const confidenceScores = data?.results?.map(result => {
+          return `(${result.data_source?.name}: ${result?.confidence_score})`
+        }).join(', ')
+        await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
+        return res.status(400).json({ error: 'Sanctions match found' });
+      } else {
+        issueCredsV2Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+      }
     }
   
-    const validationResult = validateScreeningResult(data);
-    if (validationResult.error) {
-      issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
-
-      await failSession(session, validationResult.error)
-
-      return res.status(400).json({ error: validationResult.error });
-    }
+    // Commented out since the only validation we do is to check if count > 0, which we do above.
+    // TODO: In the future, once we add more validation, we should use this pattern.
+    // const validationResult = validateScreeningResult(data);
+    // if (validationResult.error) {
+    //   issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
+    //   await failSession(session, validationResult.error)
+    //   return res.status(400).json({ error: validationResult.error });
+    // }
   
     const uuid = govIdUUID(
       firstName, 
