@@ -1057,7 +1057,7 @@ async function issueCredsV2(req, res) {
     // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
     // when we query "<base-url>/search/" (with trailing slash).
     const sanctionsUrl = 'https://api.sanctions.io/search/' +
-      '?min_score=0.85' +
+      '?min_score=0.90' +
       // TODO: Create a constant for the data sources
       // `&data_source=${encodeURIComponent('CFSP')}` +
       `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
