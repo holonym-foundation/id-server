@@ -37,6 +37,7 @@ import {
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" assert { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
+import { failSession } from "../../utils/sessions.js";
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",
@@ -996,9 +997,7 @@ async function issueCredsV2(req, res) {
         // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
         issueCredsV2Logger.alreadyRegistered(uuid);
         // Fail session and return
-        session.status = sessionStatusEnum.VERIFICATION_FAILED;
-        session.verificationFailureReason = toAlreadyRegisteredStr(user._id);
-        await session.save() 
+        await failSession(session, toAlreadyRegisteredStr(user._id))
         return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
       }
 
@@ -1078,6 +1077,10 @@ async function issueCredsV2(req, res) {
 
     if (data.count > 0) {
       issueCredsV2Logger.sanctionsMatchFound(data.results);
+      const confidenceScores = data?.results?.map(result => {
+        return `(${result.data_source?.name}: ${result?.confidence_score})`
+      }).join(', ')
+      await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
       return res.status(400).json({ error: 'Sanctions match found' });
     }
   
@@ -1085,9 +1088,7 @@ async function issueCredsV2(req, res) {
     if (validationResult.error) {
       issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
 
-      session.status = sessionStatusEnum.VERIFICATION_FAILED;
-      session.verificationFailureReason = validationResult.error;
-      await session.save()
+      await failSession(session, validationResult.error)
 
       return res.status(400).json({ error: validationResult.error });
     }
@@ -1104,9 +1105,7 @@ async function issueCredsV2(req, res) {
       // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
       issueCredsV2Logger.alreadyRegistered(uuid);
       // Fail session and return
-      session.status = sessionStatusEnum.VERIFICATION_FAILED;
-      session.verificationFailureReason = toAlreadyRegisteredStr(user._id);
-      await session.save()
+      await failSession(session, toAlreadyRegisteredStr(user._id))
       return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
     }
 
