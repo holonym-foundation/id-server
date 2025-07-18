@@ -700,13 +700,45 @@ function validateScreeningResult(result) {
   return { success: true };
 }
 
+// 18/07/2025: Truncate, character by character in utf8 compatible way
+function truncateToBytes(str, maxBytes) {
+  if (str === null || str === undefined) return '';
+  if (typeof str !== 'string') str = String(str);
+  if (typeof maxBytes !== 'number' || maxBytes < 0) return '';
+  if (maxBytes === 0) return '';
+  
+  const buffer = Buffer.from(str, 'utf8');
+  if (buffer.length <= maxBytes) return str;
+  
+  let result = '';
+  let currentBytes = 0;
+  
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const charBytes = Buffer.from(char, 'utf8').length;
+    
+    if (currentBytes + charBytes <= maxBytes) {
+      result += char;
+      currentBytes += charBytes;
+    } else {
+      break;
+    }
+  }
+  
+  return result;
+}
+
 function extractCreds(person) {
   const birthdate = person.dateOfBirth ? person.dateOfBirth : "";
   // const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
   const firstNameStr = person.firstName ? person.firstName : "";
-  const firstNameBuffer = firstNameStr ? Buffer.from(firstNameStr) : Buffer.alloc(1);
   const lastNameStr = person.lastName ? person.lastName : "";
-  const lastNameBuffer = lastNameStr ? Buffer.from(lastNameStr) : Buffer.alloc(1);
+    
+  const truncatedFirstNameStr = truncateToBytes(firstNameStr, 24);
+  const truncatedLastNameStr = truncateToBytes(lastNameStr, 24);
+  
+  const firstNameBuffer = truncatedFirstNameStr ? Buffer.from(truncatedFirstNameStr) : Buffer.alloc(1);
+  const lastNameBuffer = truncatedLastNameStr ? Buffer.from(truncatedLastNameStr) : Buffer.alloc(1);
   const nameArgs = [firstNameBuffer, lastNameBuffer].map((x) =>
     ethers.BigNumber.from(x).toString()
   );
@@ -715,8 +747,8 @@ function extractCreds(person) {
   return {
     rawCreds: {
       birthdate,
-      firstName: firstNameStr,
-      lastName: lastNameStr
+      firstName: truncatedFirstNameStr,
+      lastName: truncatedLastNameStr
     },
     derivedCreds: {
       nameHash: {
