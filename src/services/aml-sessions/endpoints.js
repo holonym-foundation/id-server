@@ -736,9 +736,24 @@ function extractCreds(person) {
     
   const truncatedFirstNameStr = truncateToBytes(firstNameStr, 24);
   const truncatedLastNameStr = truncateToBytes(lastNameStr, 24);
-  
-  const firstNameBuffer = truncatedFirstNameStr ? Buffer.from(truncatedFirstNameStr) : Buffer.alloc(1);
-  const lastNameBuffer = truncatedLastNameStr ? Buffer.from(truncatedLastNameStr) : Buffer.alloc(1);
+
+  // Log original byte lengths
+  const originalFirstNameBytes = Buffer.from(firstNameStr, 'utf8').length;
+  const originalLastNameBytes = Buffer.from(lastNameStr, 'utf8').length;
+
+  console.log('Name before truncation', {
+    originalFirstName: {
+      byteLength: originalFirstNameBytes,
+      charLength: firstNameStr.length
+    },
+    originalLastName: {
+      byteLength: originalLastNameBytes,
+      charLength: lastNameStr.length
+    }
+  });
+
+  const firstNameBuffer = truncatedFirstNameStr ? Buffer.from(truncatedFirstNameStr, 'utf8') : Buffer.alloc(1);
+  const lastNameBuffer = truncatedLastNameStr ? Buffer.from(truncatedLastNameStr, 'utf8') : Buffer.alloc(1);
   const nameArgs = [firstNameBuffer, lastNameBuffer].map((x) =>
     ethers.BigNumber.from(x).toString()
   );
