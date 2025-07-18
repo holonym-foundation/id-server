@@ -741,7 +741,7 @@ function extractCreds(person) {
   const originalFirstNameBytes = Buffer.from(firstNameStr, 'utf8').length;
   const originalLastNameBytes = Buffer.from(lastNameStr, 'utf8').length;
 
-  console.log('Name before truncation', {
+  issueCredsV2Logger.nameTruncation({
     originalFirstName: {
       byteLength: originalFirstNameBytes,
       charLength: firstNameStr.length
