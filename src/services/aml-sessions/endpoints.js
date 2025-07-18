@@ -100,7 +100,7 @@ async function postSessionv2(req, res) {
       silkDiffWallet = "diff-wallet";
     }
 
-    // Only allow a user to create up to 6 sessions
+    // Only allow a user to create up to 15 sessions
     const existingSessions = await AMLChecksSession.find({
       sigDigest: sigDigest,
       status: {
@@ -112,9 +112,9 @@ async function postSessionv2(req, res) {
       }
     }).exec();
 
-    if (existingSessions.length >= 10) {
+    if (existingSessions.length >= 15) {
       return res.status(400).json({
-        error: "User has reached the maximum number of sessions (10)"
+        error: "User has reached the maximum number of sessions (15)"
       });
     }
 
