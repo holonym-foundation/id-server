@@ -741,16 +741,18 @@ function extractCreds(person) {
   const originalFirstNameBytes = Buffer.from(firstNameStr, 'utf8').length;
   const originalLastNameBytes = Buffer.from(lastNameStr, 'utf8').length;
 
-  issueCredsV2Logger.nameTruncation({
-    originalFirstName: {
-      byteLength: originalFirstNameBytes,
-      charLength: firstNameStr.length
-    },
-    originalLastName: {
-      byteLength: originalLastNameBytes,
-      charLength: lastNameStr.length
-    }
-  });
+  if (originalFirstNameBytes > 24 || originalLastNameBytes > 24) {
+    issueCredsV2Logger.nameTruncation({
+      originalFirstName: {
+        byteLength: originalFirstNameBytes,
+        charLength: firstNameStr.length
+      },
+      originalLastName: {
+        byteLength: originalLastNameBytes,
+        charLength: lastNameStr.length
+      }
+    });
+  }
 
   const firstNameBuffer = truncatedFirstNameStr ? Buffer.from(truncatedFirstNameStr, 'utf8') : Buffer.alloc(1);
   const lastNameBuffer = truncatedLastNameStr ? Buffer.from(truncatedLastNameStr, 'utf8') : Buffer.alloc(1);
