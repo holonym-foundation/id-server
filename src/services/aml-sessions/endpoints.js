@@ -49,6 +49,15 @@ const issueCredsV2Logger = upgradeLogger(logger.child({
   },
 }));
 
+const issueCredsV3Logger = upgradeLogger(logger.child({
+  msgPrefix: "[GET /aml-sessions/credentials/v3] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+}));
+
 /**
  * ENDPOINT.
  * Creates a session.
@@ -1212,7 +1221,7 @@ async function issueCredsV3(req, res) {
     const _id = req.params._id;
 
     try {
-      const _number = BigInt(issuanceNullifier)
+      const _number = BigInt(issuanceNullifier);
     } catch (err) {
       return res.status(400).json({
         error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
@@ -1252,11 +1261,11 @@ async function issueCredsV3(req, res) {
       // Note that we don't need to validate the ZKP or creds here. If the creds are in
       // the database, validation has passed.
 
-      if (govIdCreds?.expiry < new Date()) {
-        return res.status(400).json({
-          error: "Gov ID credentials have expired. Cannot issue Clean Hands credentials."
-        });
-      }
+      // if (govIdCreds?.expiry < new Date()) {
+      //   return res.status(400).json({
+      //     error: "Gov ID credentials have expired. Cannot issue Clean Hands credentials."
+      //   });
+      // }
 
       // Get UUID
       const uuid = govIdUUID(
@@ -1273,7 +1282,7 @@ async function issueCredsV3(req, res) {
       const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
       if (user) {
         // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-        issueCredsV2Logger.alreadyRegistered(uuid);
+        issueCredsV3Logger.alreadyRegistered(uuid);
         // Fail session and return
         await failSession(session, toAlreadyRegisteredStr(user._id))
         return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
@@ -1287,7 +1296,7 @@ async function issueCredsV3(req, res) {
       const response = issuev2CleanHands(issuanceNullifier, creds);
       response.metadata = creds;
 
-      issueCredsV2Logger.info({ uuid }, "Issuing credentials");
+      issueCredsV3Logger.info({ uuid }, "Issuing credentials");
 
       session.status = sessionStatusEnum.ISSUED;
       await session.save();
@@ -1303,34 +1312,63 @@ async function issueCredsV3(req, res) {
       });
     }
 
-    // zkp should be of type Groth16FullProveResult (a proof generated with snarkjs.groth16)
-    // it should be stringified
-    let zkp = null;
-    try {
-      zkp = JSON.parse(req.query.zkp);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid zkp" });
+    // here instead of zkp, we get from onfido directly
+    const idv_session_id = req.query.idv_session_id;
+    const idv_session = await getSessionById(idv_session_id);
+    if (!idv_session) {
+      return res.status(400).json({ error: "Session not found" });
     }
+
+    const check_id = idv_session.check_id;
+    if (!check_id) {
+      return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+    }
+
+    const check = await getOnfidoCheck(check_id);
+    const validationResultCheck = validateCheck(check);
+    if (!validationResultCheck.success && !validationResultCheck.hasReports) {
+      issueCredsV3Logger.info(validationResultCheck, "Check validation failed")
+      await failSession(session, validationResultCheck.error)
+      return res.status(400).json({
+        error: validationResultCheck.error,
+        details: validationResultCheck.log.data
+      });
+    }
+
+    const reports = await getOnfidoReports(check.report_ids);
+    if (!validationResultCheck.success && (!reports || reports.length == 0)) {
+      issueCredsV3Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
+
+      await failSession(session, "No onfido reports found")
+      return res.status(400).json({ error: "No reports found" });
+    }
+    const reportsValidation = validateReports(reports, session);
+    if (validationResultCheck.error || reportsValidation.error) {
+      const userErrorMessage = onfidoValidationToUserErrorMessage(
+        reportsValidation,
+        validationResultCheck
+      )
+      issueCredsV3Logger.info(reportsValidation, "Verification failed: "+ check_id)
+      await failSession(session, userErrorMessage)
+
+      throw {
+        status: 400,
+        error: userErrorMessage,
+        details: {
+          reasons: reportsValidation.reasons,
+        },
+      };
+    }
+
+    const documentReport = reports.find((report) => report.name == "document");
+
+    // get creds from onfido report
+    const firstName = documentReport.properties.first_name || "";
+    const lastName = documentReport.properties.last_name || "";
+    const dateOfBirth = documentReport.properties.date_of_birth || "";
     
-    if (!zkp?.proof || !zkp?.publicSignals) {
-      return res.status(400).json({ error: "No zkp found" });
-    }
-  
-    const zkpVerified = await groth16.verify(V3NameDOBVKey, zkp.publicSignals, zkp.proof);
-    if (!zkpVerified) {
-      return res.status(400).json({ error: "ZKP verification failed" });
-    }
-  
-    const { 
-      expiry,
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    } = parsePublicSignals(zkp.publicSignals);
-  
-    if (expiry < new Date()) {
-      return res.status(400).json({ error: "Credentials have expired" });
-    }
+    // expiry - not needed?
+    const expiry = documentReport.properties.expiry || "";
 
     // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
     // when we query "<base-url>/search/" (with trailing slash).
@@ -1356,14 +1394,14 @@ async function issueCredsV3(req, res) {
     if (data.count > 0) {
       const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
       if (!whitelistItem) {
-        issueCredsV2Logger.sanctionsMatchFound(data.results);
+        issueCredsV3Logger.sanctionsMatchFound(data.results);
         const confidenceScores = data?.results?.map(result => {
           return `(${result.data_source?.name}: ${result?.confidence_score})`
         }).join(', ')
         await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
         return res.status(400).json({ error: 'Sanctions match found' });
       } else {
-        issueCredsV2Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+        issueCredsV3Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
       }
     }
   
@@ -1371,7 +1409,7 @@ async function issueCredsV3(req, res) {
     // TODO: In the future, once we add more validation, we should use this pattern.
     // const validationResult = validateScreeningResult(data);
     // if (validationResult.error) {
-    //   issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
+    //   issueCredsV3Logger.error(validationResult.log.data, validationResult.log.msg);
     //   await failSession(session, validationResult.error)
     //   return res.status(400).json({ error: validationResult.error });
     // }
@@ -1386,7 +1424,7 @@ async function issueCredsV3(req, res) {
     const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
     if (user) {
       // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-      issueCredsV2Logger.alreadyRegistered(uuid);
+      issueCredsV3Logger.alreadyRegistered(uuid);
       // Fail session and return
       await failSession(session, toAlreadyRegisteredStr(user._id))
       return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
@@ -1404,7 +1442,7 @@ async function issueCredsV3(req, res) {
     const response = issuev2CleanHands(issuanceNullifier, creds);
     response.metadata = creds;
     
-    issueCredsV2Logger.info({ uuid }, "Issuing credentials");
+    issueCredsV3Logger.info({ uuid }, "Issuing credentials");
 
     const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
       holoUserId: session.sigDigest,
