@@ -25,6 +25,7 @@ import {
 import { rateLimit } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
+import { objectIdFiveDaysAgo } from "../../utils/utils.js";
 
 const postSessionsV2Logger = logger.child({
   msgPrefix: "[POST /sessions/v2] ",
@@ -999,6 +1000,7 @@ async function getSessions(req, res) {
   try {
     const sigDigest = req.query.sigDigest;
     const id = req.query.id;
+    const last5days = req.query.last5days === "true" || false;
 
     if (!sigDigest && !id) {
       return res.status(400).json({ error: "sigDigest or id is required" });
@@ -1014,7 +1016,11 @@ async function getSessions(req, res) {
       }
       sessions = await Session.find({ _id: objectId }).exec();
     } else {
-      sessions = await Session.find({ sigDigest }).exec();
+      if (last5days) {
+        sessions = await Session.find({ sigDigest, _id: { $gt: objectIdFiveDaysAgo() } }).exec();
+      } else {
+        sessions = await Session.find({ sigDigest }).exec();
+      }
     }
 
     return res.status(200).json(sessions);
