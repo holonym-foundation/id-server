@@ -415,6 +415,10 @@ const CleanHandsNullifierAndCredsSchema = new Schema({
     },
     required: false,
   },
+  idvSessionId: {
+    type: String,
+    required: false,
+  },
   uuid: {
     type: String,
     required: false,

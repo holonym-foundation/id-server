@@ -1258,22 +1258,37 @@ async function issueCredsV3(req, res) {
 
     // First, check if the user is looking up their credentials using their nullifier
     const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
-    const govIdCreds = nullifierAndCreds?.govIdCreds
-    if (govIdCreds?.firstName && govIdCreds?.lastName && govIdCreds?.dateOfBirth) {
-      // Note that we don't need to validate the ZKP or creds here. If the creds are in
-      // the database, validation has passed.
+    const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
 
-      // if (govIdCreds?.expiry < new Date()) {
-      //   return res.status(400).json({
-      //     error: "Gov ID credentials have expired. Cannot issue Clean Hands credentials."
-      //   });
-      // }
+    // as idvSessionId is already set in DB, we can directly get the creds from Onfido
+    // without stringent validation
+    if (nullifierIdvSessionId) {
+      const idvSessionResult = await getSessionById(nullifierIdvSessionId);
+      if (idvSessionResult.error) {
+        return res.status(400).json({ error: idvSessionResult.error });
+      }
 
-      // Get UUID
+      const check_id = idvSessionResult.session.check_id;
+      if (!check_id) {
+        return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+      }
+
+      const check = await getOnfidoCheck(check_id);  
+      const reports = await getOnfidoReports(check.report_ids);
+      const documentReport = reports.find((report) => report.name == "document");
+
+      // get creds from onfido report
+      const firstName = documentReport.properties.first_name || "";
+      const lastName = documentReport.properties.last_name || "";
+      const dateOfBirth = documentReport.properties.date_of_birth || "";
+
+      // expiry - not needed?
+      const expiry = documentReport.properties.expiry || "";
+
       const uuid = govIdUUID(
-        govIdCreds.firstName, 
-        govIdCreds.lastName, 
-        govIdCreds.dateOfBirth, 
+        firstName, 
+        lastName, 
+        dateOfBirth, 
       );
 
       // Assert user hasn't registered yet.
@@ -1291,10 +1306,11 @@ async function issueCredsV3(req, res) {
       }
 
       const creds = extractCreds({
-        firstName: govIdCreds.firstName, 
-        lastName: govIdCreds.lastName,
-        dateOfBirth: govIdCreds.dateOfBirth,
+        firstName, 
+        lastName, 
+        dateOfBirth,
       });
+    
       const response = issuev2CleanHands(issuanceNullifier, creds);
       response.metadata = creds;
 
@@ -1452,12 +1468,7 @@ async function issueCredsV3(req, res) {
       holoUserId: session.sigDigest,
       issuanceNullifier,
       uuid,
-      govIdCreds: {
-        firstName,
-        lastName,
-        dateOfBirth,
-        expiry
-      },
+      idvSessionId,
     });
     await newNullifierAndCreds.save();
 
