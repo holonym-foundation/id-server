@@ -35,7 +35,7 @@ import {
 } from "../../utils/user-verifications.js"
 import { getSessionById, failSession } from "../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/nullifier-and-creds.js";
-import { issuev2KYC, truncateToBytes } from "../../utils/issuance.js";
+import { issuev2KYC } from "../../utils/issuance.js";
 import { toAlreadyRegisteredStr } from "../../utils/errors.js"
 import { upgradeV3Logger } from "./error-logger.js";
 
@@ -302,7 +302,7 @@ function extractCreds(documentReport) {
     countryCodeToPrime[documentReport.properties.issuing_country];
   const birthdate = documentReport.properties.date_of_birth ?? "";
   const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
-  const firstNameStr = truncateToBytes(documentReport.properties.first_name ?? "", 24);
+  const firstNameStr = documentReport.properties.first_name ?? "";
   const firstNameBuffer = firstNameStr
     ? Buffer.from(firstNameStr)
     : Buffer.alloc(1);
@@ -315,22 +315,10 @@ function extractCreds(documentReport) {
   const middleNameBuffer = middleNameStr
     ? Buffer.from(middleNameStr)
     : Buffer.alloc(1);
-  const lastNameStr = truncateToBytes(documentReport.properties.last_name ?? "", 24);
+  const lastNameStr = documentReport.properties.last_name ?? "";
   const lastNameBuffer = lastNameStr
     ? Buffer.from(lastNameStr)
     : Buffer.alloc(1);
-
-  // Log original byte lengths if truncation occurred
-  const originalFirstNameBytesLength = Buffer.from(documentReport.properties.first_name ?? "", 'utf8').length;
-  const originalLastNameBytesLength = Buffer.from(documentReport.properties.last_name ?? "", 'utf8').length;
-  
-  if (originalFirstNameBytesLength > 24 || originalLastNameBytesLength > 24) {
-    endpointLogger.info({ 
-      firstNameBytes: originalFirstNameBytesLength, 
-      lastNameBytes: originalLastNameBytesLength 
-    }, "truncation for Onfido govId credentials");
-  }
-
   const nameArgs = [firstNameBuffer, middleNameBuffer, lastNameBuffer].map(
     (x) => ethers.BigNumber.from(x).toString()
   );
