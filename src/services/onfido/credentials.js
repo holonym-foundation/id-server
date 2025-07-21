@@ -1049,4 +1049,4 @@ async function getCredentialsV3(req, res) {
   }
 }
 
-export { getCredentials, getCredentialsV2, getCredentialsV3 };
+export { getCredentials, getCredentialsV2, getCredentialsV3, validateCheck, validateReports };

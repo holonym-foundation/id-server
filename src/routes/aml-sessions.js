@@ -28,6 +28,6 @@ router.post("/:_id/v3", payForSessionV3);
 router.post("/:_id/refund/v2", refundV2);
 router.get("/:_id/credentials/:nullifier", issueCreds);
 router.get("/:_id/credentials/v2/:nullifier", issueCredsV2);
-router.get("/:_id/credentials/v2/:nullifier", issueCredsV3);
+router.get("/:_id/credentials/v3/:nullifier", issueCredsV3);
 
 export default router;

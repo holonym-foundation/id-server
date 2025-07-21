@@ -39,6 +39,8 @@ import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" a
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
 import { failSession, getSessionById } from "../../utils/sessions.js";
+import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
+import { validateCheck, validateReports } from "../onfido/credentials.js";
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",
@@ -1313,13 +1315,15 @@ async function issueCredsV3(req, res) {
     }
 
     // here instead of zkp, we get from onfido directly
-    const idv_session_id = req.query.idv_session_id;
-    const idv_session = await getSessionById(idv_session_id);
-    if (!idv_session) {
-      return res.status(400).json({ error: "Session not found" });
+    const idvSessionId = req.query.idvSessionId;
+    const idvSessionResult = await getSessionById(idvSessionId);
+    if (idvSessionResult.error) {
+      return res.status(400).json({ error: idvSessionResult.error });
     }
+    const idvSession = idvSessionResult.session;
 
-    const check_id = idv_session.check_id;
+    console.log("idvSession", idvSession);
+    const check_id = idvSession.check_id;
     if (!check_id) {
       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
     }
