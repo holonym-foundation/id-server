@@ -26,5 +26,14 @@ export function upgradeLogger(logger) {
     )
   }
 
+  logger.nameTruncation = (logData) => {
+    logger.info(
+      {
+        logData
+      },
+      'Name truncation'
+    )
+  }
+
   return logger
 }

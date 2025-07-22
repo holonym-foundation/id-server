@@ -246,7 +246,7 @@ function validateReports(reports, metaSession) {
   return { success: true };
 }
 
-function onfidoValidationToUserErrorMessage(
+export function onfidoValidationToUserErrorMessage(
   reportsValidation,
   validationResultCheck
 ) {
@@ -1049,4 +1049,4 @@ async function getCredentialsV3(req, res) {
   }
 }
 
-export { getCredentials, getCredentialsV2, getCredentialsV3 };
+export { getCredentials, getCredentialsV2, getCredentialsV3, validateCheck, validateReports };

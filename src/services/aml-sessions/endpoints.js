@@ -38,10 +38,21 @@ import {
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" assert { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
-import { failSession } from "../../utils/sessions.js";
+import { failSession, getSessionById } from "../../utils/sessions.js";
+import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
+import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials.js";
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+}));
+
+const issueCredsV3Logger = upgradeLogger(logger.child({
+  msgPrefix: "[GET /aml-sessions/credentials/v3] ",
   base: {
     ...pinoOptions.base,
     feature: "holonym",
@@ -100,7 +111,7 @@ async function postSessionv2(req, res) {
       silkDiffWallet = "diff-wallet";
     }
 
-    // Only allow a user to create up to 6 sessions
+    // Only allow a user to create up to 15 sessions
     const existingSessions = await AMLChecksSession.find({
       sigDigest: sigDigest,
       status: {
@@ -112,9 +123,9 @@ async function postSessionv2(req, res) {
       }
     }).exec();
 
-    if (existingSessions.length >= 10) {
+    if (existingSessions.length >= 15) {
       return res.status(400).json({
-        error: "User has reached the maximum number of sessions (10)"
+        error: "User has reached the maximum number of sessions (15)"
       });
     }
 
@@ -700,13 +711,62 @@ function validateScreeningResult(result) {
   return { success: true };
 }
 
+// 18/07/2025: Truncate, character by character in utf8 compatible way
+function truncateToBytes(str, maxBytes) {
+  if (str === null || str === undefined) return '';
+  if (typeof str !== 'string') str = String(str);
+  if (typeof maxBytes !== 'number' || maxBytes < 0) return '';
+  if (maxBytes === 0) return '';
+  
+  const buffer = Buffer.from(str, 'utf8');
+  if (buffer.length <= maxBytes) return str;
+  
+  let result = '';
+  let currentBytes = 0;
+  
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const charBytes = Buffer.from(char, 'utf8').length;
+    
+    if (currentBytes + charBytes <= maxBytes) {
+      result += char;
+      currentBytes += charBytes;
+    } else {
+      break;
+    }
+  }
+  
+  return result;
+}
+
 function extractCreds(person) {
   const birthdate = person.dateOfBirth ? person.dateOfBirth : "";
   // const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
   const firstNameStr = person.firstName ? person.firstName : "";
-  const firstNameBuffer = firstNameStr ? Buffer.from(firstNameStr) : Buffer.alloc(1);
   const lastNameStr = person.lastName ? person.lastName : "";
-  const lastNameBuffer = lastNameStr ? Buffer.from(lastNameStr) : Buffer.alloc(1);
+    
+  const truncatedFirstNameStr = truncateToBytes(firstNameStr, 24);
+  const truncatedLastNameStr = truncateToBytes(lastNameStr, 24);
+
+  // Log original byte lengths
+  const originalFirstNameBytes = Buffer.from(firstNameStr, 'utf8').length;
+  const originalLastNameBytes = Buffer.from(lastNameStr, 'utf8').length;
+
+  if (originalFirstNameBytes > 24 || originalLastNameBytes > 24) {
+    issueCredsV2Logger.nameTruncation({
+      originalFirstName: {
+        byteLength: originalFirstNameBytes,
+        charLength: firstNameStr.length
+      },
+      originalLastName: {
+        byteLength: originalLastNameBytes,
+        charLength: lastNameStr.length
+      }
+    });
+  }
+
+  const firstNameBuffer = truncatedFirstNameStr ? Buffer.from(truncatedFirstNameStr, 'utf8') : Buffer.alloc(1);
+  const lastNameBuffer = truncatedLastNameStr ? Buffer.from(truncatedLastNameStr, 'utf8') : Buffer.alloc(1);
   const nameArgs = [firstNameBuffer, lastNameBuffer].map((x) =>
     ethers.BigNumber.from(x).toString()
   );
@@ -715,8 +775,8 @@ function extractCreds(person) {
   return {
     rawCreds: {
       birthdate,
-      firstName: firstNameStr,
-      lastName: lastNameStr
+      firstName: truncatedFirstNameStr,
+      lastName: truncatedLastNameStr
     },
     derivedCreds: {
       nameHash: {
@@ -1153,6 +1213,276 @@ async function issueCredsV2(req, res) {
 }
 
 /**
+ * Allows user to retrieve their credentials from Onfido directly.
+ */
+async function issueCredsV3(req, res) {
+  try {
+    // Caller must specify a session ID and a nullifier. We first lookup the user's creds
+    // using the nullifier. If no hit, then we lookup the credentials using the session ID.
+    const issuanceNullifier = req.params.nullifier;
+    const _id = req.params._id;
+
+    try {
+      const _number = BigInt(issuanceNullifier);
+    } catch (err) {
+      return res.status(400).json({
+        error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
+      });
+    }
+
+    // if (process.env.ENVIRONMENT == "dev") {
+    //   const creds = cleanHandsDummyUserCreds;
+    //   const response = issuev2CleanHands(issuanceNullifier, creds);
+    //   response.metadata = cleanHandsDummyUserCreds;
+    //   return res.status(200).json(response);
+    // }
+
+    let objectId = null;
+    try {
+      objectId = new ObjectId(_id);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid _id" });
+    }
+
+    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+      return res.status(400).json({
+        error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+      });
+    }
+
+    // First, check if the user is looking up their credentials using their nullifier
+    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
+    const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
+
+    // as idvSessionId is already set in DB, we can directly get the creds from Onfido
+    // without stringent validation
+    if (nullifierIdvSessionId) {
+      const idvSessionResult = await getSessionById(nullifierIdvSessionId);
+      if (idvSessionResult.error) {
+        return res.status(400).json({ error: idvSessionResult.error });
+      }
+
+      const check_id = idvSessionResult.session.check_id;
+      if (!check_id) {
+        return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+      }
+
+      const check = await getOnfidoCheck(check_id);  
+      const reports = await getOnfidoReports(check.report_ids);
+      const documentReport = reports.find((report) => report.name == "document");
+
+      // get creds from onfido report
+      const firstName = documentReport.properties.first_name || "";
+      const lastName = documentReport.properties.last_name || "";
+      const dateOfBirth = documentReport.properties.date_of_birth || "";
+
+      // expiry - not needed?
+      const expiry = documentReport.properties.expiry || "";
+
+      const uuid = govIdUUID(
+        firstName, 
+        lastName, 
+        dateOfBirth, 
+      );
+
+      // Assert user hasn't registered yet.
+      // This step is not strictly necessary since we are only considering nullifiers
+      // from the last 5 days (in the nullifierAndCreds query above) and the user
+      // is only getting the credentials+nullifier that they were already issued.
+      // However, we keep it here to be extra safe.
+      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+      if (user) {
+        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+        issueCredsV3Logger.alreadyRegistered(uuid);
+        // Fail session and return
+        await failSession(session, toAlreadyRegisteredStr(user._id))
+        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+      }
+
+      const creds = extractCreds({
+        firstName, 
+        lastName, 
+        dateOfBirth,
+      });
+    
+      const response = issuev2CleanHands(issuanceNullifier, creds);
+      response.metadata = creds;
+
+      issueCredsV3Logger.info({ uuid }, "Issuing credentials");
+
+      session.status = sessionStatusEnum.ISSUED;
+      await session.save();
+
+      return res.status(200).json(response);
+    }
+
+    // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
+    // then the lookup via nullifier should have worked above.
+    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+      return res.status(400).json({
+        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+      });
+    }
+
+    // here instead of zkp, we get from onfido directly
+    const idvSessionId = req.query.idvSessionId;
+    const idvSessionResult = await getSessionById(idvSessionId);
+    if (idvSessionResult.error) {
+      return res.status(400).json({ error: idvSessionResult.error });
+    }
+    const idvSession = idvSessionResult.session;
+
+    console.log("idvSession", idvSession);
+    const check_id = idvSession.check_id;
+    if (!check_id) {
+      return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+    }
+
+    const check = await getOnfidoCheck(check_id);
+    const validationResultCheck = validateCheck(check);
+    if (!validationResultCheck.success && !validationResultCheck.hasReports) {
+      issueCredsV3Logger.info(validationResultCheck, "Check validation failed")
+      await failSession(session, validationResultCheck.error)
+      return res.status(400).json({
+        error: validationResultCheck.error,
+        details: validationResultCheck.log.data
+      });
+    }
+
+    const reports = await getOnfidoReports(check.report_ids);
+    if (!validationResultCheck.success && (!reports || reports.length == 0)) {
+      issueCredsV3Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
+
+      await failSession(session, "No onfido reports found")
+      return res.status(400).json({ error: "No reports found" });
+    }
+    const reportsValidation = validateReports(reports, session);
+    if (validationResultCheck.error || reportsValidation.error) {
+      const userErrorMessage = onfidoValidationToUserErrorMessage(
+        reportsValidation,
+        validationResultCheck
+      )
+      issueCredsV3Logger.info(reportsValidation, "Verification failed: "+ check_id)
+      await failSession(session, userErrorMessage)
+
+      throw {
+        status: 400,
+        error: userErrorMessage,
+        details: {
+          reasons: reportsValidation.reasons,
+        },
+      };
+    }
+
+    const documentReport = reports.find((report) => report.name == "document");
+
+    // get creds from onfido report
+    const firstName = documentReport.properties.first_name || "";
+    const lastName = documentReport.properties.last_name || "";
+    const dateOfBirth = documentReport.properties.date_of_birth || "";
+    
+    // expiry - not needed?
+    const expiry = documentReport.properties.expiry || "";
+
+    // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
+    // when we query "<base-url>/search/" (with trailing slash).
+    const sanctionsUrl = 'https://api.sanctions.io/search/' +
+      '?min_score=0.93' +
+      // TODO: Create a constant for the data sources
+      // `&data_source=${encodeURIComponent('CFSP')}` +
+      `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
+      `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+      `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+      '&entity_type=individual';
+    // TODO: Add country_residence to zkp
+    // sanctionsUrl.searchParams.append('country_residence', 'us')
+    const config = {
+      headers: {
+        'Accept': 'application/json; version=2.2',
+        'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
+      }
+    }
+    const resp = await fetch(sanctionsUrl, config)
+    const data = await resp.json()
+
+    if (data.count > 0) {
+      const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
+      if (!whitelistItem) {
+        issueCredsV3Logger.sanctionsMatchFound(data.results);
+        const confidenceScores = data?.results?.map(result => {
+          return `(${result.data_source?.name}: ${result?.confidence_score})`
+        }).join(', ')
+        await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
+        return res.status(400).json({ error: 'Sanctions match found' });
+      } else {
+        issueCredsV3Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+      }
+    }
+  
+    // Commented out since the only validation we do is to check if count > 0, which we do above.
+    // TODO: In the future, once we add more validation, we should use this pattern.
+    // const validationResult = validateScreeningResult(data);
+    // if (validationResult.error) {
+    //   issueCredsV3Logger.error(validationResult.log.data, validationResult.log.msg);
+    //   await failSession(session, validationResult.error)
+    //   return res.status(400).json({ error: validationResult.error });
+    // }
+  
+    const uuid = govIdUUID(
+      firstName, 
+      lastName, 
+      dateOfBirth, 
+    );
+
+    // Assert user hasn't registered yet
+    const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+    if (user) {
+      // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+      issueCredsV3Logger.alreadyRegistered(uuid);
+      // Fail session and return
+      await failSession(session, toAlreadyRegisteredStr(user._id))
+      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+    }
+
+    const dbResponse = await saveUserToDb(uuid);
+    if (dbResponse.error) return res.status(400).json(dbResponse);
+
+    const creds = extractCreds({
+      firstName, 
+      lastName, 
+      dateOfBirth,
+    });
+  
+    const response = issuev2CleanHands(issuanceNullifier, creds);
+    response.metadata = creds;
+    
+    issueCredsV3Logger.info({ uuid }, "Issuing credentials");
+
+    const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
+      holoUserId: session.sigDigest,
+      issuanceNullifier,
+      uuid,
+      idvSessionId,
+    });
+    await newNullifierAndCreds.save();
+
+    session.status = sessionStatusEnum.ISSUED;
+    await session.save()
+  
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
+/**
  * Get session(s) associated with sigDigest or id.
  */
 async function getSessions(req, res) {
@@ -1195,5 +1525,6 @@ export {
   refundV2,
   issueCreds,
   issueCredsV2,
+  issueCredsV3,
   getSessions,
 };
