@@ -40,7 +40,7 @@ import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
 import { failSession, getSessionById } from "../../utils/sessions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
-import { validateCheck, validateReports } from "../onfido/credentials.js";
+import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials.js";
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",

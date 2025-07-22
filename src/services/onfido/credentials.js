@@ -246,7 +246,7 @@ function validateReports(reports, metaSession) {
   return { success: true };
 }
 
-function onfidoValidationToUserErrorMessage(
+export function onfidoValidationToUserErrorMessage(
   reportsValidation,
   validationResultCheck
 ) {
