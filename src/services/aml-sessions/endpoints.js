@@ -20,7 +20,11 @@ import {
   validateTxForSessionCreation,
   refundMintFeeOnChain,
 } from "../../utils/transactions.js";
-import { cleanHandsDummyUserCreds } from "../../utils/constants.js";
+import {
+  cleanHandsDummyUserCreds,
+  siIdentifierPrefixesThatRequireUserDeclaration,
+  siIdentifierPrefixesToBlock
+} from "../../utils/constants.js";
 import { getDateAsInt, govIdUUID } from "../../utils/utils.js";
 import {
   findOneNullifierAndCredsLast5Days
@@ -1411,7 +1415,33 @@ async function issueCredsV3(req, res) {
     const resp = await fetch(sanctionsUrl, config)
     const data = await resp.json()
 
-    if (data.count > 0) {
+    const filteredResults = data.results.filter(result => {
+      // Keep all non-PEP results
+      if (result?.data_source?.short_name !== 'PEP') {
+        return true
+      }
+
+      issueCredsV3Logger.info({ result }, "PEP result found");
+
+      // Filter for PEP results from certain countries
+      // for (const prefix of siIdentifierPrefixesToBlock) {
+      // For now, we block PEP results from countries in both of these lists. In the future,
+      // we want to block on certain countries, and for the other countries, allow the user
+      // to declare that they are not the PEP with a similar name.
+      for (const prefix of [...siIdentifierPrefixesThatRequireUserDeclaration, ...siIdentifierPrefixesToBlock]) {
+        if (!result.si_identifier) {
+          issueCredsV3Logger.warn({ result }, "No si_identifier found for PEP result");
+          return true
+        }
+        if (result.si_identifier?.startsWith(prefix)) {
+          return true
+        }
+      }
+
+      return false
+    })
+
+    if (filteredResults.length > 0) {
       const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
       if (!whitelistItem) {
         issueCredsV3Logger.sanctionsMatchFound(data.results);
