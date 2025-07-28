@@ -22,7 +22,6 @@ import {
 } from "../../utils/transactions.js";
 import {
   cleanHandsDummyUserCreds,
-  siIdentifierPrefixesThatRequireUserDeclaration,
   siIdentifierPrefixesToBlock
 } from "../../utils/constants.js";
 import { getDateAsInt, govIdUUID } from "../../utils/utils.js";
@@ -1434,22 +1433,6 @@ async function issueCredsV3(req, res) {
 
       issueCredsV3Logger.info({ result }, "PEP result found");
 
-      // // Filter for PEP results from certain countries
-      // // for (const prefix of siIdentifierPrefixesToBlock) {
-      // // For now, we block PEP results from countries in both of these lists. In the future,
-      // // we want to block on certain countries, and for the other countries, allow the user
-      // // to declare that they are not the PEP with a similar name.
-      // for (const prefix of [...siIdentifierPrefixesThatRequireUserDeclaration, ...siIdentifierPrefixesToBlock]) {
-      //   if (!result.si_identifier) {
-      //     issueCredsV3Logger.warn({ result }, "No si_identifier found for PEP result");
-      //     return true
-      //   }
-      //   if (result.si_identifier?.startsWith(prefix)) {
-      //     return true
-      //   }
-      // }
-
-      // return false
       return true
     })
 

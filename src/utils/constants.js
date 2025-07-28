@@ -793,43 +793,6 @@ export const faceTecCountryNameToCode = {
   "Zimbabwe": "ZW",
 }
 
-// For certain PEP hits, we allow the user to declare that they are not
-// the PEP with the similar name.
-export const siIdentifierPrefixesThatRequireUserDeclaration = [
-  'PEP-AL',
-  'PEP-BA',
-  // EU countries
-  'PEP-AT',
-  // 'PEP-BE',
-  'PEP-BG',
-  'PEP-HR',
-  'PEP-CY',
-  // 'PEP-CZ',
-  // 'PEP-DK',
-  // 'PEP-EE',
-  // 'PEP-FI',
-  // 'PEP-FR',
-  // 'PEP-DE',
-  'PEP-GR',
-  'PEP-HU',
-  // 'PEP-IE',
-  'PEP-IT',
-  // 'PEP-LV',
-  // 'PEP-LT',
-  // 'PEP-LU',
-  'PEP-MT',
-  // 'PEP-NL',
-  'PEP-PL',
-  // 'PEP-PT',
-  'PEP-RO',
-  'PEP-SK',
-  // 'PEP-ES',
-  // 'PEP-SE',
-  // US and UK
-  'PEP-US',
-  'PEP-GB',
-]
-
 // Prefixes to block for PEP results from sanctions.io for Clean Hands
 // Block EU countries, US, GB, and some other larger countries 
 export const siIdentifierPrefixesToBlock = [
