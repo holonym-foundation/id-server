@@ -261,6 +261,22 @@ const amlChecksSessionSchema = new Schema({
     type: String,
     required: false,
   },
+  // A statement that the user must confirm, saying that they are not any
+  // of the PEPs mentioned in the results from the sanctions io query.
+  // Should be something like "I certify that I am not any of the following
+  // Politically Exposed Persons with a similar name: <list of PEPs>".
+  userDeclaration: {
+    type: {
+      // We store the statement because the sanctions io results for the
+      // same user might change over time. We want to know exactly what the
+      // user confirmed.
+      statement: String,
+      // Whether the user has confirmed the statement
+      confirmed: Boolean,
+      statementGeneratedAt: Date
+    },
+    required: false,
+  }
 });
 
 const biometricsSessionSchema = new Schema({
