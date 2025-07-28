@@ -58,6 +58,11 @@ export const sessionStatusEnum = {
   REFUNDED: "REFUNDED",
 };
 
+export const cleanHandsSessionStatusEnum = {
+  ...sessionStatusEnum,
+  NEEDS_USER_DECLARATION: "NEEDS_USER_DECLARATION",
+};
+
 // export const ethereumProvider = new ethers.providers.AlchemyProvider(
 //   "homestead",
 //   process.env.ALCHEMY_APIKEY

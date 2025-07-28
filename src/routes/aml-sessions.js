@@ -11,6 +11,8 @@ import {
   issueCreds,
   issueCredsV2,
   issueCredsV3,
+  issueCredsV4,
+  confirmStatement,
   getSessions,
 } from "../services/aml-sessions/endpoints.js";
 
@@ -29,5 +31,7 @@ router.post("/:_id/refund/v2", refundV2);
 router.get("/:_id/credentials/:nullifier", issueCreds);
 router.get("/:_id/credentials/v2/:nullifier", issueCredsV2);
 router.get("/:_id/credentials/v3/:nullifier", issueCredsV3);
+router.get("/:_id/credentials/v4/:nullifier", issueCredsV4);
+router.post("/:_id/statement/confirm", confirmStatement);
 
 export default router;

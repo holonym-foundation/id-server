@@ -29,6 +29,7 @@ import { getDateAsInt, govIdUUID } from "../../utils/utils.js";
 import {
   findOneNullifierAndCredsLast5Days
 } from "../../utils/clean-hands-nullifier-and-creds.js";
+import { parseStatementForUserCertification } from '../../utils/clean-hands-misc.js'
 import {
   findOneCleanHandsUserVerification11Months5Days
 } from "../../utils/user-verifications.js";
@@ -38,6 +39,7 @@ import {
   amlSessionUSDPrice,
   payPalApiUrlBase,
   sessionStatusEnum,
+  cleanHandsSessionStatusEnum,
 } from "../../constants/misc.js";
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" assert { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
@@ -57,6 +59,15 @@ const issueCredsV2Logger = upgradeLogger(logger.child({
 
 const issueCredsV3Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v3] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+}));
+
+const issueCredsV4Logger = upgradeLogger(logger.child({
+  msgPrefix: "[GET /aml-sessions/credentials/v4] ",
   base: {
     ...pinoOptions.base,
     feature: "holonym",
@@ -1513,6 +1524,426 @@ async function issueCredsV3(req, res) {
 }
 
 /**
+ * Same as v3, except it marks the session as NEEDS_USER_DECLARATION if certain
+ * PEP hits are found.
+ */
+async function issueCredsV4(req, res) {
+  try {
+    // Caller must specify a session ID and a nullifier. We first lookup the user's creds
+    // using the nullifier. If no hit, then we lookup the credentials using the session ID.
+    const issuanceNullifier = req.params.nullifier;
+    const _id = req.params._id;
+
+    try {
+      const _number = BigInt(issuanceNullifier);
+    } catch (err) {
+      return res.status(400).json({
+        error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
+      });
+    }
+
+    // if (process.env.ENVIRONMENT == "dev") {
+    //   const creds = cleanHandsDummyUserCreds;
+    //   const response = issuev2CleanHands(issuanceNullifier, creds);
+    //   response.metadata = cleanHandsDummyUserCreds;
+    //   return res.status(200).json(response);
+    // }
+
+    let objectId = null;
+    try {
+      objectId = new ObjectId(_id);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid _id" });
+    }
+
+    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+      return res.status(400).json({
+        error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+      });
+    }
+
+    if (session.status === cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
+      return res.status(202).json({
+        message: "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+        statement: session?.userDeclaration?.statement,
+      });
+    }
+
+    // First, check if the user is looking up their credentials using their nullifier
+    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
+    const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
+
+    // as idvSessionId is already set in DB, we can directly get the creds from Onfido
+    // without stringent validation
+    if (nullifierIdvSessionId) {
+      const idvSessionResult = await getSessionById(nullifierIdvSessionId);
+      if (idvSessionResult.error) {
+        return res.status(400).json({ error: idvSessionResult.error });
+      }
+
+      const check_id = idvSessionResult.session.check_id;
+      if (!check_id) {
+        return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+      }
+
+      const check = await getOnfidoCheck(check_id);  
+      const reports = await getOnfidoReports(check.report_ids);
+      const documentReport = reports.find((report) => report.name == "document");
+
+      // get creds from onfido report
+      const firstName = documentReport.properties.first_name || "";
+      const lastName = documentReport.properties.last_name || "";
+      const dateOfBirth = documentReport.properties.date_of_birth || "";
+
+      // expiry - not needed?
+      const expiry = documentReport.properties.expiry || "";
+
+      const uuid = govIdUUID(
+        firstName, 
+        lastName, 
+        dateOfBirth, 
+      );
+
+      // Assert user hasn't registered yet.
+      // This step is not strictly necessary since we are only considering nullifiers
+      // from the last 5 days (in the nullifierAndCreds query above) and the user
+      // is only getting the credentials+nullifier that they were already issued.
+      // However, we keep it here to be extra safe.
+      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+      if (user) {
+        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+        issueCredsV4Logger.alreadyRegistered(uuid);
+        // Fail session and return
+        await failSession(session, toAlreadyRegisteredStr(user._id))
+        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+      }
+
+      const creds = extractCreds({
+        firstName, 
+        lastName, 
+        dateOfBirth,
+      });
+    
+      const response = issuev2CleanHands(issuanceNullifier, creds);
+      response.metadata = creds;
+
+      issueCredsV4Logger.info({ uuid }, "Issuing credentials");
+
+      session.status = sessionStatusEnum.ISSUED;
+      await session.save();
+
+      return res.status(200).json(response);
+    }
+
+    // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
+    // then the lookup via nullifier should have worked above.
+    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+      return res.status(400).json({
+        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+      });
+    }
+
+    // here instead of zkp, we get from onfido directly
+    const idvSessionId = req.query.idvSessionId;
+    const idvSessionResult = await getSessionById(idvSessionId);
+    if (idvSessionResult.error) {
+      return res.status(400).json({ error: idvSessionResult.error });
+    }
+    const idvSession = idvSessionResult.session;
+
+    const check_id = idvSession.check_id;
+    if (!check_id) {
+      return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+    }
+
+    const check = await getOnfidoCheck(check_id);
+    const validationResultCheck = validateCheck(check);
+    if (!validationResultCheck.success && !validationResultCheck.hasReports) {
+      issueCredsV4Logger.info(validationResultCheck, "Check validation failed")
+      await failSession(session, validationResultCheck.error)
+      return res.status(400).json({
+        error: validationResultCheck.error,
+        details: validationResultCheck.log.data
+      });
+    }
+
+    const reports = await getOnfidoReports(check.report_ids);
+    if (!validationResultCheck.success && (!reports || reports.length == 0)) {
+      issueCredsV4Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
+
+      await failSession(session, "No onfido reports found")
+      return res.status(400).json({ error: "No reports found" });
+    }
+    const reportsValidation = validateReports(reports, session);
+    if (validationResultCheck.error || reportsValidation.error) {
+      const userErrorMessage = onfidoValidationToUserErrorMessage(
+        reportsValidation,
+        validationResultCheck
+      )
+      issueCredsV4Logger.info(reportsValidation, "Verification failed: "+ check_id)
+      await failSession(session, userErrorMessage)
+
+      throw {
+        status: 400,
+        error: userErrorMessage,
+        details: {
+          reasons: reportsValidation.reasons,
+        },
+      };
+    }
+
+    const documentReport = reports.find((report) => report.name == "document");
+
+    // get creds from onfido report
+    const firstName = documentReport.properties.first_name || "";
+    const lastName = documentReport.properties.last_name || "";
+    const dateOfBirth = documentReport.properties.date_of_birth || "";
+    
+    // expiry - not needed?
+    const expiry = documentReport.properties.expiry || "";
+
+    // If:
+    // - A sanctions check has recently been done for this session AND
+    // - The user was found to not be on any blocklists AND
+    // - The user was identified as a potential PEP in a non-high risk country,
+    // (all of the above should be true for session.userDeclaration.statement to exist)
+    // then:
+    // - Check if the user has confirmed the required statement saying they are not
+    //   any of the identified PEPs.
+    // If the user has confirmed recently, then skip the sanctions check.
+    const fiveDaysAgo = new Date(Date.now() - (5 * 24 * 60 * 60 * 1000))
+    const skipSanctionsCheck = session.userDeclaration?.confirmed && 
+      (session.userDeclaration?.statementGeneratedAt > fiveDaysAgo)
+
+    if (!skipSanctionsCheck) {
+      // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
+      // when we query "<base-url>/search/" (with trailing slash).
+      const sanctionsUrl = 'https://api.sanctions.io/search/' +
+        '?min_score=0.93' +
+        // TODO: Create a constant for the data sources
+        // `&data_source=${encodeURIComponent('CFSP')}` +
+        `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
+        `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+        `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+        '&entity_type=individual';
+      // sanctionsUrl.searchParams.append('country_residence', 'us')
+      const config = {
+        headers: {
+          'Accept': 'application/json; version=2.2',
+          'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
+        }
+      }
+      const resp = await fetch(sanctionsUrl, config)
+      const data = await resp.json()
+
+      // if (process.env.NODE_ENV == 'development') {
+      //   data.results.push({
+      //     data_hash: 'abc123',
+      //     data_source: {
+      //       short_name: 'PEP',
+      //       long_name: 'INT / Politically Exposed Persons'
+      //     },
+      //     si_identifier: 'PEP-US-1234',
+      //     name: 'Satoshi Nakamoto',
+      //     title: 'Bitcoin author',
+      //     confidence_score: 0.99
+      //   })
+      // }
+
+      const resultsToBlock = data.results.filter(result => {
+        // Keep all non-PEP results
+        if (result?.data_source?.short_name !== 'PEP') {
+          return true
+        }
+
+        issueCredsV4Logger.info({ result }, "PEP result found");
+
+        // Filter for PEP results from certain countries
+        for (const prefix of siIdentifierPrefixesToBlock) {
+          if (!result.si_identifier) {
+            issueCredsV4Logger.warn({ result }, "No si_identifier found for PEP result");
+            return true
+          }
+          if (result.si_identifier?.startsWith(prefix)) {
+            return true
+          }
+        }
+
+        return false
+      })
+
+      // Get all PEP results that do not trigger an automatic block.
+      // For all countries that we don't block, allow the user to declare that they are not the PEP with a similar name.
+      const resultsThatRequireDeclaration = data.results.filter(result => {
+        // Ignore all non-PEP results
+        if (result?.data_source?.short_name !== 'PEP') {
+          return false
+        }
+
+        // If data_hash is missing for some reason, include it. It should be present.
+        // If we see enough of these errors, we can change this logic.
+        if (!result.data_hash) {
+          issueCredsV4Logger.error({ result }, "Sanctions io PEP result is missing data_hash")
+          return true
+        }
+
+        // If this PEP result is already in the results to block, ignore it
+        for (const resultToBlock of resultsToBlock) {
+          if (
+            resultToBlock.data_hash &&
+            (result.data_hash === resultToBlock.data_hash)
+          ) {
+            return false
+          } else if (!resultToBlock.data_hash) {
+            issueCredsV4Logger.error({ result: resultToBlock }, "Sanctions io PEP result is missing data_hash")
+            return true
+          }
+        }
+
+        return true
+      })
+
+      if (resultsToBlock.length > 0) {
+        const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
+        if (!whitelistItem) {
+          issueCredsV4Logger.sanctionsMatchFound(data.results);
+          const confidenceScores = data?.results?.map(result => {
+            return `(${result.data_source?.name}: ${result?.confidence_score})`
+          }).join(', ')
+          await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
+          return res.status(400).json({ error: 'Sanctions match found' });
+        } else {
+          issueCredsV4Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+        }
+      }
+
+      if (resultsThatRequireDeclaration.length > 0) {
+        session.status = cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION;
+        const statement = parseStatementForUserCertification(resultsThatRequireDeclaration)
+        session.userDeclaration = {
+          statement,
+          confirmed: false,
+          statementGeneratedAt: new Date()
+        }
+        await session.save();
+
+        issueCredsV4Logger.info({ sessionId: session._id }, "Clean Hands session requires user declaration")
+
+        return res.status(202).json({
+          message: "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+          statement,
+        })
+      }
+    
+      // Commented out since the only validation we do is to check if count > 0, which we do above.
+      // TODO: In the future, once we add more validation, we should use this pattern.
+      // const validationResult = validateScreeningResult(data);
+      // if (validationResult.error) {
+      //   issueCredsV4Logger.error(validationResult.log.data, validationResult.log.msg);
+      //   await failSession(session, validationResult.error)
+      //   return res.status(400).json({ error: validationResult.error });
+      // }
+    }
+  
+    const uuid = govIdUUID(
+      firstName, 
+      lastName, 
+      dateOfBirth, 
+    );
+
+    // Assert user hasn't registered yet
+    const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+    if (user) {
+      // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+      issueCredsV4Logger.alreadyRegistered(uuid);
+      // Fail session and return
+      await failSession(session, toAlreadyRegisteredStr(user._id))
+      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+    }
+
+    const dbResponse = await saveUserToDb(uuid);
+    if (dbResponse.error) return res.status(400).json(dbResponse);
+
+    const creds = extractCreds({
+      firstName, 
+      lastName, 
+      dateOfBirth,
+    });
+  
+    const response = issuev2CleanHands(issuanceNullifier, creds);
+    response.metadata = creds;
+    
+    issueCredsV4Logger.info({ uuid }, "Issuing credentials");
+
+    const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
+      holoUserId: session.sigDigest,
+      issuanceNullifier,
+      uuid,
+      idvSessionId,
+    });
+    await newNullifierAndCreds.save();
+
+    session.status = sessionStatusEnum.ISSUED;
+    await session.save()
+  
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
+/**
+ * Endpoint to allow the user to confirm the statement stored under "userDeclaration"
+ * in the Clean Hands session. For v4 issuance.
+ */
+async function confirmStatement(req, res) {
+  try {
+    const _id = req.params._id;
+
+    let objectId = null;
+    try {
+      objectId = new ObjectId(_id);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid _id" });
+    }
+
+    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.status !== cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
+      return res.status(400).json({
+        error: `Session status is '${session.status}'. Expected '${cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION}'`,
+      });
+    }
+
+    if (!session?.userDeclaration?.statement) {
+      return res.status(400).json({
+        error: `Unexpected. Session has no associated statement'`,
+      });
+    }
+
+    session.userDeclaration.confirmed = true
+    session.status = sessionStatusEnum.IN_PROGRESS
+    await session.save()
+
+    return res.status(200).json({ message: 'Success' })
+  } catch (err) {
+    console.log("POST /aml-sessions/statement/confirm: Error encountered", err.message);
+    return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
+/**
  * Get session(s) associated with sigDigest or id.
  */
 async function getSessions(req, res) {
@@ -1556,5 +1987,7 @@ export {
   issueCreds,
   issueCredsV2,
   issueCredsV3,
+  issueCredsV4,
+  confirmStatement,
   getSessions,
 };
