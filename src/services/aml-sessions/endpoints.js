@@ -9,7 +9,8 @@ import {
   AMLChecksSession, 
   SessionRefundMutex,
   CleanHandsNullifierAndCreds,
-  CleanHandsSessionWhitelist
+  CleanHandsSessionWhitelist,
+  SanctionsResult
 } from "../../init.js";
 import { 
   getAccessToken as getPayPalAccessToken,
@@ -1425,26 +1426,31 @@ async function issueCredsV3(req, res) {
     const resp = await fetch(sanctionsUrl, config)
     const data = await resp.json()
 
+    const resultsObjectsToStore = []
     const filteredResults = data.results.filter(result => {
       // Keep all non-PEP results
       if (result?.data_source?.short_name !== 'PEP') {
         return true
       }
 
-      issueCredsV3Logger.info(
-        {
-          result: {
-            data_source: result.data_source,
-            nationality: result.nationality,
-            confidence_score: result.confidence_score,
-            si_identifier: result.si_identifier,
-          }
-        },
-        "PEP result found"
-      );
+      // Log and persist the PEP hit
+      const resultToLog = {
+        data_source: result.data_source,
+        nationality: result.nationality,
+        confidence_score: result.confidence_score,
+        si_identifier: result.si_identifier,
+      }
+      issueCredsV3Logger.info({ result: resultToLog }, "PEP result found");
+      const resultsObj = new SanctionsResult({
+        message: "PEP result found",
+        ...resultToLog
+      })
+      resultsObjectsToStore.push(resultsObj)
 
       return true
     })
+
+    await Promise.all(resultsObjectsToStore.map(result => result.save()))
 
     if (filteredResults.length > 0) {
       const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
@@ -1750,23 +1756,26 @@ async function issueCredsV4(req, res) {
       //   })
       // }
 
+      const resultsObjectsToStore = []
       const resultsToBlock = data.results.filter(result => {
         // Keep all non-PEP results
         if (result?.data_source?.short_name !== 'PEP') {
           return true
         }
 
-        issueCredsV4Logger.info(
-          {
-            result: {
-              data_source: result.data_source,
-              nationality: result.nationality,
-              confidence_score: result.confidence_score,
-              si_identifier: result.si_identifier,
-            }
-          },
-          "PEP result found"
-        );
+        // Log and persist the PEP hit
+        const resultToLog = {
+          data_source: result.data_source,
+          nationality: result.nationality,
+          confidence_score: result.confidence_score,
+          si_identifier: result.si_identifier,
+        }
+        issueCredsV4Logger.info({ result: resultToLog }, "PEP result found");
+        const resultsObj = new SanctionsResult({
+          message: "PEP result found",
+          ...resultToLog
+        })
+        resultsObjectsToStore.push(resultsObj)
 
         // Filter for PEP results from certain countries
         for (const prefix of siIdentifierPrefixesToBlock) {
@@ -1781,6 +1790,8 @@ async function issueCredsV4(req, res) {
 
         return false
       })
+
+      await Promise.all(resultsObjectsToStore.map((result) => result.save()))
 
       // Get all PEP results that do not trigger an automatic block.
       // For all countries that we don't block, allow the user to declare that they are not the PEP with a similar name.

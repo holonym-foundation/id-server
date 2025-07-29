@@ -5,6 +5,7 @@ import {
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema
 } from "./schemas/whitelists.js";
+import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 dotenv.config();
 
 const { Schema } = mongoose;
@@ -655,4 +656,5 @@ export {
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
+  SanctionsResultSchema,
 };

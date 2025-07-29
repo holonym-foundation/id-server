@@ -28,7 +28,8 @@ import {
   SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
-  CleanHandsSessionWhitelistSchema
+  CleanHandsSessionWhitelistSchema,
+  SanctionsResultSchema
 } from "./schemas.js";
 import dotenv from "dotenv";
 dotenv.config();
@@ -270,6 +271,11 @@ async function initializeMongoDb() {
     cleanHandsSessionWhitelistName
   );
 
+  const SanctionsResult = mongoose.model(
+    "SanctionsResult",
+    SanctionsResultSchema,
+  );
+
   return {
     UserVerifications,
     IDVSessions,
@@ -292,6 +298,7 @@ async function initializeMongoDb() {
     Order,
     HumanIDPaymentGateWhitelist,
     CleanHandsSessionWhitelist,
+    SanctionsResult,
   };
 }
 
@@ -317,7 +324,8 @@ let UserVerifications,
   SilkPeanutCampaignsMetadata,
   Order,
   HumanIDPaymentGateWhitelist,
-  CleanHandsSessionWhitelist;
+  CleanHandsSessionWhitelist,
+  SanctionsResult;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -342,6 +350,7 @@ initializeMongoDb().then((result) => {
     Order = result.Order;
     HumanIDPaymentGateWhitelist = result.HumanIDPaymentGateWhitelist;
     CleanHandsSessionWhitelist = result.CleanHandsSessionWhitelist;
+    SanctionsResult = result.SanctionsResult
   } else {
     logger.error("MongoDB initialization failed");
   }
@@ -376,5 +385,6 @@ export {
   Order,
   HumanIDPaymentGateWhitelist,
   CleanHandsSessionWhitelist,
+  SanctionsResult,
   zokProvider,
 };
