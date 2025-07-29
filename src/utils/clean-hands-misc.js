@@ -6,7 +6,7 @@
  * @property {string[]} nationality - Array of nationality codes
  * @property {number} confidence_score - Confidence score (0-1)
  * @property {string} name - Name of the entity
- * @property {string} si_identifier - Unique identifier
+ * @property {string} si_identifier - sanctions io identifier for the result type
  * @property {string} title - Entity's title
  * @property {Object} data_source - Data source information
  * @property {string} data_source.name - Full name of the data source

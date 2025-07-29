@@ -1431,7 +1431,17 @@ async function issueCredsV3(req, res) {
         return true
       }
 
-      issueCredsV3Logger.info({ result }, "PEP result found");
+      issueCredsV3Logger.info(
+        {
+          result: {
+            data_source: result.data_source,
+            nationality: result.nationality,
+            confidence_score: result.confidence_score,
+            si_identifier: result.si_identifier,
+          }
+        },
+        "PEP result found"
+      );
 
       return true
     })
@@ -1746,7 +1756,17 @@ async function issueCredsV4(req, res) {
           return true
         }
 
-        issueCredsV4Logger.info({ result }, "PEP result found");
+        issueCredsV4Logger.info(
+          {
+            result: {
+              data_source: result.data_source,
+              nationality: result.nationality,
+              confidence_score: result.confidence_score,
+              si_identifier: result.si_identifier,
+            }
+          },
+          "PEP result found"
+        );
 
         // Filter for PEP results from certain countries
         for (const prefix of siIdentifierPrefixesToBlock) {
