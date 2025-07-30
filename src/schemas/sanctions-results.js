@@ -15,7 +15,10 @@ export const SanctionsResultSchema = new Schema({
     },
     required: false
   },
-  nationality: { type: String, required: false },
+  nationality: {
+    type: [String],
+    required: false
+  },
   confidence_score: { type: String, required: false },
   si_identifier: { type: String, required: false },
 });
