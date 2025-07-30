@@ -851,6 +851,9 @@ function issuev2CleanHands(issuanceNullifier, creds) {
 }
 
 async function issueCreds(req, res) {
+  // Block usage of this endpoint
+  return res.status(404).send()
+
   try {
     const issuanceNullifier = req.params.nullifier;
     const _id = req.params._id;
@@ -1003,6 +1006,9 @@ async function issueCreds(req, res) {
  * same nullifier.
  */
 async function issueCredsV2(req, res) {
+  // Block usage of this endpoint
+  return res.status(404).send()
+
   try {
     // Caller must specify a session ID and a nullifier. We first lookup the user's creds
     // using the nullifier. If no hit, then we lookup the credentials using the session ID.
@@ -1231,6 +1237,9 @@ async function issueCredsV2(req, res) {
  * Allows user to retrieve their credentials from Onfido directly.
  */
 async function issueCredsV3(req, res) {
+  // Block usage of this endpoint
+  return res.status(404).send()
+
   try {
     // Caller must specify a session ID and a nullifier. We first lookup the user's creds
     // using the nullifier. If no hit, then we lookup the credentials using the session ID.
