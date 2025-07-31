@@ -134,73 +134,74 @@ async function getSuiOrderTransactionStatus(req, res) {
   }
 }
 
-async function setSuiOrderFulfilled(req, res) {
-  try {
-    // TODO: Reduce code duplication between this function and the setOrderFulfilled function for EVM and Stellar orders.
+// TODO: Add this once we fully support Sui SBTs
+// async function setSuiOrderFulfilled(req, res) {
+//   try {
+//     // TODO: Reduce code duplication between this function and the setOrderFulfilled function for EVM and Stellar orders.
 
-    const { externalOrderId } = req.params;
-    const { fulfillmentReceipt } = req.query;
+//     const { externalOrderId } = req.params;
+//     const { fulfillmentReceipt } = req.query;
 
-    // Check for API key in header
-    const apiKey = req.headers["x-api-key"];
+//     // Check for API key in header
+//     const apiKey = req.headers["x-api-key"];
 
-    // to be sure that ORDERS_API_KEY is defined and that apiKey is passed
-    if (!process.env.ORDERS_API_KEY || !apiKey) {
-      return res.status(500).json({ error: "Unauthorized. No API key found." });
-    }
+//     // to be sure that ORDERS_API_KEY is defined and that apiKey is passed
+//     if (!process.env.ORDERS_API_KEY || !apiKey) {
+//       return res.status(500).json({ error: "Unauthorized. No API key found." });
+//     }
 
-    if (apiKey !== process.env.ORDERS_API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+//     if (apiKey !== process.env.ORDERS_API_KEY) {
+//       return res.status(401).json({ error: "Unauthorized" });
+//     }
 
-    if (typeof fulfillmentReceipt != 'string') {
-      return res.status(400).json({
-        error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
-      })
-    }
+//     if (typeof fulfillmentReceipt != 'string') {
+//       return res.status(400).json({
+//         error: `Invalid fulfillment receipt. If present, it must be a string. Received '${fulfillmentReceipt}'`
+//       })
+//     }
 
-    // Right now, fulfillment receipt must be a JSON object with a base 58 string as the value.
-    const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[1-9A-HJ-NP-Za-km-z]+)"\s*\}/;
-    if (!pattern.test(fulfillmentReceipt)) {
-      return res.status(400).json({
-        error: `Invalid fulfillment receipt. If present, it must be a JSON object with a base 58 string value. Received '${fulfillmentReceipt}'`
-      })
-    }
+//     // Right now, fulfillment receipt must be a JSON object with a base 58 string as the value.
+//     const pattern = /\{\s*"\w+"\s*:\s*"((0x)?[1-9A-HJ-NP-Za-km-z]+)"\s*\}/;
+//     if (!pattern.test(fulfillmentReceipt)) {
+//       return res.status(400).json({
+//         error: `Invalid fulfillment receipt. If present, it must be a JSON object with a base 58 string value. Received '${fulfillmentReceipt}'`
+//       })
+//     }
 
-    // Query the DB for the order
-    const order = await Order.findOne({ externalOrderId });
+//     // Query the DB for the order
+//     const order = await Order.findOne({ externalOrderId });
 
-    if (!order) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+//     if (!order) {
+//       return res.status(404).json({ error: "Order not found" });
+//     }
 
-    // Validate TX (check memo, to, amount, etc)
-    const validationResult = await validateTx(
-      order.sui.txHash,
-      order.externalOrderId,
-      idvSessionUSDPrice
-    );
+//     // Validate TX (check memo, to, amount, etc)
+//     const validationResult = await validateTx(
+//       order.sui.txHash,
+//       order.externalOrderId,
+//       idvSessionUSDPrice
+//     );
 
-    // Update the order to fulfilled
-    order.fulfilled = true;
-    if (fulfillmentReceipt) {
-      order.fulfillmentReceipt = fulfillmentReceipt
-    } else {
-      ordersLogger.info(
-        {
-          fulfillmentReceipt,
-          externalOrderId,
-        },
-        "Marking order fulfilled without fulfillmentReceipt"
-      )
-    }
-    await order.save();
+//     // Update the order to fulfilled
+//     order.fulfilled = true;
+//     if (fulfillmentReceipt) {
+//       order.fulfillmentReceipt = fulfillmentReceipt
+//     } else {
+//       ordersLogger.info(
+//         {
+//           fulfillmentReceipt,
+//           externalOrderId,
+//         },
+//         "Marking order fulfilled without fulfillmentReceipt"
+//       )
+//     }
+//     await order.save();
 
-    return res.status(200).json({ message: "Order set to fulfilled" });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-}
+//     return res.status(200).json({ message: "Order set to fulfilled" });
+//   } catch (error) {
+//     return res.status(500).json({ error: error.message });
+//   }
+// }
 
 async function refundSuiOrder(req, res) {
   // todo...
@@ -209,5 +210,5 @@ async function refundSuiOrder(req, res) {
 export {
   createSuiOrder,
   getSuiOrderTransactionStatus,
-  setSuiOrderFulfilled,
+  // setSuiOrderFulfilled,
 }

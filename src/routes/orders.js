@@ -15,7 +15,7 @@ import {
 import {
   createSuiOrder,
   getSuiOrderTransactionStatus,
-  setSuiOrderFulfilled,
+  // setSuiOrderFulfilled,
   // refundOrder as refundSuiOrder
 } from "../services/orders/sui/endpoints.js"
 
@@ -44,7 +44,7 @@ router.post("/stellar/admin/refund", refundStellarOrder);
 // --- Sui ---
 router.post("/sui", createSuiOrder);
 router.get("/sui/:externalOrderId/transaction/status", getSuiOrderTransactionStatus);
-router.get("/sui/:externalOrderId/fulfilled", setSuiOrderFulfilled); // gated by ORDERS_API_KEY
+// router.get("/sui/:externalOrderId/fulfilled", setSuiOrderFulfilled); // gated by ORDERS_API_KEY
 // router.post("/sui/admin/refund", refundStellarOrder);
 
 export default router;
