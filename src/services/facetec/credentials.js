@@ -15,6 +15,7 @@ import {
   getDateAsInt,
   sha256,
   govIdUUID,
+  validateUUIDv4,
   objectIdElevenMonthsAgo,
   objectIdFiveDaysAgo,
 } from "../../utils/utils.js";
@@ -194,6 +195,13 @@ async function getCredentialsV3(req, res) {
 
     // ISSUANCE for the first time then save nullifierAndCreds mapping
 
+    // redundant check for session.externalDatabaseRefID is valid uuid V4
+    if (!validateUUIDv4(session.externalDatabaseRefID)) {
+      return res.status(400).json({
+        error: "Invalid externalDatabaseRefID. It must be a valid UUID V4",
+      });
+    }
+ 
     // as facetec is used for deduplication
     // there is no need for saveCollisionMetadata logic
 
