@@ -316,9 +316,10 @@ async function getCredentialsV3(req, res) {
         }
       );
 
-      // this should be a rare case
+      // this should be a rare case if the user has done proper verification enrollment
       if (!faceDbEnrollResponse.data.success) {
-        // TODO: facetec: if that happens, we would need to rewind above issueV2 steps
+        // one of the reason might be that verification enrollment does not exit
+        // just return and exit the flow, do not proceed with issuance
         return res
           .status(400)
           .json({ error: "duplicate check: /3d-db enrollment failed" });
