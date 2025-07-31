@@ -101,6 +101,15 @@ export function govIdUUID(firstName, lastName, dob) {
   return sha256(Buffer.from(uuidConstituents)).toString("hex");
 }
 
+export function validateUUIDv4(uuid) {  
+  // Handle non-string inputs
+  if (typeof uuid !== 'string') {
+    return false;
+  }
+  
+  return uuid.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/) !== null;
+}
+
 /**
  * When checking whether a user has already been verified, we want to ignore
  * records that are older than 11 months. The soonest an SBT can expire is
