@@ -21,13 +21,19 @@ import { ethers } from "ethers";
 import { poseidon } from "circomlibjs-old";
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { upgradeV3Logger } from "./error-logger.js";
 
-// const postSessionsLogger = logger.child({
-//   msgPrefix: "[POST /sessions] ",
-//   base: {
-//     ...pinoOptions.base,
-//   },
-// });
+const endpointLoggerV3 = upgradeV3Logger(
+  logger.child({
+    msgPrefix: "[POST /facetec/enrollment-3d] ",
+    base: {
+      ...pinoOptions.base,
+      idvProvider: "facetec",
+      feature: "holonym",
+      subFeature: "enrollment",
+    },
+  })
+);
 
 export async function enrollment3d(req, res) {
   try {
@@ -55,6 +61,12 @@ export async function enrollment3d(req, res) {
         .status(400)
         .json({ error: true, errorMessage: "sessionType is required" });
     }
+    
+    if (!sessionType || (sessionType !== "biometrics" && sessionType !== "kyc")) {
+      return res
+        .status(400)
+        .json({ error: true, errorMessage: "sessionType must be either 'biometrics' or 'kyc'" });
+    }
     if (!issuanceNullifier) {
       return res
         .status(400)
@@ -78,8 +90,6 @@ export async function enrollment3d(req, res) {
     if(sessionType === "biometrics") {
       session = await BiometricsSession.findOne({ _id: objectId }).exec();
     } else if(sessionType === "kyc") {
-      session = await Session.findOne({ _id: objectId }).exec();
-    } else {
       session = await Session.findOne({ _id: objectId }).exec();
     }
 
@@ -137,9 +147,6 @@ export async function enrollment3d(req, res) {
       );
     }
 
-    // console.log('device key', req.headers["x-device-key"])
-    // console.log('x-user-agent', req.headers["x-user-agent"])
-    // console.log('enrollment-3d faceTecParams', faceTecParams)
     try {
       if (sessionType === "biometrics") faceTecParams.storeAsFaceVector = true;
       
@@ -160,8 +167,6 @@ export async function enrollment3d(req, res) {
           },
         }
       );
-
-      console.log("enrollmentResponse.data", enrollmentResponse.data);
 
       // check for enrollment success
       if (!enrollmentResponse.data.success) {
@@ -240,19 +245,11 @@ export async function enrollment3d(req, res) {
       }
     }
 
-    // console.log("facetec POST /enrollment-3d response:", data);
-
     // duplication check /3d-db/search
     // do duplication check here
     req.app.locals.sseManager.sendToClient(sid, {
       status: "in_progress",
       message: "duplicates check: sending to server",
-    });
-
-    console.log("/3d-db/search", {
-      externalDatabaseRefID: session.externalDatabaseRefID,
-      minMatchLevel: 15,
-      groupName: groupName,
     });
 
     try {
@@ -272,44 +269,59 @@ export async function enrollment3d(req, res) {
           },
         }
       );
-      console.log("faceDbSearchResponse.data", faceDbSearchResponse.data);
 
-      if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
-        console.log("Fresh/empty groupName detected, continuing with enrollment flow");
-        // Continue with the flow instead of returning an error
-      } else {
-        if (faceDbSearchResponse.data?.results?.length > 0) {
-          if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
-            // Continue
-            // search returns 1 result which is the same, so it is not a duplicate
-          } else {
-            // duplicates found, return error
-            console.log(
-              "duplicate check: found duplicates",
-              faceDbSearchResponse.data.results.length,
-              faceDbSearchResponse.data.results
-            );
+      if (faceDbSearchResponse.data?.success && faceDbSearchResponse.data?.results) {
+        if(faceDbSearchResponse.data.results.length === 0) {
+          // search returns 0 result
+          // so continue with enrollment flow
+        } else if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
+          // search returns 1 result which is the same, so it is not a duplicate
+          // so continue with enrollment flow
+        } else { 
+          // duplicates found, return error
+          endpointLoggerV3.error(
+            {
+              resultsLength: faceDbSearchResponse.data.results.length,
+              results: faceDbSearchResponse.data.results,
+              externalDatabaseRefID: session.externalDatabaseRefID,
+            },
+            "Duplicate check: found duplicates"
+          );
 
-            // send event to user client
-            req.app.locals.sseManager.sendToClient(sid, {
-              status: "error",
-              message: "found duplicates! verification has failed.",
-            });
+          // send event to user client
+          req.app.locals.sseManager.sendToClient(sid, {
+            status: "error",
+            message: "found duplicates! verification has failed.",
+          });
 
-            await updateSessionStatus(
-              session,
-              sessionStatusEnum.VERIFICATION_FAILED,
-              `Face scan failed as highly matching duplicates are found.`
-            );
+          await updateSessionStatus(
+            session,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            `Face scan failed as highly matching duplicates are found.`
+          );
 
-            return res.status(400).json({
-              error: true,
-              errorMessage: "duplicate check: found duplicates",
-              instructions: "Verification has failed as highly matching duplicates are found.",
-              triggerRetry: false,
-            });
-          }
+          return res.status(400).json({
+            error: true,
+            errorMessage: "duplicate check: found duplicates",
+            instructions: "Verification has failed as highly matching duplicates are found.",
+            triggerRetry: false,
+          });
         }
+      } else if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
+        endpointLoggerV3.info({ externalDatabaseRefID: session.externalDatabaseRefID }, "Fresh/empty groupName detected, continuing with enrollment flow");
+        // Continue with the flow instead of returning an error
+      } else { 
+        endpointLoggerV3.error(
+          {
+            responseData: faceDbSearchResponse.data,
+          },
+          "Duplicate check: /3d-db/search encountered an error"
+        );
+        return res.status(400).json({
+          error: true,
+          errorMessage: "duplicate check: /3d-db/search encountered an error",
+          triggerRetry: true,
+        });
       }
     } catch (err) {
       console.error("Error during /3d-db/search:", err.message);
@@ -342,7 +354,7 @@ export async function enrollment3d(req, res) {
       }
     }
 
-    // credentials issuance and 3d-dbenrollment logic happens via getCredentialsV3 endpoint
+    // credentials issuance and 3d-db enrollment logic happens via getCredentialsV3 endpoint
     // when /store page is accessed
     // here just return success and scanResultBlob
     if (sessionType === "biometrics") {
@@ -368,7 +380,7 @@ export async function enrollment3d(req, res) {
         triggerRetry: true,
       });
   } catch (err) {
-    console.log("POST /enrollment-3d: Error encountered", err.message);
+    endpointLoggerV3.error(err, "POST /enrollment-3d: Error encountered");
     return res.status(500).json({
       error: true,
       errorMessage: "An unknown error occurred",

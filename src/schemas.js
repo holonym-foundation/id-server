@@ -299,6 +299,10 @@ const biometricsSessionSchema = new Schema({
     type: String,
     required: false,
   },
+  verificationFailureReason: {
+    type: String,
+    required: false,
+  },
   num_facetec_liveness_checks: {
     type: Number,
     required: false,
