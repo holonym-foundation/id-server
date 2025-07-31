@@ -274,42 +274,50 @@ export async function enrollment3d(req, res) {
       );
       console.log("faceDbSearchResponse.data", faceDbSearchResponse.data);
 
-      if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
+      if (faceDbSearchResponse.data?.success && faceDbSearchResponse.data?.results) {
+        if(faceDbSearchResponse.data.results.length === 0) {
+          // search returns 0 result
+          // so continue with enrollment flow
+        } else if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
+          // search returns 1 result which is the same, so it is not a duplicate
+          // so continue with enrollment flow
+        } else { 
+          // duplicates found, return error
+          console.log(
+            "duplicate check: found duplicates",
+            faceDbSearchResponse.data.results.length,
+            faceDbSearchResponse.data.results
+          );
+
+          // send event to user client
+          req.app.locals.sseManager.sendToClient(sid, {
+            status: "error",
+            message: "found duplicates! verification has failed.",
+          });
+
+          await updateSessionStatus(
+            session,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            `Face scan failed as highly matching duplicates are found.`
+          );
+
+          return res.status(400).json({
+            error: true,
+            errorMessage: "duplicate check: found duplicates",
+            instructions: "Verification has failed as highly matching duplicates are found.",
+            triggerRetry: false,
+          });
+        }
+      } else if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
         console.log("Fresh/empty groupName detected, continuing with enrollment flow");
         // Continue with the flow instead of returning an error
-      } else {
-        if (faceDbSearchResponse.data?.results?.length > 0) {
-          if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
-            // Continue
-            // search returns 1 result which is the same, so it is not a duplicate
-          } else {
-            // duplicates found, return error
-            console.log(
-              "duplicate check: found duplicates",
-              faceDbSearchResponse.data.results.length,
-              faceDbSearchResponse.data.results
-            );
-
-            // send event to user client
-            req.app.locals.sseManager.sendToClient(sid, {
-              status: "error",
-              message: "found duplicates! verification has failed.",
-            });
-
-            await updateSessionStatus(
-              session,
-              sessionStatusEnum.VERIFICATION_FAILED,
-              `Face scan failed as highly matching duplicates are found.`
-            );
-
-            return res.status(400).json({
-              error: true,
-              errorMessage: "duplicate check: found duplicates",
-              instructions: "Verification has failed as highly matching duplicates are found.",
-              triggerRetry: false,
-            });
-          }
-        }
+      } else { 
+        console.log("duplicate check: /3d-db/search encountered an error", faceDbSearchResponse.data);
+        return res.status(400).json({
+          error: true,
+          errorMessage: "duplicate check: /3d-db/search encountered an error",
+          triggerRetry: true,
+        });
       }
     } catch (err) {
       console.error("Error during /3d-db/search:", err.message);
