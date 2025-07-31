@@ -136,3 +136,6 @@ export const idServerStellarPaymentAddress = "GCJCFGPSKP2D6I4KU3PGA6NUKPUHKYT7XE
 
 export const krakenXLMAddress = "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM";
 export const krakenXLMMemo = new StellarSdk.Memo.text("1742822151996056872");
+
+// ---------------- Sui stuff ----------------
+export const idServerSuiPaymentAddress = "0x96a5cbb66c3150eb5e61ebab9cef55b17083ee2ab903295dc90292a477acabbc";

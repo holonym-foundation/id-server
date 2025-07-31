@@ -33,6 +33,18 @@ export const OrderSchema = new Schema({
       }
     },
     required: false
+  },
+
+  // For Sui payments
+  sui: {
+    type: {
+      txHash: String,
+      refundTxHash: {
+        type: String,
+        required: false
+      }
+    },
+    required: false
   }
 
   // createdAt: { type: Date, default: Date.now },

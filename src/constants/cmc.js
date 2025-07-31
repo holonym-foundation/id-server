@@ -4,6 +4,8 @@ export const avalancheCMCID = 5805;
 export const fantomCMCID = 32684; // Sonic
 export const nearCMCID = 6535;
 
+export const suiCMCID = 20947;
+
 export const xlmCMCID = 512;
 
 export const slugToID = {
@@ -12,6 +14,7 @@ export const slugToID = {
   fantom: fantomCMCID,
   near: nearCMCID,
   stellar: xlmCMCID,
+  sui: suiCMCID,
 };
 
 export const idToSlug = {
@@ -19,5 +22,6 @@ export const idToSlug = {
   [avalancheCMCID]: "avalanche",
   [fantomCMCID]: "fantom",
   [nearCMCID]: "near",
-  [xlmCMCID]: "stellar"
+  [xlmCMCID]: "stellar",
+  [suiCMCID]: "sui"
 }

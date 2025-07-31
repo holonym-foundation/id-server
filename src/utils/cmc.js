@@ -4,7 +4,8 @@ import {
   fantomCMCID,
   avalancheCMCID,
   idToSlug,
-  xlmCMCID
+  xlmCMCID,
+  suiCMCID
 } from "../constants/cmc.js";
 
 // TODO: Use redis instead. This is a temporary solution to avoid hitting
@@ -78,4 +79,10 @@ export async function usdToXLM(usdAmount) {
   const xlmPrice = await getPriceFromCacheOrAPI(xlmCMCID)
   const xlmAmount = usdAmount / xlmPrice;
   return xlmAmount;
+}
+
+export async function usdToSui(usdAmount) {
+  const suiPrice = await getPriceFromCacheOrAPI(suiCMCID)
+  const suiAmount = usdAmount / suiPrice;
+  return suiAmount;
 }

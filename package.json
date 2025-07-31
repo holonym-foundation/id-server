@@ -11,6 +11,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.209.0",
     "@holonym-foundation/utils": "^1.0.1",
+    "@mysten/sui": "^1.37.1",
     "@sendgrid/mail": "^7.7.0",
     "@squirrel-labs/peanut-sdk": "^0.3.34",
     "@stellar/stellar-sdk": "^13.3.0",
