@@ -10,6 +10,8 @@ import { idvSessionUSDPrice } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSuiOrderTransactionStatus } from "./sui/endpoints.js"
 import { getOrderTransactionStatus as getStellarOrderTransactionStatus } from "./stellar/endpoints.js"
+import { validatTx as validateSuiTx } from "./sui/functions.js"
+import { validateTx as validateStellarTx } from "./stellar/functions.js"
 
 import { Order } from "../../init.js";
 import { orderCategoryEnums } from './constants.js';
@@ -216,13 +218,29 @@ async function setOrderFulfilled(req, res) {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    // Validate TX (check tx.data, tx.to, tx.value, etc)
-    const validTx = await validateTx(
-      order.chainId,
-      order.txHash,
-      order.externalOrderId,
-      idvSessionUSDPrice
-    );
+    if (order.txHash) {
+      // Validate TX (check tx.data, tx.to, tx.value, etc)
+      const validTx = await validateTx(
+        order.chainId,
+        order.txHash,
+        order.externalOrderId,
+        idvSessionUSDPrice
+      );
+    } else if (order.sui?.txHash) {
+      const validationResult = await validateSuiTx(
+        order.sui.txHash,
+        order.externalOrderId,
+        idvSessionUSDPrice
+      );
+    } else if (order.stellar?.txHash) {
+      const validTx = await validateStellarTx(
+        order.stellar.txHash,
+        order.externalOrderId,
+        idvSessionUSDPrice
+      );
+    } else {
+      return res.status(400).json({ error: "Unexpected: no transaction hash associated with order" })
+    }
 
     // Update the order to fulfilled
     order.fulfilled = true;
