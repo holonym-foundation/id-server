@@ -53,10 +53,10 @@ async function saveUserToDb(uuidV2) {
   try {
     await userVerificationsDoc.save();
   } catch (err) {
-    // endpointLoggerV3.error(
-    //   err,
-    //   "An error occurred while saving user verification to database"
-    // );
+    endpointLoggerV3.error(
+      err,
+      "An error occurred while saving user verification to database"
+    );
     return {
       error:
         "An error occurred while trying to save object to database. Please try again.",
@@ -81,8 +81,6 @@ async function getCredentialsV3(req, res) {
     const _id = req.params._id;
     const issuanceNullifier = req.params.nullifier;
     const sessionType = req.params.sessionType;
-
-    console.log("sessionType", sessionType);
 
     // Validate sessionType
     if (!sessionType || (sessionType !== "biometrics" && sessionType !== "kyc")) {
@@ -161,8 +159,6 @@ async function getCredentialsV3(req, res) {
     // retrieval of credentials
     if (externalDatabaseRefIDFromNullifier) {
       // issue credentials
-      console.log("issuev2 nullifierAndCreds", issuanceNullifier, externalDatabaseRefIDFromNullifier);
-
       const refBuffers = externalDatabaseRefIDFromNullifier
         .split("-")
         .map((x) => Buffer.from(x));
@@ -177,8 +173,13 @@ async function getCredentialsV3(req, res) {
           referenceHash
         )
       );
-      console.log("issueV2Response", issueV2Response);
-      // issueV2Response.metadata = creds;
+
+      endpointLoggerV3.info(
+        { 
+          externalDatabaseRefID: session.externalDatabaseRefID
+        },
+        `Issue ${sessionType} credentials with issuanceNullifier`
+      );
       
       await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
 
@@ -223,7 +224,6 @@ async function getCredentialsV3(req, res) {
           },
         }
       );
-      console.log("faceDbSearchResponse.data", faceDbSearchResponse.data);
 
       if (faceDbSearchResponse.data?.success && faceDbSearchResponse.data?.results) {
         if(faceDbSearchResponse.data.results.length === 0) {
@@ -234,10 +234,13 @@ async function getCredentialsV3(req, res) {
           // so continue with enrollment flow
         } else { 
           // duplicates found, return error
-          console.log(
-            "duplicate check: found duplicates",
-            faceDbSearchResponse.data.results.length,
-            faceDbSearchResponse.data.results
+          endpointLoggerV3.error(
+            {
+              resultsLength: faceDbSearchResponse.data.results.length,
+              results: faceDbSearchResponse.data.results,
+              externalDatabaseRefID: session.externalDatabaseRefID,
+            },
+            "Duplicate check: found duplicates"
           );
           await updateSessionStatus(
             session,
@@ -252,10 +255,15 @@ async function getCredentialsV3(req, res) {
           });
         }
       } else if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
-        console.log("Fresh/empty groupName detected, continuing with enrollment flow");
+        endpointLoggerV3.info({ externalDatabaseRefID: session.externalDatabaseRefID }, "Fresh/empty groupName detected, continuing with enrollment flow");
         // Continue with the flow instead of returning an error
       } else {
-        console.log("duplicate check: /3d-db/search encountered an error", faceDbSearchResponse.data);
+        endpointLoggerV3.error(
+          {
+            responseData: faceDbSearchResponse.data,
+          },
+          "Duplicate check: /3d-db/search encountered an error"
+        );
         return res.status(400).json({
           error: true,
           errorMessage: "duplicate check: /3d-db/search encountered an error",
@@ -263,20 +271,15 @@ async function getCredentialsV3(req, res) {
         });
       }
     } catch (err) {
-      console.error("Error during /3d-db/search:", err.message);
+      endpointLoggerV3.error(err, "Error during /3d-db/search");
 
       if (err.request) {
-        console.error("No response received from the server during duplicate check");
         return res.status(502).json({
           error: true,
           errorMessage: "Did not receive a response from the server during duplicate check",
           triggerRetry: true,
         });
       } else if (err.response) {
-        console.error(
-          { error: err.response.data },
-          "(err.response) Error during duplicate check"
-        );
         return res.status(err.response.status).json({
           error: true,
           errorMessage: "Server returned an error during duplicate check",
@@ -284,7 +287,6 @@ async function getCredentialsV3(req, res) {
           triggerRetry: true,
         });
       } else {
-        console.error("Unknown error:", err);
         return res.status(500).json({
           error: true,
           errorMessage: "An unknown error occurred during duplicate check",
@@ -294,11 +296,6 @@ async function getCredentialsV3(req, res) {
     }
 
     // do /3d-db/enroll (verify page only did /3d-db/search)
-    console.log("/3d-db/enroll for biometrics", {
-      externalDatabaseRefID: session.externalDatabaseRefID,
-      groupName: groupName,
-    });
-
     try {
       const faceDbEnrollResponse = await axios.post(
         `${facetecServerBaseURL}/3d-db/enroll`,
@@ -317,7 +314,61 @@ async function getCredentialsV3(req, res) {
       );
 
       // this should be a rare case if the user has done proper verification enrollment
-      if (!faceDbEnrollResponse.data.success) {
+      if (faceDbEnrollResponse.data.success && faceDbEnrollResponse.data.wasProcessed) {
+        // enrollment successful
+        // so continue with issuance
+        const refBuffers = session.externalDatabaseRefID
+          .split("-")
+          .map((x) => Buffer.from(x));
+        const refArgs = refBuffers.map((x) => ethers.BigNumber.from(x).toString());
+        const referenceHash = ethers.BigNumber.from(poseidon(refArgs)).toString();
+
+        const issueV2Response = JSON.parse(
+          issuev2(
+            ISSUER_PRIVKEY,
+            issuanceNullifier,
+            "1", // reference to 3d-db groupName for biometrics
+            referenceHash
+          )
+        );
+
+        endpointLoggerV3.info(
+          { 
+            externalDatabaseRefID: session.externalDatabaseRefID
+          },
+          `Issue ${sessionType} credentials`
+        );
+        
+        // Store UUID for Sybil resistance
+        const uuidNew = govIdUUID(session.externalDatabaseRefID, "", "");
+        const dbResponse = await saveUserToDb(uuidNew);
+        if (dbResponse.error) return res.status(400).json(dbResponse);
+
+        // save nullifierAndCreds mapping for subsequent retrieval of credentials
+        const newNullifierAndCreds = new BiometricsNullifierAndCreds({
+          holoUserId: session.sigDigest,
+          issuanceNullifier,
+          uuidV2: uuidNew,
+          idvSessionIds: {
+            facetec: {
+              externalDatabaseRefID: session.externalDatabaseRefID,
+            },
+          },
+        });
+        await newNullifierAndCreds.save();
+
+        await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
+
+        return res.status(200).json(issueV2Response);
+      } else {
+        endpointLoggerV3.info(
+          {
+            externalDatabaseRefID: session.externalDatabaseRefID,
+            responseData: faceDbEnrollResponse.data,
+          },
+          `/3d-db/enroll failed`
+        );
+        
         // one of the reason might be that verification enrollment does not exit
         // just return and exit the flow, do not proceed with issuance
         return res
@@ -325,16 +376,14 @@ async function getCredentialsV3(req, res) {
           .json({ error: "duplicate check: /3d-db enrollment failed" });
       }
     } catch (err) {
-      console.error("Error during /3d-db/enroll:", err.message);
+      endpointLoggerV3.error(err, "Error during /3d-db/enroll");
       if (err.request) {
-        console.error("No response received from the server during /3d-db/enroll");
         return res.status(502).json({
           error: true,
           errorMessage: "Did not receive a response from the server during /3d-db/enroll",
           triggerRetry: true,
         });
       } else if (err.response) {
-        console.error("Response data:", err.response.data);
         return res.status(err.response.status).json({
           error: true,
           errorMessage: "The server returned an error during /3d-db/enroll",
@@ -342,7 +391,6 @@ async function getCredentialsV3(req, res) {
           triggerRetry: true,
         }); 
       } else {
-        console.error("Unknown error:", err);
         return res.status(500).json({
           error: true,
           errorMessage: "An unknown error occurred during /3d-db/enroll",
@@ -350,58 +398,14 @@ async function getCredentialsV3(req, res) {
         });
       }
     }
-
-    // issue credentials
-    console.log("issuev2", issuanceNullifier, session.externalDatabaseRefID);
-
-    const refBuffers = session.externalDatabaseRefID
-      .split("-")
-      .map((x) => Buffer.from(x));
-    const refArgs = refBuffers.map((x) => ethers.BigNumber.from(x).toString());
-    const referenceHash = ethers.BigNumber.from(poseidon(refArgs)).toString();
-
-    const issueV2Response = JSON.parse(
-      issuev2(
-        ISSUER_PRIVKEY,
-        issuanceNullifier,
-        "1", // reference to 3d-db groupName for biometrics
-        referenceHash
-      )
-    );
-    console.log("issueV2Response", issueV2Response);
-    // issueV2Response.metadata = creds;
-
-    // Store UUID for Sybil resistance
-    const uuidNew = govIdUUID(session.externalDatabaseRefID, "", "");
-    const dbResponse = await saveUserToDb(uuidNew);
-    if (dbResponse.error) return res.status(400).json(dbResponse);
-
-    // save nullifierAndCreds mapping for subsequent retrieval of credentials
-    const newNullifierAndCreds = new BiometricsNullifierAndCreds({
-      holoUserId: session.sigDigest,
-      issuanceNullifier,
-      uuidV2: uuidNew,
-      idvSessionIds: {
-        facetec: {
-          externalDatabaseRefID: session.externalDatabaseRefID,
-        },
-      },
-    });
-    await newNullifierAndCreds.save();
-
-    console.log("Issuing credentials", { uuidV2: uuidNew, externalDatabaseRefID: session.externalDatabaseRefID });
-
-    await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
-
-    return res.status(200).json(issueV2Response);
   } catch (err) {
+    // Otherwise, log the unexpected error
+    endpointLoggerV3.unexpected(err);
+
     // If this is our custom error, use its properties
     if (err.status && err.error) {
       return res.status(err.status).json(err);
     }
-
-    // Otherwise, log the unexpected error
-    endpointLoggerV3.unexpected(err);
 
     return res.status(500).json({
       error: "An unexpected error occurred.",
