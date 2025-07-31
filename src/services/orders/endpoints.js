@@ -8,6 +8,8 @@ import {
 } from "./functions.js";
 import { idvSessionUSDPrice } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { getSuiOrderTransactionStatus } from "./sui/endpoints.js"
+import { getOrderTransactionStatus as getStellarOrderTransactionStatus } from "./stellar/endpoints.js"
 
 import { Order } from "../../init.js";
 import { orderCategoryEnums } from './constants.js';
@@ -101,6 +103,7 @@ async function createOrder(req, res) {
 // Should query the DB for the tx metadata,
 // wait a little bit for the tx to be confirmed (if it's not already),
 // and return a success response if all goes well.
+// Supports both EVM and Sui
 async function getOrderTransactionStatus(req, res) {
   const { externalOrderId } = req.params;
 
@@ -114,30 +117,39 @@ async function getOrderTransactionStatus(req, res) {
         .json({ error: "Order not found", externalOrderId });
     }
 
-    // Validate TX (check tx.data, tx.to, tx.value, etc)
-    const validTx = await validateTx(
-      order.chainId,
-      order.txHash,
-      order.externalOrderId,
-      idvSessionUSDPrice
-    );
-    const validTxConfirmation = await validateTxConfirmation(validTx);
+    // Handle EVM
+    if (order.txHash) {
+      // Validate TX (check tx.data, tx.to, tx.value, etc)
+      const validTx = await validateTx(
+        order.chainId,
+        order.txHash,
+        order.externalOrderId,
+        idvSessionUSDPrice
+      );
+      const validTxConfirmation = await validateTxConfirmation(validTx);
 
-    // If TX is confirmed, return both order and tx receipt
-    return res
-      .status(200)
-      .json({
-        txReceipt: validTxConfirmation,
-        order: {
-          externalOrderId: order.externalOrderId,
-          category: order.category,
-          fulfilled: order.fulfilled,
-          txHash: order.txHash,
-          chainId: order.chainId,
-          refunded: order.refunded,
-          refundTxHash: order.refundTxHash,
-        }
-      });
+      // If TX is confirmed, return both order and tx receipt
+      return res
+        .status(200)
+        .json({
+          txReceipt: validTxConfirmation,
+          order: {
+            externalOrderId: order.externalOrderId,
+            category: order.category,
+            fulfilled: order.fulfilled,
+            txHash: order.txHash,
+            chainId: order.chainId,
+            refunded: order.refunded,
+            refundTxHash: order.refundTxHash,
+          }
+        });
+    } else if (order.sui?.txHash) {
+      return await getSuiOrderTransactionStatus(req, res)
+    } else if (order.stellar?.txHash) {
+      return await getStellarOrderTransactionStatus(req, res)
+    } else {
+      return res.status(400).json({ error: 'Order has no associated transaction hash' })
+    }
   } catch (error) {
     console.log("error", error);
     return res.status(500).json({ error: error.message, externalOrderId });
