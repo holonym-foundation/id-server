@@ -10,7 +10,7 @@ import { idvSessionUSDPrice } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSuiOrderTransactionStatus } from "./sui/endpoints.js"
 import { getOrderTransactionStatus as getStellarOrderTransactionStatus } from "./stellar/endpoints.js"
-import { validatTx as validateSuiTx } from "./sui/functions.js"
+import { validateTx as validateSuiTx } from "./sui/functions.js"
 import { validateTx as validateStellarTx } from "./stellar/functions.js"
 
 import { Order } from "../../init.js";
