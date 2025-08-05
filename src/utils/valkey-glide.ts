@@ -1,11 +1,19 @@
 import { GlideClient, Logger } from "@valkey/valkey-glide";
 
-let valkeyClient;
+if (typeof process.env.VALKEY_HOST != 'string') {
+  throw new Error('process.env.VALKEY_HOST must be a string')
+}
+
+if (typeof process.env.VALKEY_PORT != 'string') {
+  throw new Error('process.env.VALKEY_PORT must be a string')
+}
+
+let valkeyClient: GlideClient | undefined;
 
 const addresses = [
   {
     host: process.env.VALKEY_HOST, // e.g., "localhost"
-    port: process.env.VALKEY_PORT // e.g., 6379
+    port: Number(process.env.VALKEY_PORT) // e.g., 6379
   },
 ];
 // Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.

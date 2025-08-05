@@ -1,5 +1,7 @@
 node_modules
 /daemon/target
+/dist
+tsconfig.tsbuildinfo
 .vscode
 notes.txt
 .env

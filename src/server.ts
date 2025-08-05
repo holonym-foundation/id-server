@@ -2,9 +2,10 @@ import { mongoose } from "./init.js";
 import { app } from "./index.js";
 import logger from "./utils/logger.js";
 import { valkeyClient } from "./utils/valkey-glide.js";
+import type { Server } from "http";
 
 const PORT = process.env.ENVIRONMENT == "dev" ? 3031 : 3000;
-const server = app.listen(PORT, (err) => {
+const server: Server = app.listen(PORT, (err?: Error) => {
   if (err) throw err;
   logger.info(`Server running, exposed at http://127.0.0.1:${PORT}`);
 });
@@ -20,8 +21,10 @@ async function terminate() {
     );
   }
   try {
-    await valkeyClient.close();
-    logger.info("Closed valkey connection");
+    if (valkeyClient) {
+      valkeyClient.close();
+      logger.info("Closed valkey connection");
+    }
   } catch (err) {
     logger.error(
       { error: err },
