@@ -18,10 +18,10 @@ export const slugToID = {
 };
 
 export const idToSlug = {
-  [ethereumCMCID]: "ethereum",
-  [avalancheCMCID]: "avalanche",
-  [fantomCMCID]: "fantom",
-  [nearCMCID]: "near",
-  [xlmCMCID]: "stellar",
-  [suiCMCID]: "sui"
+  [ethereumCMCID]: "ethereum" as const,
+  [avalancheCMCID]: "avalanche" as const,
+  [fantomCMCID]: "fantom" as const,
+  [nearCMCID]: "near" as const,
+  [xlmCMCID]: "stellar" as const,
+  [suiCMCID]: "sui" as const
 }
