@@ -1,15 +1,11 @@
-import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { ethers } from "ethers";
 
 import { usdToSui } from "../../../utils/cmc.js";
-import { idServerSuiPaymentAddress } from "../../../constants/misc.js"
+import { suiToMist, mistToSui } from "../../../utils/sui.js";
+import { suiClient, idServerSuiPaymentAddress } from "../../../constants/misc.js"
 
 const PACKAGE_ID = "0xf03bf161b3f338f1bdff745d642be98c5b5b0246539ff37a87bce54b389fc979";
 const MEMO_EVENT_TYPE = `${PACKAGE_ID}::payment_memo::PaymentMemo`;
-
-const client = new SuiClient({
-    url: getFullnodeUrl("mainnet")
-});
 
 /**
  * @typedef {Object} ValidationDetails
@@ -39,7 +35,7 @@ const client = new SuiClient({
 async function validateTx(txDigest, externalOrderId, desiredAmount) {
   try {
     // Fetch the transaction block with all details
-    const txBlock = await client.getTransactionBlock({
+    const txBlock = await suiClient.getTransactionBlock({
       digest: txDigest,
       options: {
         showInput: true,
@@ -169,15 +165,6 @@ function extractPaymentDetails(balanceChanges, sender) {
   }
 
   return null;
-}
-
-
-function mistToSui(mist) {
-  return mist / 1_000_000_000;
-}
-
-function suiToMist(sui) {
-  return sui * 1_000_000_000;
 }
 
 // Export functions for use in other modules

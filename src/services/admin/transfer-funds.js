@@ -1,4 +1,6 @@
 import { ethers } from "ethers";
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction as SuiTransaction } from '@mysten/sui/transactions';
 import * as StellarSdk from "@stellar/stellar-sdk";
 import {
   ethereumProvider,
@@ -15,8 +17,11 @@ import {
   horizonServer,
   krakenXLMAddress,
   krakenXLMMemo,
+  suiClient,
+  companySuiAddress,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { mistToSui, suiToMist } from "../../utils/sui.js"
 
 // const endpointLogger = logger.child({
 //   msgPrefix: "[DELETE /admin/transfer-funds] ",
@@ -149,7 +154,7 @@ async function transferFunds(req, res) {
       txReceipts["aurora"] = await tx.wait();
     }
 
-    // Transfer ETH on Stellar \\
+    // Transfer XLM on Stellar \\
     const stellarKeypair = StellarSdk.Keypair.fromSecret(
       process.env.STELLAR_PAYMENTS_SECRET_KEY
     );
@@ -175,6 +180,35 @@ async function transferFunds(req, res) {
 
       const tx = await horizonServer.submitTransaction(stellarTx);
       txReceipts["stellar"] = tx.hash;
+    }
+
+    // Transfer SUI on Sui \\
+    const privateKeyBytes = new Uint8Array(
+      Buffer.from(process.env.SUI_PRIVATE_KEY.replace('0x', ''), 'hex')
+    );
+    const suiWallet = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+    const suiBalanceResult = await suiClient.getBalance({
+      owner: suiWallet.toSuiAddress()
+    })
+    const suiBalance = mistToSui(suiBalanceResult?.totalBalance)
+    if (suiBalance > 150) {
+      // Send all but 30 SUI to company address
+      const amountToSend = suiToMist(suiBalance - 30);
+      const tx = new SuiTransaction();
+
+      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToSend)]);
+      tx.transferObjects([coin], tx.pure.address(companySuiAddress));
+
+      const result = await suiClient.signAndExecuteTransaction({
+        signer: suiWallet,
+        transaction: tx,
+        options: {
+          showEvents: true,
+          showEffects: true,
+        }
+      });
+
+      console.log(`Transfered ${mistToSui(amountToSend)} SUI to ${companySuiAddress}. Result:`, result)
     }
 
     return res.status(200).json(txReceipts);

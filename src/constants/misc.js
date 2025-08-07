@@ -1,3 +1,4 @@
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import * as StellarSdk from '@stellar/stellar-sdk'
 import { ethers } from "ethers";
 
@@ -139,3 +140,9 @@ export const krakenXLMMemo = new StellarSdk.Memo.text("1742822151996056872");
 
 // ---------------- Sui stuff ----------------
 export const idServerSuiPaymentAddress = "0x96a5cbb66c3150eb5e61ebab9cef55b17083ee2ab903295dc90292a477acabbc";
+export const companySuiAddress = "0x58d01e1281b29ad0888ca6c482efd16e9633d128a2d38230f655c8da229b0ef0";
+
+export const suiClient = new SuiClient({
+  // url: getFullnodeUrl("mainnet")
+  url: process.env.SUI_RPC_URL
+});
