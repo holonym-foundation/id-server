@@ -1,6 +1,6 @@
-import pino from "pino";
+import pino, { LoggerOptions, TransportMultiOptions } from "pino";
 
-const pinoOptions = {
+const pinoOptions: LoggerOptions = {
   base: {
     src: "id-server",
   },
@@ -16,7 +16,13 @@ if (process.env.NODE_ENV === "development") {
       // NOTE for future: We output logs using both pino/file (for stdout) and
       // pino-datadog-transport so that logs get sent to both AWS CloudWatch
       // and Datadog. Perhaps in the future, we should send logs to one place.
-      { target: 'pino/file', options: { destination: 1 } },
+      {
+        target: 'pino/file',
+        options: {
+          destination: 1
+        },
+        level: "info",
+      },
       {
         // target: "pino-datadog-transport",
         target: "./pino-datadog-logger",
@@ -30,12 +36,13 @@ if (process.env.NODE_ENV === "development") {
             site: "us5.datadoghq.com",
           },
         },
+        level: "info",
       },
     ],
   };
 }
 
-const logger = pino(pinoOptions);
+const logger = pino.default(pinoOptions);
 
 export { pinoOptions, logger };
 export default logger;

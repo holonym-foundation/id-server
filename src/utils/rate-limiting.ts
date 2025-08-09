@@ -8,7 +8,11 @@ const THIRTY_DAYS_IN_SECS = 60 * 60 * 24 * 30
  * Limits the number of requests from IP to 10 requests per 30 days
  * for the given subKey.
  */
-async function rateLimit(ip, subKey) {
+async function rateLimit(ip: string, subKey: string) {
+  if (!valkeyClient) {
+    throw new Error('valkeyClient is not defined')
+  }
+
   // Rate limiting
   const key = `NUM_REQUESTS_BY_IP:${subKey}:${ip}`;
   const count = await valkeyClient.incr(key);

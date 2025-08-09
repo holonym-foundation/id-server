@@ -136,7 +136,7 @@ export const horizonServer = new StellarSdk.Horizon.Server("https://horizon.stel
 export const idServerStellarPaymentAddress = "GCJCFGPSKP2D6I4KU3PGA6NUKPUHKYT7XECMU5SGIATX6374WI4OX24B";
 
 export const krakenXLMAddress = "GA5XIGA5C7QTPTWXQHY6MCJRMTRZDOSHR6EFIBNDQTCQHG262N4GGKTM";
-export const krakenXLMMemo = new StellarSdk.Memo.text("1742822151996056872");
+export const krakenXLMMemo = StellarSdk.Memo.text("1742822151996056872");
 
 // ---------------- Sui stuff ----------------
 export const idServerSuiPaymentAddress = "0x96a5cbb66c3150eb5e61ebab9cef55b17083ee2ab903295dc90292a477acabbc";
@@ -144,5 +144,5 @@ export const companySuiAddress = "0x58d01e1281b29ad0888ca6c482efd16e9633d128a2d3
 
 export const suiClient = new SuiClient({
   // url: getFullnodeUrl("mainnet")
-  url: process.env.SUI_RPC_URL
+  url: process.env.SUI_RPC_URL as string
 });

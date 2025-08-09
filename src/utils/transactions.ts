@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { ObjectId } from "mongodb";
 import {
   sessionStatusEnum,
   idServerPaymentAddress,
@@ -13,7 +14,7 @@ import {
 import { usdToETH, usdToFTM, usdToAVAX } from "./cmc.js";
 import { retry } from './utils.js';
 
-function getTransaction(chainId, txHash) {
+function getTransaction(chainId: number, txHash: string) {
   if (chainId === 1) {
     return ethereumProvider.getTransaction(txHash);
   } else if (chainId === 10) {
@@ -38,7 +39,7 @@ function getTransaction(chainId, txHash) {
  * - Ensure tx is confirmed.
  * - Ensure tx is on a supported chain.
  */
-async function validateTxForSessionCreation(session, chainId, txHash, desiredAmount) {
+async function validateTxForSessionCreation(session: { _id: ObjectId }, chainId: number, txHash: string, desiredAmount: number) {
   // Transactions on L2s mostly go through within a few seconds. Mainnet can take 15s or
   // possibly even longer.
   const tx = await retry(async () => {
@@ -125,7 +126,16 @@ async function validateTxForSessionCreation(session, chainId, txHash, desiredAmo
  * Refund 69.1% of the transaction denoted by session.txHash on chain session.chainId.
  * Sets session.refundTxHash and session.status after successful refund.
  */
-async function refundMintFeeOnChain(session, to) {
+async function refundMintFeeOnChain(
+  session: {
+    chainId: number,
+    txHash: string,
+    refundTxHash: string,
+    status: string,
+    save: () => Promise<void>
+  },
+  to: string
+) {
   let provider;
   if (session.chainId === 1) {
     provider = ethereumProvider;
@@ -141,6 +151,8 @@ async function refundMintFeeOnChain(session, to) {
     provider = auroraProvider;
   } else if (process.env.NODE_ENV === "development" && session.chainId === 420) {
     provider = optimismGoerliProvider;
+  } else {
+    throw new Error(`Session has an unsupported chain ID: ${session.chainId}`)
   }
 
   const tx = await provider.getTransaction(session.txHash);
@@ -154,7 +166,7 @@ async function refundMintFeeOnChain(session, to) {
     };
   }
 
-  const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY, provider);
+  const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY as string, provider);
 
   const refundAmount = tx.value; //.mul(5).div(10);
 
@@ -174,18 +186,19 @@ async function refundMintFeeOnChain(session, to) {
     value: refundAmount,
   });
 
+  // Aug 9, 2025 note: We no longer support Fantom.
   // For some reason gas estimates from Fantom are way off. We manually increase
   // gas to avoid "transaction underpriced" error. Hopefully this is unnecessary
   // in the future. The following values happened to be sufficient at the time
   // of adding this block.
-  if (session.chainId === 250) {
-    txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
-    txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
+  // if (session.chainId === 250) {
+  //   txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
+  //   txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
 
-    if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
-      txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
-    }
-  }
+  //   if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
+  //     txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
+  //   }
+  // }
 
   const txResponse = await wallet.sendTransaction(txReq);
 
