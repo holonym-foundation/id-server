@@ -135,6 +135,7 @@ async function getOrderTransactionStatus(req, res) {
         .status(200)
         .json({
           txReceipt: validTxConfirmation,
+          txIsValid: true,
           order: {
             externalOrderId: order.externalOrderId,
             category: order.category,

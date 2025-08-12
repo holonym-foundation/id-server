@@ -123,6 +123,7 @@ async function getOrderTransactionStatus(req, res) {
       .status(200)
       .json({
         transaction: validTx,
+        txIsValid: true,
         order: {
           externalOrderId: order.externalOrderId,
           category: order.category,

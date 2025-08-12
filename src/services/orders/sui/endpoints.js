@@ -119,6 +119,7 @@ async function getSuiOrderTransactionStatus(req, res) {
       .status(200)
       .json({
         txBlock: validationResult.txBlock,
+        txIsValid: validationResult.isValid,
         order: {
           externalOrderId: order.externalOrderId,
           category: order.category,
