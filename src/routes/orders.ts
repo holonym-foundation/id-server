@@ -28,21 +28,25 @@ const router = express.Router();
 // GET /:externalOrderId/fulfilled. API key gated endpoint. To be called by verifier server after minting the SBT. Sets order.fulfilled to true.
 // GET /:externalOrderId/refund.  Refunds an unfulfilled order.
 
+// --- Chain-agnostic ---
+router.get("/:externalOrderId/transaction/status", getOrderTransactionStatus);
+
 // --- EVM ---
 router.post("/", createOrder);
-router.get("/:externalOrderId/transaction/status", getOrderTransactionStatus);
 router.get("/:externalOrderId/fulfilled", setOrderFulfilled); // gated by ORDERS_API_KEY
 router.get("/", getOrder);
 router.post("/admin/refund", refundOrder);
 
 // --- Stellar ---
 router.post("/stellar", createStellarOrder);
+// TODO: Deprecate this stellar order status endpoint. The frontend just needs the chain-agnostic order status endpoint
 router.get("/stellar/:externalOrderId/transaction/status", getStellarOrderTransactionStatus);
 router.get("/stellar/:externalOrderId/fulfilled", setStellarOrderFulfilled); // gated by ORDERS_API_KEY
 router.post("/stellar/admin/refund", refundStellarOrder);
 
 // --- Sui ---
 router.post("/sui", createSuiOrder);
+// TODO: Deprecate this sui order status endpoint. The frontend just needs the chain-agnostic order status endpoint
 router.get("/sui/:externalOrderId/transaction/status", getSuiOrderTransactionStatus);
 // router.get("/sui/:externalOrderId/fulfilled", setSuiOrderFulfilled); // gated by ORDERS_API_KEY
 // router.post("/sui/admin/refund", refundStellarOrder);
