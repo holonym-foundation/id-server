@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { IOrder } from "@/types.js";
 dotenv.config();
 
 const { Schema } = mongoose;
 if (process.env.ENVIRONMENT == "dev") mongoose.set("debug", true);
 
-export const OrderSchema = new Schema({
+export const OrderSchema = new Schema<IOrder>({
   holoUserId: { type: String, required: true },
   externalOrderId: { type: String, required: true },
   category: { type: String, required: true },

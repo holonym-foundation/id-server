@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ethers } from "ethers";
+import { HydratedDocument } from "mongoose";
 import { Session } from "../../init.js";
 import {
   idServerPaymentAddress,
@@ -28,12 +29,17 @@ import {
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { campaignIdToWorkflowIdMap } from "../../utils/constants.js";
 import { v4 as uuidV4 } from "uuid";
+import { ISession } from "@/types.js";
+import pino from "pino";
 
-function campaignIdToWorkflowId(campaignId) {
+function campaignIdToWorkflowId(campaignId: string) {
   return campaignIdToWorkflowIdMap[campaignId] || campaignIdToWorkflowIdMap["default"];
 }
 
-async function handleIdvSessionCreation(session, logger) {
+async function handleIdvSessionCreation(
+  session: HydratedDocument<ISession>,
+  logger: pino.Logger<pino.LoggerOptions>
+) {
   if (session.idvProvider === "veriff") {
     const veriffSession = await createVeriffSession();
     if (!veriffSession) {

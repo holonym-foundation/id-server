@@ -94,7 +94,7 @@ export const cleanHandsDummyUserCreds = {
   ],
 };
 
-export const campaignIdToWorkflowIdMap = {
+export const campaignIdToWorkflowIdMap: Record<string, string> = {
   "test": "19d0c530-8b15-4893-9067-03c0685e2624",
   "ika": "0ce09160-ef72-4726-ab13-56244adcc266",
 }

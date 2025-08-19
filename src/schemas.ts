@@ -6,12 +6,32 @@ import {
   CleanHandsSessionWhitelistSchema
 } from "./schemas/whitelists.js";
 import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
+import {
+  IUserVerifications,
+  IIdvSessions,
+  ISession,
+  IAmlChecksSession,
+  IBiometricsSession,
+  ISessionRefundMutex,
+  IUserCredentials,
+  IUserCredentialsV2,
+  IUserProofMetadata,
+  INullifierAndCreds,
+  ICleanHandsNullifierAndCreds,
+  IBiometricsNullifierAndCreds,
+  IEncryptedNullifiers,
+  IDailyVerificationCount,
+  IDailyVerificationDeletions,
+  IVerificationCollisionMetadata,
+  IGalxeCampaignZeroUser,
+  ISilkPeanutCampaignsMetadata
+} from "./types.js"
 dotenv.config();
 
 const { Schema } = mongoose;
 if (process.env.ENVIRONMENT == "dev") mongoose.set("debug", true);
 
-const userVerificationsSchema = new Schema({
+const userVerificationsSchema = new Schema<IUserVerifications>({
   govId: {
     type: {
       // uuid is a hash of data from the user's ID document. We stopped
@@ -50,7 +70,7 @@ const userVerificationsSchema = new Schema({
 // handling the delay between when a user submits their documents to the
 // IDV provider and when the provider finishes verifying the documents,
 // which can be up to 20 minutes for iDenfy, for example.
-const idvSessionsSchema = new Schema({
+const idvSessionsSchema = new Schema<IIdvSessions>({
   sigDigest: String,
   // For "verification status" display in frontend, make it conditional on:
   // - Whether the user has govId creds
@@ -96,7 +116,7 @@ const idvSessionsSchema = new Schema({
 });
 
 // Note that IDVSessions is distinct from Session.
-const sessionSchema = new Schema({
+const sessionSchema = new Schema<ISession>({
   sigDigest: String,
   idvProvider: String,
   // status here is distinct from the status of the IDV session (as
@@ -208,7 +228,7 @@ const sessionSchema = new Schema({
   },
 });
 
-const amlChecksSessionSchema = new Schema({
+const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
   sigDigest: String,
   // Right now a session for AML checks only uses Veriff, so there
   // is no reason to store idvProvider.
@@ -280,7 +300,7 @@ const amlChecksSessionSchema = new Schema({
   }
 });
 
-const biometricsSessionSchema = new Schema({
+const biometricsSessionSchema = new Schema<IBiometricsSession>({
   sigDigest: String,
   // The possible values of status are the same as for the sessions above
   status: String,
@@ -310,12 +330,12 @@ const biometricsSessionSchema = new Schema({
 });
 
 // TODO: Do not use MongoDB for mutex purposes. Use something like Redis instead.
-const sessionRefundMutexSchema = new Schema({
+const sessionRefundMutexSchema = new Schema<ISessionRefundMutex>({
   // sessionId is NOT a Veriff sessionId. It is the _id of the associated Session.
   sessionId: String,
 });
 
-const userCredentialsSchema = new Schema({
+const userCredentialsSchema = new Schema<IUserCredentials>({
   sigDigest: String,
   proofDigest: {
     type: String,
@@ -338,7 +358,7 @@ const userCredentialsSchema = new Schema({
   },
 });
 
-const userCredentialsV2Schema = new Schema({
+const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
   holoUserId: String,
   encryptedPhoneCreds: {
     type: {
@@ -370,7 +390,7 @@ const userCredentialsV2Schema = new Schema({
   },
 });
 
-const userProofMetadataSchema = new Schema({
+const userProofMetadataSchema = new Schema<IUserProofMetadata>({
   sigDigest: String,
   encryptedProofMetadata: {
     type: String,
@@ -389,7 +409,7 @@ const userProofMetadataSchema = new Schema({
 // A collection to associate an issuance nullifier to
 // an IDV session ID so that the user can lookup their
 // credentials using their nullifier.
-const NullifierAndCredsSchema = new Schema({
+const NullifierAndCredsSchema = new Schema<INullifierAndCreds>({
   holoUserId: String,
   issuanceNullifier: String,
   idvSessionIds: {
@@ -424,7 +444,7 @@ const NullifierAndCredsSchema = new Schema({
 // A collection to associate an issuance nullifier to the
 // user's Clean Hands creds so that the user can lookup their
 // credentials using their nullifier.
-const CleanHandsNullifierAndCredsSchema = new Schema({
+const CleanHandsNullifierAndCredsSchema = new Schema<ICleanHandsNullifierAndCreds>({
   holoUserId: String,
   issuanceNullifier: String,
   govIdCreds: {
@@ -449,7 +469,7 @@ const CleanHandsNullifierAndCredsSchema = new Schema({
 // A collection to associate an issuance nullifier to the
 // user's Biometrics creds so that the user can lookup their
 // credentials using their nullifier.
-const BiometricsNullifierAndCredsSchema = new Schema({
+const BiometricsNullifierAndCredsSchema = new Schema<IBiometricsNullifierAndCreds>({
   holoUserId: String,
   issuanceNullifier: String,
   idvSessionIds: {
@@ -471,7 +491,7 @@ const BiometricsNullifierAndCredsSchema = new Schema({
 
 // To allow the user to persist a nullifier so that they can request their
 // signed credentials in more than one browser session.
-const EncryptedNullifiersSchema = new Schema({
+const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
   holoUserId: String,
   govId: {
     type: {
@@ -526,7 +546,7 @@ const EncryptedNullifiersSchema = new Schema({
   },      
 });
 
-const DailyVerificationCountSchema = new Schema({
+const DailyVerificationCountSchema = new Schema<IDailyVerificationCount>({
   date: {
     type: String, // use: new Date().toISOString().slice(0, 10)
     required: true,
@@ -561,7 +581,8 @@ const DailyVerificationCountSchema = new Schema({
   },
 });
 
-const DailyVerificationDeletionsSchema = new Schema({
+// TODO: Use redis for this
+const DailyVerificationDeletionsSchema = new Schema<IDailyVerificationDeletions>({
   date: {
     type: String, // use: new Date().toISOString().slice(0, 10)
     required: true,
@@ -569,7 +590,7 @@ const DailyVerificationDeletionsSchema = new Schema({
   deletionCount: Number,
 });
 
-const VerificationCollisionMetadataSchema = new Schema({
+const VerificationCollisionMetadataSchema = new Schema<IVerificationCollisionMetadata>({
   uuid: String,
   uuidV2: {
     type: String,
@@ -625,13 +646,13 @@ const VerificationCollisionMetadataSchema = new Schema({
   },
 });
 
-const GalxeCampaignZeroUserSchema = new Schema({
+const GalxeCampaignZeroUserSchema = new Schema<IGalxeCampaignZeroUser>({
   generatedLink: String,
   peanutLink: String,
   email: String,
 });
 
-const SilkPeanutCampaignsMetadataSchema = new Schema({
+const SilkPeanutCampaignsMetadataSchema = new Schema<ISilkPeanutCampaignsMetadata>({
   generatedLink: String,
   peanutLink: String,
   email: String,

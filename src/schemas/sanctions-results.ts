@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { ISanctionsResult } from "@/types.js";
 dotenv.config();
 
 const { Schema } = mongoose;
 if (process.env.ENVIRONMENT == "dev") mongoose.set("debug", true);
 
-export const SanctionsResultSchema = new Schema({
+export const SanctionsResultSchema = new Schema<ISanctionsResult>({
   message: { type: String, required: true },
   // From sanctions io
   data_source: {
