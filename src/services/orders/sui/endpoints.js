@@ -50,6 +50,14 @@ async function createSuiOrder(req, res) {
     }
 
     try {
+      // Make sure this transaction isn't already associated with an order
+      const existingOrder = await Order.findOne({ "sui.txHash": txHash });
+      if (existingOrder) {
+        return res.status(400).json({
+          error: `An order already exists for this transaction (${txHash})`
+        })
+      }
+
       // Create the order
       const order = new Order({
         holoUserId,
