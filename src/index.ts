@@ -18,7 +18,6 @@ import nullifiers from "./routes/nullifiers.js";
 import orders from "./routes/orders.js";
 import whitelists from "./routes/whitelists.js";
 import constants from "./routes/constants.js";
-import { rateLimit } from "./utils/rate-limiting.js";
 
 const app = express();
 
@@ -68,19 +67,5 @@ app.get("/", (req, res) => {
 app.get("/aws-health", (req, res) => {
   return res.status(200).json({ healthy: true });
 });
-
-app.get("/rate-limit-test", async (req, res) => {
-  try {
-    const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress
-    const { limitExceeded } = await rateLimit(ip, 'test')
-
-    console.log('/rate-limit-test', { ip, limitExceeded })
-
-    return res.status(200).json({ limitExceeded })
-  } catch (err) {
-    console.error('error in /rate-limit-test', err)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-})
 
 export { app };

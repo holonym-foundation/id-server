@@ -3,7 +3,7 @@ import assert from "assert";
 import axios from "axios";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import mongoose from "mongoose";
+import mongoose, { Model } from "mongoose";
 import * as AWS from "@aws-sdk/client-s3";
 import { initialize } from "zokrates-js";
 import logger from "./utils/logger.js";
@@ -32,6 +32,30 @@ import {
   SanctionsResultSchema
 } from "./schemas.js";
 import dotenv from "dotenv";
+import { 
+  IDailyVerificationCount, 
+  IDailyVerificationDeletions, 
+  IUserVerifications,
+  IIdvSessions,
+  ISession,
+  ISessionRefundMutex,
+  IUserCredentials,
+  IUserCredentialsV2,
+  IUserProofMetadata,
+  IEncryptedNullifiers,
+  INullifierAndCreds,
+  ICleanHandsNullifierAndCreds,
+  IBiometricsNullifierAndCreds,
+  IVerificationCollisionMetadata,
+  IAmlChecksSession,
+  IBiometricsSession,
+  IGalxeCampaignZeroUser,
+  ISilkPeanutCampaignsMetadata,
+  IOrder,
+  IHumanIDPaymentGateWhitelist,
+  ICleanHandsSessionWhitelist,
+  ISanctionsResult
+} from "./types.js";
 dotenv.config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,7 +110,9 @@ function validateEnv() {
   }
 }
 
-async function initializeDailyVerificationCount(DailyVerificationCount) {
+async function initializeDailyVerificationCount(
+  DailyVerificationCount: Model<IDailyVerificationCount>
+) {
   const DailyverificationCountCollection = await DailyVerificationCount.find();
   if (DailyverificationCountCollection.length == 0) {
     // TODO: Get total Veriff verifications
@@ -104,7 +130,9 @@ async function initializeDailyVerificationCount(DailyVerificationCount) {
   }
 }
 
-async function initializeDailyVerificationDeletions(DailyVerificationDeletions) {
+async function initializeDailyVerificationDeletions(
+  DailyVerificationDeletions: Model<IDailyVerificationDeletions>
+) {
   const DailyVerificationDeletionsCollection = await DailyVerificationDeletions.find();
   if (DailyVerificationDeletionsCollection.length == 0) {
     const newDailyVerificationDeletions = new DailyVerificationDeletions({
@@ -121,8 +149,8 @@ async function initializeMongoDb() {
     try {
       const s3 = new AWS.S3({
         credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
         },
         region: "us-east-1",
       });
@@ -130,9 +158,9 @@ async function initializeMongoDb() {
         Bucket: process.env.BUCKET_NAME,
         Key: process.env.MONGO_CERT_FILE_NAME,
       };
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         logger.info("Downloading certificate for MongoDB connection...");
-        s3.getObject(params, async (getObjectErr, data) => {
+        s3.getObject(params, async (getObjectErr: any, data: any) => {
           if (getObjectErr) reject(getObjectErr);
           const bodyStream = data.Body;
           const bodyAsString = await bodyStream.transformToString();
@@ -171,7 +199,7 @@ async function initializeMongoDb() {
       sslCA: `${__dirname}/../../${process.env.MONGO_CERT_FILE_NAME}`,
     };
     await mongoose.connect(
-      process.env.MONGO_DB_CONNECTION_STR,
+      process.env.MONGO_DB_CONNECTION_STR as string,
       process.env.ENVIRONMENT == "dev" ? {} : mongoConfig
     );
     logger.info("Connected to MongoDB database.");
@@ -304,28 +332,28 @@ async function initializeMongoDb() {
 
 validateEnv();
 
-let UserVerifications,
-  IDVSessions,
-  Session,
-  SessionRefundMutex,
-  UserCredentials,
-  UserCredentialsV2,
-  UserProofMetadata,
-  EncryptedNullifiers,
-  NullifierAndCreds,
-  CleanHandsNullifierAndCreds,
-  BiometricsNullifierAndCreds,
-  DailyVerificationCount,
-  DailyVerificationDeletions,
-  VerificationCollisionMetadata,
-  AMLChecksSession,
-  BiometricsSession,
-  GalxeCampaignZeroUser,
-  SilkPeanutCampaignsMetadata,
-  Order,
-  HumanIDPaymentGateWhitelist,
-  CleanHandsSessionWhitelist,
-  SanctionsResult;
+let UserVerifications: Model<IUserVerifications>,
+  IDVSessions: Model<IIdvSessions>,
+  Session: Model<ISession>,
+  SessionRefundMutex: Model<ISessionRefundMutex>,
+  UserCredentials: Model<IUserCredentials>,
+  UserCredentialsV2: Model<IUserCredentialsV2>,
+  UserProofMetadata: Model<IUserProofMetadata>,
+  EncryptedNullifiers: Model<IEncryptedNullifiers>,
+  NullifierAndCreds: Model<INullifierAndCreds>,
+  CleanHandsNullifierAndCreds: Model<ICleanHandsNullifierAndCreds>,
+  BiometricsNullifierAndCreds: Model<IBiometricsNullifierAndCreds>,
+  DailyVerificationCount: Model<IDailyVerificationCount>,
+  DailyVerificationDeletions: Model<IDailyVerificationDeletions>,
+  VerificationCollisionMetadata: Model<IVerificationCollisionMetadata>,
+  AMLChecksSession: Model<IAmlChecksSession>,
+  BiometricsSession: Model<IBiometricsSession>,
+  GalxeCampaignZeroUser: Model<IGalxeCampaignZeroUser>,
+  SilkPeanutCampaignsMetadata: Model<ISilkPeanutCampaignsMetadata>,
+  Order: Model<IOrder>,
+  HumanIDPaymentGateWhitelist: Model<IHumanIDPaymentGateWhitelist>,
+  CleanHandsSessionWhitelist: Model<ICleanHandsSessionWhitelist>,
+  SanctionsResult: Model<ISanctionsResult>;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");

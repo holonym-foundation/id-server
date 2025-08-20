@@ -1,15 +1,20 @@
 import axios from "axios";
+import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
+import { HydratedDocument } from "mongoose";
 import { Session, IDVSessions } from "../init.js";
 import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
+import { IIdvSessions } from "@/types.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
 
-async function getVeriffSessionStatus(sessions) {
+async function getVeriffSessionStatus(
+  sessions: HydratedDocument<IIdvSessions> | null
+) {
   if (!sessions?.veriff?.sessions || sessions.veriff.sessions.length === 0) {
     return;
   }
@@ -19,11 +24,11 @@ async function getVeriffSessionStatus(sessions) {
 
   const decisionsWithTimestamps = [];
   for (const session of sessions.veriff.sessions) {
-    const decision = await getVeriffSessionDecision(session.sessionId);
+    const decision = await getVeriffSessionDecision(session.sessionId as string);
     if (!decision) continue;
     decisionsWithTimestamps.push({
       decision,
-      createdAt: session.createdAt,
+      createdAt: session.createdAt ?? new Date(0),
     });
     if (decision?.verification?.status === "approved") {
       return { status: decision?.verification?.status, sessionId: session.sessionId };
@@ -47,7 +52,9 @@ async function getVeriffSessionStatus(sessions) {
   };
 }
 
-async function getIdenfySessionStatus(sessions) {
+async function getIdenfySessionStatus(
+  sessions: HydratedDocument<IIdvSessions> | null
+) {
   if (!sessions?.idenfy?.sessions || sessions.idenfy.sessions.length === 0) {
     return;
   }
@@ -57,11 +64,11 @@ async function getIdenfySessionStatus(sessions) {
 
   const sessionsWithTimestamps = [];
   for (const sessionMetadata of sessions.idenfy.sessions) {
-    const session = await getIdenfySession(sessionMetadata.scanRef);
+    const session = await getIdenfySession(sessionMetadata.scanRef as string);
     if (!session) continue;
     sessionsWithTimestamps.push({
       session,
-      createdAt: sessionMetadata.createdAt,
+      createdAt: sessionMetadata.createdAt ?? new Date(0),
     });
     if (session?.status === "APPROVED") {
       return { status: session?.status, scanRef: sessionMetadata.scanRef };
@@ -101,8 +108,10 @@ async function getIdenfySessionStatus(sessions) {
   };
 }
 
-async function getOnfidoCheck(check_id) {
+async function getOnfidoCheck(check_id: string) {
   try {
+    // ignoring: "Property 'get' does not exist on type 'typeof import(...)"
+    // @ts-ignore
     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
       headers: {
         "Content-Type": "application/json",
@@ -110,7 +119,7 @@ async function getOnfidoCheck(check_id) {
       },
     });
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     let errToLog = err;
     // Onfido deletes checks after 30 days. So, if we get a 410, delete the check
     // from IDVSessions.
@@ -134,7 +143,7 @@ async function getOnfidoCheck(check_id) {
   }
 }
 
-function getOnfidoVerificationFailureReasons(reports) {
+function getOnfidoVerificationFailureReasons(reports: Array<Record<string, any>>) {
   const failureReasons = [];
   for (const report of reports) {
     if (report.status !== "complete") {
@@ -158,7 +167,9 @@ function getOnfidoVerificationFailureReasons(reports) {
   return failureReasons;
 }
 
-async function getOnfidoSessionStatus(sessions) {
+async function getOnfidoSessionStatus(
+  sessions: HydratedDocument<IIdvSessions> | null
+) {
   if (!sessions?.onfido?.checks || sessions.onfido.checks.length === 0) {
     return;
   }
@@ -168,11 +179,11 @@ async function getOnfidoSessionStatus(sessions) {
 
   const sessionsWithTimestamps = [];
   for (const sessionMetadata of sessions.onfido.checks) {
-    const check = await getOnfidoCheck(sessionMetadata.check_id);
+    const check = await getOnfidoCheck(sessionMetadata.check_id as string);
     if (!check) continue;
     sessionsWithTimestamps.push({
       check,
-      createdAt: sessionMetadata.createdAt,
+      createdAt: sessionMetadata.createdAt ?? new Date(0),
     });
     if (check?.status === "complete" && check?.result === "clear") {
       return {
@@ -211,7 +222,7 @@ async function getOnfidoSessionStatus(sessions) {
 /**
  * ENDPOINT
  */
-async function getSessionStatus(req, res) {
+async function getSessionStatus(req: Request, res: Response) {
   try {
     const sigDigest = req.query.sigDigest;
     const provider = req.query.provider; // not required
@@ -261,7 +272,7 @@ async function getSessionStatus(req, res) {
 /**
  * ENDPOINT
  */
-async function getSessionStatusV2(req, res) {
+async function getSessionStatusV2(req: Request, res: Response) {
   try {
     const sid = req.query.sid;
 
@@ -271,7 +282,7 @@ async function getSessionStatusV2(req, res) {
 
     let objectId = null;
     try {
-      objectId = new ObjectId(sid);
+      objectId = new ObjectId(sid as string);
     } catch (err) {
       return res.status(400).json({ error: "Invalid sid" });
     }
@@ -286,7 +297,7 @@ async function getSessionStatusV2(req, res) {
     // this is to provide direct status query
     // when more than 1 idv sessions are done in 1 session
     const provider = req.query.provider;
-    if(provider) session.idvProvider = provider;
+    if(provider) session.idvProvider = provider as string;
 
     if (session.idvProvider === "veriff") {
       if (!session.sessionId) {
