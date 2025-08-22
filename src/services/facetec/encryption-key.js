@@ -1,5 +1,5 @@
 import axios from "axios";
-import { facetecServerBaseURL } from "../../constants/misc.js";
+import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
 // const postSessionsLogger = logger.child({
@@ -12,7 +12,7 @@ import { pinoOptions, logger } from "../../utils/logger.js";
 export async function getProductionEncryptionKeyText(req, res) {
   try {
     const resp = await axios.get(
-      `${facetecServerBaseURL}/production-encryption-key-text`,
+      `${getFaceTecBaseURL(req)}/production-encryption-key-text`,
       {
         headers: {
           "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,

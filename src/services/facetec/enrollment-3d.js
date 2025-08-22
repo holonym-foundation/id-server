@@ -3,7 +3,6 @@ import { ObjectId } from "mongodb";
 import { Session, BiometricsSession } from "../../init.js";
 import {
   sessionStatusEnum,
-  facetecServerBaseURL,
 } from "../../constants/misc.js";
 import {
   getDateAsInt,
@@ -21,6 +20,7 @@ import { ethers } from "ethers";
 import { poseidon } from "circomlibjs-old";
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import { upgradeV3Logger } from "./error-logger.js";
 
 const endpointLoggerV3 = upgradeV3Logger(
@@ -156,7 +156,7 @@ export async function enrollment3d(req, res) {
       });
 
       const enrollmentResponse = await axios.post(
-        `${facetecServerBaseURL}/enrollment-3d`,
+        `${getFaceTecBaseURL(req)}/enrollment-3d`,
         faceTecParams,
         {
           headers: {
@@ -254,7 +254,7 @@ export async function enrollment3d(req, res) {
 
     try {
       const faceDbSearchResponse = await axios.post(
-        `${facetecServerBaseURL}/3d-db/search`,
+        `${getFaceTecBaseURL(req)}/3d-db/search`,
         {
           externalDatabaseRefID: session.externalDatabaseRefID,
           minMatchLevel: 15,

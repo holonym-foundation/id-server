@@ -3,8 +3,8 @@ import { ObjectId } from "mongodb";
 import { Session, BiometricsSession } from "../../init.js";
 import {
   sessionStatusEnum,
-  facetecServerBaseURL,
 } from "../../constants/misc.js";
+import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
 // const postSessionsLogger = logger.child({
@@ -61,7 +61,7 @@ export async function sessionToken(req, res) {
       });
 
       const resp = await axios.get(
-        `${facetecServerBaseURL}/session-token`,
+        `${getFaceTecBaseURL(req)}/session-token`,
         {
           headers: {
             "Content-Type": "application/json",

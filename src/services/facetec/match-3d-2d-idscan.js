@@ -7,7 +7,6 @@ import {
 } from "../../init.js";
 import {
   sessionStatusEnum,
-  facetecServerBaseURL,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import {
@@ -16,6 +15,7 @@ import {
   govIdUUID,
   objectIdElevenMonthsAgo,
 } from "../../utils/utils.js";
+import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import {
   flattenScannedValues,
   validateFaceTecResponse,
@@ -89,7 +89,7 @@ export async function match3d2dIdScan(req, res) {
       });
 
       const resp = await axios.post(
-        `${facetecServerBaseURL}/match-3d-2d-idscan`,
+        `${getFaceTecBaseURL(req)}/match-3d-2d-idscan`,
         faceTecParams,
         {
           headers: {
@@ -290,7 +290,7 @@ export async function match3d2dIdScan(req, res) {
         groupName: groupName,
       });
       const faceDbEnrollResponse = await axios.post(
-        `${facetecServerBaseURL}/3d-db/enroll`,
+        `${getFaceTecBaseURL(req)}/3d-db/enroll`,
         {
           externalDatabaseRefID: faceTecParams.externalDatabaseRefID,
           groupName: groupName,

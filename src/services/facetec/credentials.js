@@ -20,12 +20,13 @@ import {
   objectIdFiveDaysAgo,
 } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { sessionStatusEnum, facetecServerBaseURL } from "../../constants/misc.js";
+import { sessionStatusEnum } from "../../constants/misc.js";
 import {
   findOneUserVerificationLast11Months,
   findOneUserVerification11Months5Days,
 } from "../../utils/user-verifications.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/biometrics-nullifier-and-creds.js";
+import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import { upgradeV3Logger } from "./error-logger.js";
 import {
   updateSessionStatus,
@@ -209,7 +210,7 @@ async function getCredentialsV3(req, res) {
     // search for duplicates first /3d-db/search
     try {
       const faceDbSearchResponse = await axios.post(
-        `${facetecServerBaseURL}/3d-db/search`,
+        `${getFaceTecBaseURL(req)}/3d-db/search`,
         {
           externalDatabaseRefID: session.externalDatabaseRefID,
           minMatchLevel: 15,
@@ -298,7 +299,7 @@ async function getCredentialsV3(req, res) {
     // do /3d-db/enroll (verify page only did /3d-db/search)
     try {
       const faceDbEnrollResponse = await axios.post(
-        `${facetecServerBaseURL}/3d-db/enroll`,
+        `${getFaceTecBaseURL(req)}/3d-db/enroll`,
         {
           externalDatabaseRefID: session.externalDatabaseRefID,
           groupName: groupName,
