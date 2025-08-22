@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { ethers } from "ethers";
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction as SuiTransaction } from '@mysten/sui/transactions';
@@ -34,18 +35,18 @@ import { mistToSui, suiToMist } from "../../utils/sui.js"
  * Endpoint to be called by daemon to periodically transfer funds from
  * id-server's account to the company's account.
  */
-async function transferFunds(req, res) {
+async function transferFunds(req: Request, res: Response) {
   const apiKey = req.headers["x-api-key"];
 
   if (apiKey !== process.env.ADMIN_API_KEY) {
     return res.status(401).json({ error: "Invalid API key." });
   }
 
-  const txReceipts = {};
+  const txReceipts: Record<string, any> = {};
 
   try {
     const mainnetWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       ethereumProvider
     );
     const balanceMainnet = await mainnetWallet.getBalance();
@@ -62,7 +63,7 @@ async function transferFunds(req, res) {
 
     // Transfer ETH on Optimism \\
     const optimismWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       optimismProvider
     );
     const balanceOptimism = await optimismWallet.getBalance();
@@ -78,7 +79,7 @@ async function transferFunds(req, res) {
 
     // Transfer FTM on Fantom \\
     const fantomWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       fantomProvider
     );
     const balanceFantom = await fantomWallet.getBalance();
@@ -91,10 +92,10 @@ async function transferFunds(req, res) {
         value: ethers.utils.parseEther("1100"),
       });
 
-      txReq.maxFeePerGas = txReq.maxFeePerGas.mul(4);
-      txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
+      txReq.maxFeePerGas = (txReq.maxFeePerGas as any).mul(4);
+      txReq.maxPriorityFeePerGas = (txReq.maxPriorityFeePerGas as any).mul(14);
 
-      if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
+      if ((txReq.maxPriorityFeePerGas as any).gt(txReq.maxFeePerGas)) {
         txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
       }
 
@@ -105,7 +106,7 @@ async function transferFunds(req, res) {
 
     // Transfer ETH on Base \\
     const baseWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       baseProvider
     );
     const balanceBase = await baseWallet.getBalance();
@@ -122,7 +123,7 @@ async function transferFunds(req, res) {
 
     // Transfer AVAX on Avalanche \\
     const avalancheWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       avalancheProvider
     );
     const balanceAvalanche = await avalancheWallet.getBalance();
@@ -139,7 +140,7 @@ async function transferFunds(req, res) {
 
     // Transfer ETH on Aurora \\
     const auroraWallet = new ethers.Wallet(
-      process.env.PAYMENTS_PRIVATE_KEY,
+      process.env.PAYMENTS_PRIVATE_KEY as string,
       auroraProvider
     );
     const balanceAurora = await auroraWallet.getBalance();
@@ -156,10 +157,10 @@ async function transferFunds(req, res) {
 
     // Transfer XLM on Stellar \\
     const stellarKeypair = StellarSdk.Keypair.fromSecret(
-      process.env.STELLAR_PAYMENTS_SECRET_KEY
+      process.env.STELLAR_PAYMENTS_SECRET_KEY as string
     );
     const stellarAccount = await horizonServer.loadAccount(stellarKeypair.publicKey());
-    const xlmBalance = stellarAccount.balances.filter(x => x.asset_type === 'native')[0].balance;
+    const xlmBalance: number = parseFloat(stellarAccount.balances.filter(x => x.asset_type === 'native')[0].balance);
     if (xlmBalance >= 2000) {
       const stellarTx = new StellarSdk.TransactionBuilder(
         stellarAccount,
@@ -184,16 +185,16 @@ async function transferFunds(req, res) {
 
     // Transfer SUI on Sui \\
     const privateKeyBytes = new Uint8Array(
-      Buffer.from(process.env.SUI_PRIVATE_KEY.replace('0x', ''), 'hex')
+      Buffer.from((process.env.SUI_PRIVATE_KEY as string).replace('0x', ''), 'hex')
     );
     const suiWallet = Ed25519Keypair.fromSecretKey(privateKeyBytes);
     const suiBalanceResult = await suiClient.getBalance({
       owner: suiWallet.toSuiAddress()
     })
-    const suiBalance = mistToSui(suiBalanceResult?.totalBalance)
+    const suiBalance: number = mistToSui(Number(suiBalanceResult?.totalBalance as string))
     if (suiBalance > 150) {
       // Send all but 30 SUI to company address
-      const amountToSend = suiToMist(suiBalance - 30);
+      const amountToSend: number = suiToMist(suiBalance - 30);
       const tx = new SuiTransaction();
 
       const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToSend)]);
@@ -213,9 +214,9 @@ async function transferFunds(req, res) {
 
     return res.status(200).json(txReceipts);
   } catch (err) {
-    console.log("transferFunds: Error encountered (a)", err.message);
-    if (err?.response?.data)
-      console.log("transferFunds: Error encountered (b)", err?.response?.data);
+    console.log("transferFunds: Error encountered (a)", (err as Error).message);
+    if ((err as any)?.response?.data)
+      console.log("transferFunds: Error encountered (b)", (err as any)?.response?.data);
     else console.log("transferFunds: Error encountered (b)", err);
     return res.status(500).json({ error: "An unknown error occurred" });
   }

@@ -1,9 +1,13 @@
+import { Request, Response } from "express";
 import { UserCredentialsV2 } from "../init.js";
 import logger from "../utils/logger.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /credentials/v2] " });
 
-async function validatePutCredentialsArgs(holoUserId) {
+async function validatePutCredentialsArgs(
+  holoUserId: string | null | undefined,
+  encryptedCredentials: any
+) {
   // Require that args are present
   if (!holoUserId || holoUserId == "null" || holoUserId == "undefined") {
     return { error: "No holoUserId specified" };
@@ -21,7 +25,10 @@ async function validatePutCredentialsArgs(holoUserId) {
   return { success: true };
 }
 
-async function storeOrUpdatePhoneCredentials(holoUserId, encryptedCredentials) {
+async function storeOrUpdatePhoneCredentials(
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
   let userCredentialsDoc;
   try {
     userCredentialsDoc = await UserCredentialsV2.findOne({
@@ -52,7 +59,10 @@ async function storeOrUpdatePhoneCredentials(holoUserId, encryptedCredentials) {
   return { success: true };
 }
 
-async function storeOrUpdateGovIdCredentials(holoUserId, encryptedCredentials) {
+async function storeOrUpdateGovIdCredentials(
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
   let userCredentialsDoc;
   try {
     userCredentialsDoc = await UserCredentialsV2.findOne({
@@ -83,7 +93,10 @@ async function storeOrUpdateGovIdCredentials(holoUserId, encryptedCredentials) {
   return { success: true };
 }
 
-async function storeOrUpdateCleanHandsCredentials(holoUserId, encryptedCredentials) {
+async function storeOrUpdateCleanHandsCredentials(
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
   let userCredentialsDoc;
   try {
     userCredentialsDoc = await UserCredentialsV2.findOne({
@@ -113,7 +126,10 @@ async function storeOrUpdateCleanHandsCredentials(holoUserId, encryptedCredentia
   return { success: true };
 }
 
-async function storeOrUpdateBiometricsCredentials(holoUserId, encryptedCredentials) {
+async function storeOrUpdateBiometricsCredentials(
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
   let userCredentialsDoc;
   try {
     userCredentialsDoc = await UserCredentialsV2.findOne({
@@ -146,7 +162,7 @@ async function storeOrUpdateBiometricsCredentials(holoUserId, encryptedCredentia
 /**
  * Get user's encrypted credentials and symmetric key from document store.
  */
-async function getCredentials(req, res) {
+async function getCredentials(req: Request, res: Response) {
   const holoUserId = req?.query?.holoUserId;
 
   if (!holoUserId) {
@@ -177,7 +193,7 @@ async function getCredentials(req, res) {
 /**
  * ENDPOINT
  */
-async function putPhoneCredentials(req, res) {
+async function putPhoneCredentials(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedCredentials = req?.body?.encryptedCredentials;
 
@@ -205,7 +221,7 @@ async function putPhoneCredentials(req, res) {
 /**
  * ENDPOINT
  */
-async function putGovIdCredentials(req, res) {
+async function putGovIdCredentials(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedCredentials = req?.body?.encryptedCredentials;
 
@@ -233,7 +249,7 @@ async function putGovIdCredentials(req, res) {
 /**
  * ENDPOINT
  */
-async function putCleanHandsCredentials(req, res) {
+async function putCleanHandsCredentials(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedCredentials = req?.body?.encryptedCredentials;
 
@@ -261,7 +277,7 @@ async function putCleanHandsCredentials(req, res) {
 /**
  * ENDPOINT
  */
-async function putBiometricsCredentials(req, res) {
+async function putBiometricsCredentials(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedCredentials = req?.body?.encryptedCredentials;
 

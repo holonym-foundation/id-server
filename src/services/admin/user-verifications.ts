@@ -1,8 +1,11 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import {
   UserVerifications,
   DailyVerificationCount,
   DailyVerificationDeletions,
 } from "../../init.js";
+import { IUserVerifications, IDailyVerificationDeletions } from "../../types.js";
 import logger from "../../utils/logger.js";
 
 const getEndpointLogger = logger.child({
@@ -12,7 +15,7 @@ const deleteEndpointLogger = logger.child({
   msgPrefix: "[DELETE /admin/user-verifications] ",
 });
 
-async function getUserVerification(req, res) {
+async function getUserVerification(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -21,10 +24,11 @@ async function getUserVerification(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const id = req.query.id;
-    const uuid = req.query.uuid;
-    const uuidV2 = req.query.uuidV2;
-    const idvProviderSessionId = req.query.idvProviderSessionId;
+
+    const id: string = req.query.id as string;
+    const uuid: string = req.query.uuid as string;
+    const uuidV2: string = req.query.uuidV2 as string;
+    const idvProviderSessionId: string = req.query.idvProviderSessionId as string;
 
     if (!id && !uuid && !uuidV2 && !idvProviderSessionId) {
       return res.status(400).json({ error: "No user ID provided." });
@@ -32,7 +36,7 @@ async function getUserVerification(req, res) {
 
     // Whatever parameters were included in the request to this endpoint, include them.
     // Leave out any null/undefined values.
-    const orInQuery = []
+    const orInQuery: any[] = []
     if (id) {
       orInQuery.push({ _id: id });
     }
@@ -47,7 +51,7 @@ async function getUserVerification(req, res) {
     }
 
     // const user = await UserVerifications.findOne({ _id: id }).exec();
-    const users = await UserVerifications.find({
+    const users: HydratedDocument<IUserVerifications>[] = await UserVerifications.find({
       $or: orInQuery,
     }).exec();
     if (users) {
@@ -66,7 +70,7 @@ async function getUserVerification(req, res) {
   }
 }
 
-async function deleteUserVerification(req, res) {
+async function deleteUserVerification(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -75,10 +79,10 @@ async function deleteUserVerification(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const id = req.query.id;
-    const uuid = req.query.uuid;
-    const uuidV2 = req.query.uuidV2;
-    const idvProviderSessionId = req.query.idvProviderSessionId;
+    const id: string = req.query.id as string;
+    const uuid: string = req.query.uuid as string;
+    const uuidV2: string = req.query.uuidV2 as string;
+    const idvProviderSessionId: string = req.query.idvProviderSessionId as string;
 
     if (!id && !uuid && !uuidV2 && !idvProviderSessionId) {
       return res.status(400).json({ error: "No user ID provided." });
@@ -93,11 +97,12 @@ async function deleteUserVerification(req, res) {
     //   (verificationCountDoc?.veriff?.sessionCount ?? 0) +
     //   (verificationCountDoc?.idenfy?.sessionCount ?? 0) +
     //   (verificationCountDoc?.onfido?.applicantCount ?? 0);
-    const deletionCountDoc = await DailyVerificationDeletions.findOne({
+    const deletionCountDoc: HydratedDocument<IDailyVerificationDeletions> | null = await DailyVerificationDeletions.findOne({
       date: new Date().toISOString().slice(0, 10),
     }).exec();
-    const deletionCountToday = deletionCountDoc?.deletionCount ?? 0;
-    if (deletionCountToday >= sessionCountToday * 0.02) {
+    const deletionCountToday: number = deletionCountDoc?.deletionCount ?? 0;
+    // if (deletionCountToday >= sessionCountToday * 0.02) {
+    if (deletionCountToday >= 2) {
       deleteEndpointLogger.info("Deletion limit reached for today. Exiting.");
       return res
         .status(429)
@@ -106,7 +111,7 @@ async function deleteUserVerification(req, res) {
 
     // Whatever parameters were included in the request to this endpoint, include them.
     // Leave out any null/undefined values.
-    const orInQuery = []
+    const orInQuery: any[] = []
     if (id) {
       orInQuery.push({ _id: id });
     }

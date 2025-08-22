@@ -1,5 +1,12 @@
+import { Request, Response } from "express";
+
 import { pinoOptions, logger } from "../utils/logger.js";
-import { getPriceFromCache, setPriceInCache, getLatestCryptoPrice } from "../utils/cmc.js";
+import {
+  getPriceFromCache,
+  setPriceInCache,
+  getLatestCryptoPrice,
+  CryptoPriceSlug
+} from "../utils/cmc.js";
 import { slugToID } from "../constants/cmc.js";
 
 const endpointLogger = logger.child({
@@ -9,14 +16,14 @@ const endpointLogger = logger.child({
   },
 });
 
-async function getPrice(req, res) {
+async function getPrice(req: Request, res: Response) {
   try {
     const slug = req.query.slug;
     if (!slug) {
       return res.status(400).json({ error: "No slug provided." });
     }
 
-    const id = slugToID[slug];
+    const id = slugToID[slug as keyof typeof slugToID];
 
     const resp = await getLatestCryptoPrice(id);
     const price = resp?.data?.data?.[id]?.quote?.USD?.price;
@@ -24,7 +31,7 @@ async function getPrice(req, res) {
     return res.status(200).json({
       price,
     });
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       endpointLogger.error(
         { error: err.response.data, theUserIp: req.ip, userReq: req },
@@ -42,7 +49,7 @@ async function getPrice(req, res) {
   }
 }
 
-async function getPriceV2(req, res) {
+async function getPriceV2(req: Request, res: Response) {
   // const ip = headers().get("x-forwarded-for") || req.connection.remoteAddress;
   try {
     const slug = req.query.slug;
@@ -50,22 +57,22 @@ async function getPriceV2(req, res) {
       return res.status(400).json({ error: "No slug provided." });
     }
 
-    const slugs = slug.split(",");
+    const slugs = (slug as string).split(",");
 
     // Check cache first
-    const cachedPrices = {};
+    const cachedPrices: Partial<Record<CryptoPriceSlug, number | undefined>> = {};
     for (let i = 0; i < slugs.length; i++) {
       const slug = slugs[i];
-      const cachedPrice = getPriceFromCache(slug);
+      const cachedPrice = getPriceFromCache(slug as CryptoPriceSlug);
       if (cachedPrice) {
-        cachedPrices[slug] = cachedPrice;
+        cachedPrices[slug as CryptoPriceSlug] = cachedPrice;
       }
     }
 
     // Get ids of cryptos whose prices weren't retrieved from cache
     const ids = [];
     for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i];
+      const slug = slugs[i] as CryptoPriceSlug;
       if (!cachedPrices[slug]) {
         ids.push(slugToID[slug]);
       }
@@ -77,23 +84,23 @@ async function getPriceV2(req, res) {
 
     const resp = await getLatestCryptoPrice(ids.join(","));
 
-    const newPrices = {};
+    const newPrices: Partial<Record<CryptoPriceSlug, number>> = {};
 
     for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i];
+      const slug = slugs[i] as CryptoPriceSlug;
 
       // Ignore slugs whose prices were retrieved from cache
       if (cachedPrices[slug]) continue;
 
       const id = slugToID[slug];
-      newPrices[slug] = resp?.data?.data?.[id]?.quote?.USD?.price;
+      newPrices[slug] = Number(resp?.data?.data?.[id]?.quote?.USD?.price);
 
       // Update cache
       setPriceInCache(slug, newPrices[slug]);
     }
 
     return res.status(200).json({ ...newPrices, ...cachedPrices });
-  } catch (err) {
+  } catch (err: any) {
     let errorObjStr = JSON.stringify(err);
     if (err.response) {
       endpointLogger.error(

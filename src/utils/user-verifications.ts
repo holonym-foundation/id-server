@@ -4,7 +4,10 @@ import {
   objectIdFiveDaysAgo
 } from "./utils.js"
 
-export async function findOneUserVerificationLast11Months(uuidOld, uuidNew) {
+export async function findOneUserVerificationLast11Months(
+  uuidOld: string,
+  uuidNew: string
+) {
   return UserVerifications.findOne({
     $or: [{ "govId.uuid": uuidOld }, { "govId.uuidV2": uuidNew }],
     // Filter out documents older than 11 months
@@ -16,8 +19,8 @@ export async function findOneUserVerificationLast11Months(uuidOld, uuidNew) {
  * Lookup a user verification that is older than 11 months and younger than 5 days.
  */
 export async function findOneUserVerification11Months5Days(
-  uuidOld,
-  uuidNew
+  uuidOld: string,
+  uuidNew: string
 ) {
   return UserVerifications.findOne({ 
     $or: [
@@ -35,7 +38,7 @@ export async function findOneUserVerification11Months5Days(
 /**
  * Lookup a clean hands user verification that is older than 11 months and younger than 5 days.
  */
-export async function findOneCleanHandsUserVerification11Months5Days(uuid) {
+export async function findOneCleanHandsUserVerification11Months5Days(uuid: string) {
   return UserVerifications.findOne({ 
     $or: [
       { "aml.uuid": uuid },

@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { mongoose, UserCredentials, UserProofMetadata } from "../init.js";
 import logger from "../utils/logger.js";
 
@@ -7,7 +8,7 @@ const getEndpointLogger = logger.child({ msgPrefix: "[GET /proof-metadata] " });
 /**
  * Get user's encrypted proof metadata and symmetric key from document store.
  */
-async function getProofMetadata(req, res) {
+async function getProofMetadata(req: Request, res: Response) {
   const sigDigest = req?.query?.sigDigest;
 
   if (!sigDigest) {
@@ -41,7 +42,7 @@ async function getProofMetadata(req, res) {
 /**
  * Set user's encrypted proof metadata and symmetric key.
  */
-async function postProofMetadata(req, res) {
+async function postProofMetadata(req: Request, res: Response) {
   const sigDigest = req?.body?.sigDigest;
   const encryptedProofMetadata = req?.body?.encryptedProofMetadata;
   const encryptedSymmetricKey = req?.body?.encryptedSymmetricKey;

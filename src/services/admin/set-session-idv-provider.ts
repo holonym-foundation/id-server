@@ -1,3 +1,5 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { Session, UserVerifications } from "../../init.js";
 import { createVeriffSession } from "../../utils/veriff.js";
@@ -8,6 +10,7 @@ import {
   createOnfidoCheck,
 } from "../../utils/onfido.js";
 import { sessionStatusEnum } from "../../constants/misc.js";
+import { ISession } from "../../types.js";
 import logger from "../../utils/logger.js";
 
 const postEndpointLogger = logger.child({
@@ -23,7 +26,7 @@ const postEndpointLogger = logger.child({
  * with that provider; this is to prevent creating multiple sessions
  * with each provider, something we want to prevent to avoid excessive costs.
  */
-async function setSessionIdvProvider(req, res) {
+async function setSessionIdvProvider(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -31,8 +34,8 @@ async function setSessionIdvProvider(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const id = req.body.id;
-    const newIdvProvider = req.body.idvProvider;
+    const id: string = req.body.id;
+    const newIdvProvider: string = req.body.idvProvider;
 
     if (!id) {
       return res.status(400).json({ error: "No user ID specified." });
@@ -49,14 +52,14 @@ async function setSessionIdvProvider(req, res) {
       });
     }
 
-    let objectId = null;
+    let objectId: ObjectId | null = null;
     try {
       objectId = new ObjectId(id);
     } catch (err) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await Session.findOne({ _id: objectId }).exec();
+    const session: HydratedDocument<ISession> | null = await Session.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -66,7 +69,7 @@ async function setSessionIdvProvider(req, res) {
       sessionStatusEnum.IN_PROGRESS,
       sessionStatusEnum.VERIFICATION_FAILED,
     ];
-    if (acceptableSessionStatuses.indexOf(session.status) === -1) {
+    if (acceptableSessionStatuses.indexOf(session.status as string) === -1) {
       // User might have other sessions that can be reset. If they do, we return
       // those session IDs to the admin, so the admin can reset a different session.
       try {
@@ -74,7 +77,7 @@ async function setSessionIdvProvider(req, res) {
         const sessions = await Session.find({ sigDigest }).exec();
         const filteredSids = sessions
           .filter((s) => {
-            return acceptableSessionStatuses.indexOf(s.status) !== -1;
+            return acceptableSessionStatuses.indexOf(s.status as string) !== -1;
           })
           .map((s) => `'${s._id.toString()}'`);
 

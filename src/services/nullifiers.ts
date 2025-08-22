@@ -1,9 +1,15 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
+import { IEncryptedNullifiers } from "@/types.js";
 import { EncryptedNullifiers } from "../init.js";
 import logger from "../utils/logger.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /nullifiers] " });
 
-async function validatePutNullifierArgs(holoUserId, encryptedNullifier) {
+async function validatePutNullifierArgs(
+  holoUserId: string | null | undefined,
+  encryptedNullifier: { ciphertext: string, iv: string } | undefined
+) {
   // Require that args are present
   if (!holoUserId || holoUserId == "null" || holoUserId == "undefined") {
     return { error: "No holoUserId specified" };
@@ -28,7 +34,7 @@ async function validatePutNullifierArgs(holoUserId, encryptedNullifier) {
 /**
  * Get user's encrypted nullifiers.
  */
-async function getNullifiers(req, res) {
+async function getNullifiers(req: Request, res: Response) {
   const holoUserId = req?.query?.holoUserId;
 
   if (!holoUserId) {
@@ -59,7 +65,7 @@ async function getNullifiers(req, res) {
  * encrypted nullifier only if the user does not have an encrypted nullifier that was 
  * created in the last 11 months.
  */
-async function putGovIdNullifier(req, res) {
+async function putGovIdNullifier(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedNullifier = req?.body?.encryptedNullifier;
 
@@ -72,7 +78,7 @@ async function putGovIdNullifier(req, res) {
     return res.status(400).json({ error: validationResult.error });
   }
 
-  let encryptedNullifiersDoc;
+  let encryptedNullifiersDoc: HydratedDocument<IEncryptedNullifiers> | null;
   try {
     encryptedNullifiersDoc = await EncryptedNullifiers.findOne({
       holoUserId: holoUserId,
@@ -82,9 +88,9 @@ async function putGovIdNullifier(req, res) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc) {
+  if (encryptedNullifiersDoc?.govId?.createdAt) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.govId?.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if (encryptedNullifiersDoc.govId.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -118,7 +124,7 @@ async function putGovIdNullifier(req, res) {
 /**
  * ENDPOINT
  */
-async function putPhoneNullifier(req, res) {
+async function putPhoneNullifier(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedNullifier = req?.body?.encryptedNullifier;
 
@@ -141,9 +147,9 @@ async function putPhoneNullifier(req, res) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc) {
+  if (encryptedNullifiersDoc?.phone?.createdAt) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.phone?.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if (encryptedNullifiersDoc.phone.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -177,7 +183,7 @@ async function putPhoneNullifier(req, res) {
 /**
  * ENDPOINT
  */
-async function putCleanHandsNullifier(req, res) {
+async function putCleanHandsNullifier(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedNullifier = req?.body?.encryptedNullifier;
 
@@ -200,9 +206,9 @@ async function putCleanHandsNullifier(req, res) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc) {
+  if (encryptedNullifiersDoc?.cleanHands?.createdAt) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.cleanHands?.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if (encryptedNullifiersDoc.cleanHands.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -236,7 +242,7 @@ async function putCleanHandsNullifier(req, res) {
 /**
  * ENDPOINT
  */
-async function putBiometricsNullifier(req, res) {
+async function putBiometricsNullifier(req: Request, res: Response) {
   const holoUserId = req?.body?.holoUserId;
   const encryptedNullifier = req?.body?.encryptedNullifier;
 
@@ -259,9 +265,9 @@ async function putBiometricsNullifier(req, res) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc) {
+  if (encryptedNullifiersDoc?.biometrics?.createdAt) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.biometrics?.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if (encryptedNullifiersDoc.biometrics.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 

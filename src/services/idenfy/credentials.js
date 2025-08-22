@@ -7,7 +7,7 @@ import {
   VerificationCollisionMetadata,
 } from "../../init.js";
 import { issue } from "holonym-wasm-issuer";
-import { createLeaf, getDateAsInt, sha256, govIdUUID, objectIdElevenMonthsAgo } from "../../utils/utils.js";
+import { getDateAsInt, sha256, govIdUUID, objectIdElevenMonthsAgo } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { newDummyUserCreds, countryCodeToPrime } from "../../utils/constants.js";
 import { sessionStatusEnum } from "../../constants/misc.js";

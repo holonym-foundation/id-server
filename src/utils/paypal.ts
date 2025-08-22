@@ -1,5 +1,7 @@
 import axios from "axios";
-import { payPalApiUrlBase } from "../constants/misc.js";
+import { HydratedDocument } from "mongoose";
+import { ISession } from "@/types.js";
+import { payPalApiUrlBase, sessionStatusEnum } from "../constants/misc.js";
 
 // ------------------- Simple API calls -------------------
 
@@ -14,11 +16,13 @@ async function getAccessToken() {
       password: process.env.PAYPAL_SECRET,
     },
   };
+  // ignoring "Property 'post' does not exist on type 'typeof import()'"
+  // @ts-ignore
   const response = await axios.post(url, data, config);
   return response?.data?.access_token;
 }
 
-async function getOrder(id, accessToken) {
+async function getOrder(id: string, accessToken: string) {
   const url = `${payPalApiUrlBase}/v2/checkout/orders/${id}`;
   const config = {
     headers: {
@@ -26,11 +30,13 @@ async function getOrder(id, accessToken) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
+  // ignoring "Property 'get' does not exist on type 'typeof import()'"
+  // @ts-ignore
   const resp = await axios.get(url, config);
   return resp.data;
 }
 
-async function getRefundDetails(id, accessToken) {
+async function getRefundDetails(id: string, accessToken: string) {
   const url = `${payPalApiUrlBase}/v2/payments/refunds/${id}`;
   const config = {
     headers: {
@@ -38,11 +44,13 @@ async function getRefundDetails(id, accessToken) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
+  // ignoring "Property 'get' does not exist on type 'typeof import()'"
+  // @ts-ignore
   const resp = await axios.get(url, config);
   return resp.data;
 }
 
-async function capturePayPalOrder(orderId) {
+async function capturePayPalOrder(orderId: string) {
   const accessToken = await getAccessToken();
 
   const url = `${payPalApiUrlBase}/v2/checkout/orders/${orderId}/capture`;
@@ -52,6 +60,8 @@ async function capturePayPalOrder(orderId) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
+  // ignoring "Property 'post' does not exist on type 'typeof import()'"
+  // @ts-ignore
   const resp = await axios.post(url, {}, config);
 
   return resp.data;
@@ -64,7 +74,7 @@ async function capturePayPalOrder(orderId) {
  * function accesses .payPal?.orders on the session object, and, if the refund is 
  * successful, it sets the session status to REFUNDED.
  */
-async function refundMintFeePayPal(session) {
+async function refundMintFeePayPal(session: HydratedDocument<ISession>) {
   const accessToken = await getAccessToken();
 
   const orders = session.payPal?.orders ?? [];
@@ -80,7 +90,7 @@ async function refundMintFeePayPal(session) {
 
   let successfulOrder;
   for (const { id: orderId } of orders) {
-    const order = await getOrder(orderId, accessToken);
+    const order = await getOrder(orderId as string, accessToken);
     if (order.status === "COMPLETED") {
       successfulOrder = order;
       break;
@@ -148,6 +158,8 @@ async function refundMintFeePayPal(session) {
     // invoice_id: "INVOICE-123",
     note_to_payer: "Failed verification",
   };
+  // ignoring "Property 'post' does not exist on type 'typeof import()'"
+  // @ts-ignore
   const resp = await axios.post(url, data, config);
 
   if (resp.data?.status !== "COMPLETED") {

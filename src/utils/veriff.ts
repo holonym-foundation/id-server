@@ -2,13 +2,10 @@ import { createHmac } from "crypto";
 import axios from "axios";
 import { v4 as uuidV4 } from "uuid";
 
-/**
- * @param {any} [data]
- */
-export async function createVeriffSession(data) {
+export async function createVeriffSession(data?: any) {
   try {
     const frontendUrl =
-      process.NODE_ENV === "development"
+      process.env.NODE_ENV === "development"
         ? "http://localhost:3002"
         : "https://holonym.id";
     const reqBody = {
@@ -28,26 +25,27 @@ export async function createVeriffSession(data) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,
       config
     );
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error creating veriff session:", err.message, err.response?.data);
   }
 }
 
-/**
- * @param {string} sessionId
- */
-export async function getVeriffSessionDecision(sessionId) {
+export async function getVeriffSessionDecision(sessionId: string) {
   try {
-    const hmacSignature = createHmac("sha256", process.env.VERIFF_SECRET_API_KEY)
+    const hmacSignature = createHmac("sha256", process.env.VERIFF_SECRET_API_KEY as string)
       .update(Buffer.from(sessionId, "utf8"))
       .digest("hex")
       .toLowerCase();
+    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.get(
       `https://api.veriff.me/v1/sessions/${sessionId}/decision`,
       {
@@ -59,7 +57,7 @@ export async function getVeriffSessionDecision(sessionId) {
       }
     );
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       "Error getting veriff session decision:",
       err.message,
@@ -71,12 +69,14 @@ export async function getVeriffSessionDecision(sessionId) {
 /**
  * @param {string} sessionId
  */
-export async function deleteVeriffSession(sessionId) {
+export async function deleteVeriffSession(sessionId: string) {
   try {
-    const hmacSignature = createHmac("sha256", process.env.VERIFF_SECRET_API_KEY)
+    const hmacSignature = createHmac("sha256", process.env.VERIFF_SECRET_API_KEY as string)
       .update(Buffer.from(sessionId, "utf8"))
       .digest("hex")
       .toLowerCase();
+    // ignoring "Property 'delete' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.delete(`https://api.veriff.me/v1/sessions/${sessionId}`, {
       headers: {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
@@ -85,7 +85,7 @@ export async function deleteVeriffSession(sessionId) {
       },
     });
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error deleting veriff session:", err.message, err.response?.data);
   }
 }

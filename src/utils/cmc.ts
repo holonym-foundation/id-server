@@ -9,9 +9,9 @@ import {
   suiCMCID
 } from "../constants/cmc.js";
 
-type CryptoPriceSlug = keyof typeof slugToID;
+export type CryptoPriceSlug = keyof typeof slugToID;
 
-type CryptoPricesCache = {
+export type CryptoPricesCache = {
   [K in keyof typeof slugToID]?: {
     price: number,
     lastUpdatedAt: Date

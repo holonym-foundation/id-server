@@ -1,17 +1,20 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
-import { Session } from "../../init.js";
+import { AMLChecksSession } from "../../init.js";
 import { sessionStatusEnum } from "../../constants/misc.js";
+import { IAmlChecksSession } from "../../types.js";
 import logger from "../../utils/logger.js";
 
 const postEndpointLogger = logger.child({
-  msgPrefix: "[POST /admin/fail-session] ",
+  msgPrefix: "[POST /admin/fail-clean-hands-session] ",
 });
 
 /**
- * Admin endpoint for manually failing a session. This allows a user
+ * Admin endpoint for manually failing a clean hands session. This allows a user
  * to request a refund AFTER paying but BEFORE failing verification.
  */
-async function failSession(req, res) {
+async function failCleanHandsSession(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -19,20 +22,20 @@ async function failSession(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const id = req.body.id;
+    const id: string = req.body.id;
 
     if (!id) {
       return res.status(400).json({ error: "No session ID specified." });
     }
 
-    let objectId = null;
+    let objectId: ObjectId | null = null;
     try {
       objectId = new ObjectId(id);
     } catch (err) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await Session.findOne({ _id: objectId }).exec();
+    const session: HydratedDocument<IAmlChecksSession> | null = await AMLChecksSession.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -60,4 +63,4 @@ async function failSession(req, res) {
   }
 }
 
-export { failSession };
+export { failCleanHandsSession };

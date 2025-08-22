@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { BinaryLike, createHash, randomBytes } from "crypto";
 import assert from "assert";
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
@@ -10,9 +10,9 @@ import sgMail from "@sendgrid/mail";
  * @param {string} date Must be of form yyyy-mm-dd
  * @returns {number} Date as seconds since 1900
  */
-export function getDateAsInt(date) {
+export function getDateAsInt(date: string) {
   // Format input
-  const [year, month, day] = date.split("-");
+  const [year, month, day] = date.split("-").map(s => Number(s));
   assert.ok(year && month && day, `Missing year, month, or day. Values: ${year}, ${month}, ${day}`); // Make sure Y M D all given
   assert.ok(year >= 1900 && year <= 2099, `Parsed year (${year}) doesn't satisfy: year >= 1900 && year <= 2099`); // Make sure date is in a reasonable range, otherwise it's likely the input was malformatted and it's best to be safe by stopping -- we can always allow more edge cases if needed later
   const time = new Date(date).getTime() / 1000 + 2208988800; // 2208988800000 is 70 year offset; Unix timestamps below 1970 are negative and we want to allow from approximately 1900.
@@ -20,11 +20,7 @@ export function getDateAsInt(date) {
   return time;
 }
 
-export function logWithTimestamp(message) {
-  console.log(`${new Date().toISOString()} ${message}`);
-}
-
-function assertLengthIs(item, length, itemName) {
+function assertLengthIs(item: any, length: number, itemName: string) {
   const errMsg = `${itemName} must be ${length} bytes but is ${item.length} bytes`;
   assert.equal(item.length, length, errMsg);
 }
@@ -41,33 +37,33 @@ function assertLengthIs(item, length, itemName) {
  * @returns {Promise<string>} Poseidon hash (of input data) right-shifted 3 bits. Represented as
  * a base 10 number represented as a string.
  */
-export async function createLeaf(
-  issuer,
-  secret,
-  countryCode,
-  nameCitySubdivisionZipStreetHash,
-  completedAt,
-  birthdate
-) {
-  assertLengthIs(issuer, 20, "issuer");
-  assertLengthIs(secret, 16, "secret");
-  try {
-    return poseidon(
-      [
-        issuer,
-        secret,
-        countryCode,
-        nameCitySubdivisionZipStreetHash,
-        completedAt,
-        birthdate,
-      ].map((x) => ethers.BigNumber.from(x).toString())
-    );
-  } catch (err) {
-    console.log(err);
-  }
-}
+// export async function createLeaf(
+//   issuer,
+//   secret,
+//   countryCode,
+//   nameCitySubdivisionZipStreetHash,
+//   completedAt,
+//   birthdate
+// ) {
+//   assertLengthIs(issuer, 20, "issuer");
+//   assertLengthIs(secret, 16, "secret");
+//   try {
+//     return poseidon(
+//       [
+//         issuer,
+//         secret,
+//         countryCode,
+//         nameCitySubdivisionZipStreetHash,
+//         completedAt,
+//         birthdate,
+//       ].map((x) => ethers.BigNumber.from(x).toString())
+//     );
+//   } catch (err) {
+//     console.log(err);
+//   }
+// }
 
-export async function sendEmail(to, subject, text, html) {
+export async function sendEmail(to: string, subject: string, text: string, html: string) {
   // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
   // const msg = {
   //   to, // "test@example.com"
@@ -86,12 +82,12 @@ export async function sendEmail(to, subject, text, html) {
   // }
 }
 
-export function sha256(data) {
+export function sha256(data: BinaryLike) {
   // returns Buffer
   return createHash("sha256").update(data).digest();
 }
 
-export function govIdUUID(firstName, lastName, dob) {
+export function govIdUUID(firstName: string, lastName: string, dob: string) {
   const uuidConstituents =
     (firstName || "") +
     (lastName || "") +
@@ -101,7 +97,7 @@ export function govIdUUID(firstName, lastName, dob) {
   return sha256(Buffer.from(uuidConstituents)).toString("hex");
 }
 
-export function validateUUIDv4(uuid) {  
+export function validateUUIDv4(uuid: string) {  
   // Handle non-string inputs
   if (typeof uuid !== 'string') {
     return false;
@@ -127,21 +123,14 @@ export function objectIdFiveDaysAgo() {
   return new ObjectId(Math.floor(fiveDaysAgo.getTime() / 1000).toString(16) + "0000000000000000");
 }
 
-/**
- * 
- * @param {() => Promise<T>} fn 
- * @param {number} retries 
- * @param {number} delay 
- * @returns 
- */
-export async function retry(
-  fn,
-  retries,
-  delay
+export async function retry<T>(
+  fn: () => Promise<T>,
+  retries: number,
+  delay: number
 ) {
   try {
     return await fn()
-  } catch (err) {
+  } catch (err: any) {
     if (retries === 0) {
       throw err
     }

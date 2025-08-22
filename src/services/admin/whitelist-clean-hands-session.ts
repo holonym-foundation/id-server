@@ -1,13 +1,16 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { AMLChecksSession, CleanHandsSessionWhitelist } from "../../init.js";
 import { sessionStatusEnum } from "../../constants/misc.js";
+import { IAmlChecksSession, ICleanHandsSessionWhitelist } from "../../types.js";
 import logger from "../../utils/logger.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /admin/whitelist-clean-hands-session] ",
 });
 
-async function whitelistCleanHandsSession(req, res) {
+async function whitelistCleanHandsSession(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -15,7 +18,7 @@ async function whitelistCleanHandsSession(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const sid = req.body.sid;
+    const sid: string = req.body.sid;
 
     if (!sid) {
       return res
@@ -23,9 +26,9 @@ async function whitelistCleanHandsSession(req, res) {
         .json({ error: "'sid' must be included in request body" });
     }
 
-    let session = null;
+    let session: HydratedDocument<IAmlChecksSession> | null = null;
 
-    let objectId = null;
+    let objectId: ObjectId | null = null;
     try {
       objectId = new ObjectId(sid);
     } catch (err) {
@@ -42,7 +45,7 @@ async function whitelistCleanHandsSession(req, res) {
       return res.status(400).json({ error: "Cannot whitelist session. It is not in a failed state" });
     }
 
-    const failureReason = session.verificationFailureReason;
+    const failureReason: string = session.verificationFailureReason as string;
 
     if (!failureReason.includes("Sanctions match found. Confidence scores")) {
       return res.status(400).json({ error: `Cannot whitelist session. verificationFailureReason is ${failureReason}, not "Sanctions match found"` });
@@ -56,10 +59,11 @@ async function whitelistCleanHandsSession(req, res) {
       .split(")")
       .map(item => item.trim().split(":")[1])
       .filter(score => score !== undefined)
+      .map(score => parseFloat(score.trim()))
     
     const maxScore = Math.max(...confidenceScores);
 
-    const MAX_ALLOWED_CONFIDENCE_SCORE = 0.95;
+    const MAX_ALLOWED_CONFIDENCE_SCORE: number = 0.95;
     if (maxScore > MAX_ALLOWED_CONFIDENCE_SCORE) {
       endpointLogger.error(
         {
@@ -89,6 +93,7 @@ async function whitelistCleanHandsSession(req, res) {
     await whitelistItem.save();
 
     session.status = sessionStatusEnum.IN_PROGRESS;
+    // @ts-ignore
     session.verificationFailureReason = null;
     await session.save();
 

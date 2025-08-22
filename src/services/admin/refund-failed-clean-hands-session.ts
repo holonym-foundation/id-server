@@ -1,6 +1,8 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { ethers } from "ethers";
-import { Session, SessionRefundMutex } from "../../init.js";
+import { AMLChecksSession, SessionRefundMutex } from "../../init.js";
 import {
   idServerPaymentAddress,
   sessionStatusEnum,
@@ -13,12 +15,13 @@ import {
   baseProvider,
   supportedChainIds,
 } from "../../constants/misc.js";
+import { IAmlChecksSession, ISessionRefundMutex } from "../../types.js";
 import logger from "../../utils/logger.js";
 import { refundMintFeeOnChain } from "../../utils/transactions.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 
 const postEndpointLogger = logger.child({
-  msgPrefix: "[POST /admin/refund-failed-session] ",
+  msgPrefix: "[POST /admin/refund-failed-clean-hands-session] ",
 });
 
 
@@ -29,7 +32,7 @@ const postEndpointLogger = logger.child({
  * signatures and so cannot get access to their original sigDigest and thus
  * cannot get access to their original sessions.
  */
-export async function refundFailedSession(req, res) {
+export async function refundFailedCleanHandsSession(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -37,15 +40,15 @@ export async function refundFailedSession(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const txHash = req.body.txHash;
+    const txHash: string = req.body.txHash;
 
     if (!txHash) {
       return res.status(400).json({ error: "No txHash specified." });
     }
 
-    const session = await Session.findOne({ txHash }).exec();
+    const session: HydratedDocument<IAmlChecksSession> | null = await AMLChecksSession.findOne({ txHash }).exec();
 
-    if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
+    if (session?.status !== sessionStatusEnum.VERIFICATION_FAILED) {
       return res.status(400).json({
         error: `Transaction ${txHash} is not associated with a failed session.`,
       });
@@ -67,6 +70,8 @@ export async function refundFailedSession(req, res) {
       provider = auroraProvider;
     } else if (process.env.NODE_ENV === "development" && session.chainId === 420) {
       provider = optimismGoerliProvider;
+    } else {
+      throw new Error(`Unexpected: Session has unsupported chain ID: ${session.chainId}`);
     }
 
     const tx = await provider.getTransaction(txHash);
@@ -77,7 +82,7 @@ export async function refundFailedSession(req, res) {
       });
     }
 
-    if (idServerPaymentAddress !== tx.to.toLowerCase()) {
+    if (idServerPaymentAddress !== (tx.to as string).toLowerCase()) {
       return res.status(400).json({
         error: `Invalid transaction recipient. Recipient must be ${idServerPaymentAddress}`,
       });
@@ -89,9 +94,9 @@ export async function refundFailedSession(req, res) {
       });
     }
 
-    const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY, provider);
+    const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY as string, provider);
 
-    const refundAmount = tx.value; //.mul(5).div(10);
+    const refundAmount = tx.value //.mul(8).div(10);
 
     // Ensure wallet has enough funds to refund
     const balance = await wallet.getBalance();
@@ -114,15 +119,15 @@ export async function refundFailedSession(req, res) {
     // in the future. The following values happened to be sufficient at the time
     // of adding this block.
     if (session.chainId === 250) {
-      txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
-      txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
+      txReq.maxFeePerGas = (txReq.maxFeePerGas as any).mul(2);
+      txReq.maxPriorityFeePerGas = (txReq.maxPriorityFeePerGas as any).mul(14);
 
-      if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
+      if ((txReq.maxPriorityFeePerGas as any).gt(txReq.maxFeePerGas)) {
         txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
       }
     }
 
-    const mutex = await SessionRefundMutex.findOne({ _id: session._id }).exec();
+    const mutex: HydratedDocument<ISessionRefundMutex> | null = await SessionRefundMutex.findOne({ _id: session._id }).exec();
     if (mutex) {
       return res.status(400).json({ error: "Refund already in progress" });
     }
@@ -237,7 +242,7 @@ export async function refundFailedSession(req, res) {
     //   refundTxHash: txResponse.hash,
     // });
   } catch (err) {
-    postEndpointLogger.error({ error: err, errMsg: err.message });
+    postEndpointLogger.error({ error: err, errMsg: (err as Error).message });
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }

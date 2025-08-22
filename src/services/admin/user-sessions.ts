@@ -1,5 +1,8 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { Session } from "../../init.js";
+import { ISession } from "../../types.js";
 import logger from "../../utils/logger.js";
 
 const getEndpointLogger = logger.child({
@@ -10,7 +13,7 @@ const getEndpointLogger = logger.child({
  * Simple endpoint that returns all of a user's sessions, given a single
  * session ID or txHash.
  */
-async function userSessions(req, res) {
+async function userSessions(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -18,8 +21,8 @@ async function userSessions(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const id = req.body.id;
-    const txHash = req.body.txHash;
+    const id: string = req.body.id;
+    const txHash: string = req.body.txHash;
 
     if (!id && !txHash) {
       return res
@@ -27,10 +30,10 @@ async function userSessions(req, res) {
         .json({ error: "'id' or 'txHash' must be included in request body" });
     }
 
-    let session = null;
+    let session: HydratedDocument<ISession> | null = null;
 
     if (id) {
-      let objectId = null;
+      let objectId: ObjectId | null = null;
       try {
         objectId = new ObjectId(id);
       } catch (err) {
@@ -48,7 +51,7 @@ async function userSessions(req, res) {
 
     const sigDigest = session.sigDigest;
 
-    const sessions = await Session.find({ sigDigest }).exec();
+    const sessions: HydratedDocument<ISession>[] = await Session.find({ sigDigest }).exec();
 
     // Only include session status, idvProvider, txHash, chainId, and refundTxHash.
     const filteredSessions = sessions.map((s) => ({

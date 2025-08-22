@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { ethers } from "ethers";
 import { VeraxSdk } from "@verax-attestation-registry/verax-sdk";
 import {
@@ -24,7 +25,7 @@ const veraxSdk = new VeraxSdk(
   // address,
   '0xB1f50c6C34C72346b1229e5C80587D0D659556Fd',
   // privateKey
-  process.env.RELAYER_PRIVATE_KEY
+  process.env.RELAYER_PRIVATE_KEY as `0x${string}`
 );
 
 const hubV3Address = contractAddresses.HubV3.mainnet.optimism;
@@ -32,13 +33,15 @@ const hubV3Address = contractAddresses.HubV3.mainnet.optimism;
 /**
  * @param subject Should be user's address
  */
-function getAttestations(subject) {
+function getAttestations(subject: string) {
   return veraxSdk.attestation.findBy(
     undefined,
     undefined,
     {
       // Holonym's schemaId
+      // @ts-ignore
       schemaId: "0x1c14fd320660a59a50eb1f795116193a59c26f2463c0705b79d8cb97aa9f419b",
+      schema: "0x1c14fd320660a59a50eb1f795116193a59c26f2463c0705b79d8cb97aa9f419b",
       // Our relayer/attester
       attester: "0xB1f50c6C34C72346b1229e5C80587D0D659556Fd",
       // Our address of interest
@@ -47,7 +50,7 @@ function getAttestations(subject) {
   );
 }
 
-function validateKYCAttestation(attestation) {
+function validateKYCAttestation(attestation: any) {
   const { circuitId, publicValues, revoked } = attestation.decodedPayload[0]
   
   const actionId = publicValues[2].toString();
@@ -75,7 +78,7 @@ function validateKYCAttestation(attestation) {
   }
 }
 
-function validateBiometricsAttestation(attestation) {
+function validateBiometricsAttestation(attestation: any) {
   const { circuitId, publicValues, revoked } = attestation.decodedPayload[0]
   
   const actionId = publicValues[2].toString();
@@ -103,7 +106,7 @@ function validateBiometricsAttestation(attestation) {
   }
 }
 
-function validatePhoneAttestation(attestation) {
+function validatePhoneAttestation(attestation: any) {
   const { circuitId, publicValues, revoked } = attestation.decodedPayload[0]
   
   const actionId = publicValues[2].toString();
@@ -131,7 +134,7 @@ function validatePhoneAttestation(attestation) {
   }
 }
 
-async function getAndValidateV3SBT(address, circuitId, issuerAddress) {
+async function getAndValidateV3SBT(address: string, circuitId: string, issuerAddress: string) {
   const hubV3Contract = new ethers.Contract(hubV3Address, HubV3ABI, optimismProvider);
 
   // Check v3 contract for SBT
@@ -149,19 +152,19 @@ async function getAndValidateV3SBT(address, circuitId, issuerAddress) {
   }
 }
 
-function getAndValidateV3KYCSBT(address) {
+function getAndValidateV3KYCSBT(address: string) {
   return getAndValidateV3SBT(address, v3KYCSybilResistanceCircuitId, kycIssuerAddress);
 }
 
-function getAndValidateV3PhoneSBT(address) {
+function getAndValidateV3PhoneSBT(address: string) {
   return getAndValidateV3SBT(address, v3PhoneSybilResistanceCircuitId, phoneIssuerAddress);
 }
 
-function getAndValidateV3BiometricsSBT(address) {
+function getAndValidateV3BiometricsSBT(address: string) {
   return getAndValidateV3SBT(address, v3BiometricsSybilResistanceCircuitId, biometricsIssuerAddress);
 }
 
-function getSBT(address, attestationType) {
+function getSBT(address: string, attestationType: string) {
   if (attestationType == 'kyc') {
     return getAndValidateV3KYCSBT(address);
   }
@@ -176,7 +179,7 @@ function getSBT(address, attestationType) {
 
 }
 
-async function attest(subject, circuitId, publicValues, revoked) {
+async function attest(subject: string, circuitId: string, publicValues: any[], revoked: boolean) {
   // Old address. Has attestation replacement vulnerability.
   // const portalAddr = "0x5631Aecf3283922b6bf36D7485Eb460f244bfac1"
   // v2. Fixes replacement vulnerability.
@@ -184,6 +187,7 @@ async function attest(subject, circuitId, publicValues, revoked) {
   // v3
   const portalAddr = "0x3d2F5e17e365CE495df340a341755EFA6F4f553c"
   const schemaId = "0x1c14fd320660a59a50eb1f795116193a59c26f2463c0705b79d8cb97aa9f419b"
+  // @ts-ignore
   const expiry = Math.floor(BigInt(publicValues[0]).toString());
   await veraxSdk.portal.attestV2(
     portalAddr,
@@ -205,7 +209,7 @@ async function attest(subject, circuitId, publicValues, revoked) {
 /**
  * ENDPOINT.
  */
-async function issueVeraxAttestation(req, res) {
+async function issueVeraxAttestation(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -213,8 +217,8 @@ async function issueVeraxAttestation(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const address = req.body.address;
-    const attestationType = req.body.attestationType;
+    const address: string = req.body.address;
+    const attestationType: string = req.body.attestationType;
 
     if (['kyc', 'phone', 'biometrics'].indexOf(attestationType) === -1) {
       return res.status(400).json({ error: "Invalid attestation type" });
@@ -223,12 +227,15 @@ async function issueVeraxAttestation(req, res) {
     // ---------- Make sure user doesn't already have this attestation ----------
     const attestations = await getAttestations(address);
     const kycAttestation = attestations.filter(
+      // @ts-ignore
       (attestation) => attestation.decodedPayload[0].circuitId == v3KYCSybilResistanceCircuitId
     )[0];
     const phoneAttestation = attestations.filter(
+      // @ts-ignore
       (attestation) => attestation.decodedPayload[0].circuitId == v3PhoneSybilResistanceCircuitId
     )[0];
     const biometricsAttestation = attestations.filter(
+      // @ts-ignore
       (attestation) => attestation.decodedPayload[0].circuitId == v3BiometricsSybilResistanceCircuitId
     )[0];
 
@@ -254,7 +261,7 @@ async function issueVeraxAttestation(req, res) {
     }
     
     // ---------- Make sure user has the required SBT ----------
-    let sbt;
+    let sbt: any;
     try {
       sbt = await getSBT(address, attestationType);
   
@@ -262,20 +269,22 @@ async function issueVeraxAttestation(req, res) {
         return res.status(400).json({ error: "User does not have the required SBT" });
       }
     } catch (err) {
-      if ((err.errorArgs?.[0] ?? "").includes("SBT is expired")) {
-        return res.status(400).json({ error: err.errorArgs?.[0] });
+      if (((err as any).errorArgs?.[0] ?? "").includes("SBT is expired")) {
+        return res.status(400).json({ error: (err as any).errorArgs?.[0] });
       }
     }
 
     // ---------- Issue attestation ----------
     const publicValues = sbt[1];
-    let circuitId = null;
+    let circuitId: string | null = null;
     if (attestationType == 'kyc') {
       circuitId = v3KYCSybilResistanceCircuitId;
     } else if (attestationType == 'phone') {
       circuitId = v3PhoneSybilResistanceCircuitId;
     } else if (attestationType == 'biometrics') {
       circuitId = v3BiometricsSybilResistanceCircuitId;
+    } else {
+      return res.status(400).json({ error: "Unexpected attestationType" })
     }
     const revoked = sbt[2];
     await attest(address, circuitId, publicValues, revoked);

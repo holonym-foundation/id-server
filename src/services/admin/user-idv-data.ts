@@ -1,3 +1,5 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import axios from "axios";
 import { ObjectId } from "mongodb";
 import { subDays } from "date-fns";
@@ -7,6 +9,7 @@ import {
   CleanHandsNullifierAndCreds
 } from "../../init.js";
 import { sessionStatusEnum, facetecServerBaseURL } from "../../constants/misc.js";
+import { ISession, INullifierAndCreds, ICleanHandsNullifierAndCreds } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { deleteVeriffSession } from "../../utils/veriff.js";
 import { deleteOnfidoApplicant } from "../../utils/onfido.js";
@@ -19,17 +22,17 @@ import { deleteIdenfySession } from "../../utils/idenfy.js";
 //   },
 // });
 
-function dateToObjectId(date) {
+function dateToObjectId(date: Date): ObjectId {
   // https://stackoverflow.com/a/8753670
-  return ObjectId(Math.floor(date / 1000).toString(16) + "0000000000000000");
+  return new ObjectId(Math.floor(date.getTime() / 1000).toString(16) + "0000000000000000");
 }
 
-async function setDeletedFromIDVProvider(session) {
+async function setDeletedFromIDVProvider(session: HydratedDocument<ISession>) {
   session.deletedFromIDVProvider = true;
   await session.save();
 }
 
-async function deleteDataFromIDVProvider(session) {
+async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
   switch (session.idvProvider) {
     case "veriff":
       if (session.sessionId) {
@@ -64,7 +67,7 @@ async function deleteDataFromIDVProvider(session) {
  * Endpoint to be called by daemon to periodically delete old user data
  * from IDV provider databases.
  */
-async function deleteUserData(req, res) {
+async function deleteUserData(req: Request, res: Response) {
   const apiKey = req.headers["x-api-key"];
 
   if (apiKey !== process.env.ADMIN_API_KEY) {
@@ -78,7 +81,7 @@ async function deleteUserData(req, res) {
     // - have status of (VERIFICATION_FAILED or ISSUED) AND
     // - have not already been deleted from IDV provider databases
     const tenDaysAgo = subDays(new Date(), 10);
-    const sessions = await Session.find({
+    const sessions: HydratedDocument<ISession>[] = await Session.find({
       $and: [
         {
           _id: {
@@ -108,7 +111,7 @@ async function deleteUserData(req, res) {
     // - have status of IN_PROGRESS or REFUNDED AND
     // - have not already been deleted from IDV provider databases
     const thirtyDaysAgo = subDays(new Date(), 30);
-    const sessions2 = await Session.find({
+    const sessions2: HydratedDocument<ISession>[] = await Session.find({
       $and: [
         {
           _id: {
@@ -156,9 +159,9 @@ async function deleteUserData(req, res) {
 
     return res.status(200).json({ message: "Success" });
   } catch (err) {
-    console.log("deleteUserData: Error encountered (a)", err.message);
-    if (err?.response?.data)
-      console.log("deleteUserData: Error encountered (b)", err?.response?.data);
+    console.log("deleteUserData: Error encountered (a)", (err as Error).message);
+    if ((err as any)?.response?.data)
+      console.log("deleteUserData: Error encountered (b)", (err as any)?.response?.data);
     else console.log("deleteUserData: Error encountered (b)", err);
     return res.status(500).json({ error: "An unknown error occurred" });
   }

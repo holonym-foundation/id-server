@@ -1,3 +1,5 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { ethers } from "ethers";
 import { Session, AMLChecksSession, Order } from "../../init.js";
@@ -13,6 +15,7 @@ import {
   baseProvider,
   supportedChainIds,
 } from "../../constants/misc.js";
+import { ISession, IAmlChecksSession, IOrder } from "../../types.js";
 import logger from "../../utils/logger.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 
@@ -20,7 +23,7 @@ const postEndpointLogger = logger.child({
   msgPrefix: "[POST /admin/refund-unused-transaction] ",
 });
 
-export async function refundUnusedTransaction(req, res) {
+export async function refundUnusedTransaction(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -28,9 +31,9 @@ export async function refundUnusedTransaction(req, res) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    const txHash = req.body.txHash;
-    const chainId = Number(req.body.chainId);
-    const to = req.body.to;
+    const txHash: string = req.body.txHash;
+    const chainId: number = Number(req.body.chainId);
+    const to: string = req.body.to;
 
     if (!txHash) {
       return res.status(400).json({ error: "No txHash specified." });
@@ -50,7 +53,7 @@ export async function refundUnusedTransaction(req, res) {
       return res.status(400).json({ error: "No 'to' specified." });
     }
 
-    const session = await Session.findOne({ txHash }).exec();
+    const session: HydratedDocument<ISession> | null = await Session.findOne({ txHash }).exec();
 
     if (session) {
       if (session.refundTxHash) {
@@ -63,7 +66,7 @@ export async function refundUnusedTransaction(req, res) {
       });
     }
 
-    const cleanHandsSession = await AMLChecksSession.findOne({ txHash }).exec();
+    const cleanHandsSession: HydratedDocument<IAmlChecksSession> | null = await AMLChecksSession.findOne({ txHash }).exec();
 
     if (cleanHandsSession) {
       return res.status(404).json({
@@ -71,7 +74,7 @@ export async function refundUnusedTransaction(req, res) {
       });
     }
 
-    const order = await Order.findOne({ txHash }).exec();
+    const order: HydratedDocument<IOrder> | null = await Order.findOne({ txHash }).exec();
     if (order) {
       if (order.refunded) {
         return res.status(400).json({
@@ -99,6 +102,8 @@ export async function refundUnusedTransaction(req, res) {
       provider = auroraProvider;
     } else if (process.env.NODE_ENV === "development" && chainId === 420) {
       provider = optimismGoerliProvider;
+    } else {
+      throw new Error(`Unexpected: Unsupported chain ID: ${chainId}`);
     }
 
     const tx = await provider.getTransaction(txHash);
@@ -109,7 +114,7 @@ export async function refundUnusedTransaction(req, res) {
       });
     }
 
-    if (idServerPaymentAddress !== tx.to.toLowerCase()) {
+    if (idServerPaymentAddress !== (tx.to as string).toLowerCase()) {
       return res.status(400).json({
         error: `Invalid transaction recipient. Recipient must be ${idServerPaymentAddress}`,
       });
@@ -153,7 +158,7 @@ export async function refundUnusedTransaction(req, res) {
 
     // ------------ end tx validation ------------
 
-    const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY, provider);
+    const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY as string, provider);
 
     const refundAmount = tx.value //.mul(9).div(10);
 
@@ -175,10 +180,10 @@ export async function refundUnusedTransaction(req, res) {
     // in the future. The following values happened to be sufficient at the time
     // of adding this block.
     if (chainId === 250) {
-      txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
-      txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
+      txReq.maxFeePerGas = (txReq.maxFeePerGas as any).mul(2);
+      txReq.maxPriorityFeePerGas = (txReq.maxPriorityFeePerGas as any).mul(14);
 
-      if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
+      if ((txReq.maxPriorityFeePerGas as any).gt(txReq.maxFeePerGas)) {
         txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
       }
     }
@@ -203,7 +208,7 @@ export async function refundUnusedTransaction(req, res) {
       refundTxHash: txResponse.hash,
     });
   } catch (err) {
-    postEndpointLogger.error({ error: err, errMsg: err.message });
+    postEndpointLogger.error({ error: err, errMsg: (err as Error).message });
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }

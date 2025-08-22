@@ -1,7 +1,8 @@
 import axios from "axios";
 import ethersPkg from "ethers";
+import { Request, Response } from "express";
 const { ethers } = ethersPkg;
-import { poseidon } from "circomlibjs-old";
+// import { poseidon } from "circomlibjs-old";
 import { mongoose, UserCredentials, zokProvider } from "../init.js";
 import logger from "../utils/logger.js";
 import contractAddresses from "../constants/contractAddresses.js";
@@ -11,10 +12,10 @@ const postEndpointLogger = logger.child({ msgPrefix: "[POST /credentials] " });
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /credentials] " });
 
 async function validatePostCredentialsArgs(
-  sigDigest,
+  sigDigest: string,
   // proof,
-  encryptedCredentials,
-  encryptedSymmetricKey
+  encryptedCredentials: string,
+  encryptedSymmetricKey: string
 ) {
   // if (!proof) {
   //   return { error: "proof is empty" };
@@ -83,11 +84,11 @@ async function validatePostCredentialsArgs(
 }
 
 async function storeOrUpdateUserCredentials(
-  sigDigest,
+  sigDigest: string,
   // proofDigest,
-  encryptedCredentials,
-  encryptedSymmetricKey,
-  encryptedCredentialsAES
+  encryptedCredentials: string,
+  encryptedSymmetricKey: string,
+  encryptedCredentialsAES: string
 ) {
   let userCredentialsDoc;
   try {
@@ -145,7 +146,7 @@ async function storeOrUpdateUserCredentials(
 /**
  * Get user's encrypted credentials and symmetric key from document store.
  */
-async function getCredentials(req, res) {
+async function getCredentials(req: Request, res: Response) {
   const sigDigest = req?.query?.sigDigest;
 
   if (!sigDigest) {
@@ -182,7 +183,7 @@ async function getCredentials(req, res) {
  * Ideally, each user can store only 1 credential set. However, given our privacy
  * guarantees, it is not clear that any design can reach this ideal.
  */
-async function postCredentials(req, res) {
+async function postCredentials(req: Request, res: Response) {
   const sigDigest = req?.body?.sigDigest;
   const proof = req?.body?.proof;
   const encryptedCredentials = req?.body?.encryptedCredentials;

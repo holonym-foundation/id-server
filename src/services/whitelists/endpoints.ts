@@ -1,6 +1,7 @@
+import { Request, Response } from "express";
 import { HumanIDPaymentGateWhitelist } from '../../init.js'
 
-async function getHumanIDPaymentgateWhitelistItem(req, res) {
+async function getHumanIDPaymentgateWhitelistItem(req: Request, res: Response) {
   try {
     const { address, chain } = req.query;
 
@@ -11,7 +12,7 @@ async function getHumanIDPaymentgateWhitelistItem(req, res) {
     const items = await HumanIDPaymentGateWhitelist.find()
     console.log('items', items) 
     const item = await HumanIDPaymentGateWhitelist.findOne({
-      address: address.toLowerCase(),
+      address: (address as string).toLowerCase(),
       chain
     });
 
@@ -20,7 +21,7 @@ async function getHumanIDPaymentgateWhitelistItem(req, res) {
       chain: item?.chain,
       reason: item?.reason
     });
-  } catch (error) {
+  } catch (error: any) {
     console.log("error", error);
     return res.status(500).json({ error: error.message });
   }
