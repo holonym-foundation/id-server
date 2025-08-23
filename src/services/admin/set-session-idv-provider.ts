@@ -158,7 +158,7 @@ async function setSessionIdvProvider(req: Request, res: Response) {
       // });
       return res.status(200).json({ message: "Veriff session created" });
     } else if (newIdvProvider === "idenfy") {
-      const tokenData = await createIdenfyToken(session.sigDigest);
+      const tokenData = await createIdenfyToken(session.sigDigest!);
       if (!tokenData) {
         return res.status(500).json({ error: "Error creating iDenfy token" });
       }

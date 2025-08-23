@@ -1,4 +1,6 @@
-async function decisionWebhook(req, res) {
+import { Request, Response } from "express";
+
+async function decisionWebhook(req: Request, res: Response) {
   try {
     // TODO: CT: See https://developers.veriff.com/#handling-security
     console.log("veriff/decision-webhook: req.body", req.body);

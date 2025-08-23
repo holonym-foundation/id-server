@@ -60,7 +60,7 @@ async function handleIdvSessionCreation(
       id: veriffSession.verification.id,
     };
   } else if (session.idvProvider === "idenfy") {
-    const tokenData = await createIdenfyToken(session.sigDigest);
+    const tokenData = await createIdenfyToken(session.sigDigest!);
     if (!tokenData) {
       throw new Error("Error creating iDenfy token");
     }

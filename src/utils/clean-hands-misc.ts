@@ -13,11 +13,26 @@
  * @property {string} data_source.short_name - Short name of the data source
  */
 
+type PEPResult = {
+ source_list_url: string
+  data_hash: string
+  entity_type: string
+  nationality: string[]
+  confidence_score: number
+  name: string
+  si_identifier: string
+  title: string
+  data_source: {
+    name: string
+    short_name: string
+  }
+}
+
 /**
  * Parse a statement from the sanctions io results for the user to certify.
  * @param {Array<PEPResult>} results - Array of PEP results from sanctions io 
  */
-export function parseStatementForUserCertification(results) {
+export function parseStatementForUserCertification(results: Array<PEPResult>) {
   const names = results.map(result => {
     if (result.name && result.title) {
       return `${result.name} (${result.title})`

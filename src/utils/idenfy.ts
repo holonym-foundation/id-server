@@ -1,7 +1,7 @@
 import axios from "axios";
 import { sha256 } from "./utils.js";
 
-export async function createIdenfyToken(sigDigest) {
+export async function createIdenfyToken(sigDigest: string) {
   try {
     const reqBody = {
       clientId: sha256(Buffer.from(sigDigest)).toString("hex"),
@@ -16,13 +16,15 @@ export async function createIdenfyToken(sigDigest) {
         ).toString("base64")}`,
       },
     };
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       "https://ivs.idenfy.com/api/v2/token",
       reqBody,
       config
     );
     return resp?.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error(`Error creating idenfy token:`, err.message, err.response?.data);
   }
 }
@@ -30,8 +32,10 @@ export async function createIdenfyToken(sigDigest) {
 /**
  * @param {string} scanRef
  */
-export async function getIdenfySessionStatus(scanRef) {
+export async function getIdenfySessionStatus(scanRef: string) {
   try {
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       `https://ivs.idenfy.com/api/v2/status`,
       {
@@ -47,7 +51,7 @@ export async function getIdenfySessionStatus(scanRef) {
       }
     );
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       `Error getting idenfy session status (scanRef: ${scanRef}):`,
       err.message,
@@ -59,8 +63,10 @@ export async function getIdenfySessionStatus(scanRef) {
 /**
  * @param {string} scanRef
  */
-export async function getIdenfySessionVerificationData(scanRef) {
+export async function getIdenfySessionVerificationData(scanRef: string) {
   try {
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       "https://ivs.idenfy.com/api/v2/data",
       {
@@ -76,7 +82,7 @@ export async function getIdenfySessionVerificationData(scanRef) {
       }
     );
     return resp.data;
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       `Error getting idenfy session data (scanRef: ${scanRef}):`,
       err.message,
@@ -85,8 +91,10 @@ export async function getIdenfySessionVerificationData(scanRef) {
   }
 }
 
-export async function deleteIdenfySession(scanRef) {
+export async function deleteIdenfySession(scanRef: string) {
   try {
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     return await axios.post(
       "https://ivs.idenfy.com/api/v2/delete",
       {
@@ -101,7 +109,7 @@ export async function deleteIdenfySession(scanRef) {
         },
       }
     );
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       `Error deleting idenfy session (scanRef: ${scanRef}):`,
       err.message,

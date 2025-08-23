@@ -1,4 +1,5 @@
 import axios from "axios";
+import { Request, Response } from "express";
 import { v4 as uuidV4 } from "uuid";
 import { DailyVerificationCount, IDVSessions } from "../../init.js";
 import { sendEmail } from "../../utils/utils.js";
@@ -19,7 +20,7 @@ const v2EndpointLogger = logger.child({
   },
 });
 
-async function v1CreateSession(req, res) {
+async function v1CreateSession(req: Request, res: Response) {
   // Increment sessionCount in today's verification count doc. If doc doesn't exist,
   // create it, and set Veriff sessionCount to 1.
   // findOneAndUpdate is used so that the operation is atomic.
@@ -28,16 +29,16 @@ async function v1CreateSession(req, res) {
     { $inc: { "veriff.sessionCount": 1 } },
     { upsert: true, returnOriginal: false }
   ).exec();
-  const sessionCountToday = verificationCountDoc.veriff.sessionCount;
+  const sessionCountToday = verificationCountDoc?.veriff?.sessionCount ?? 0;
 
   // Send 2 emails after 5k verifications
-  if (sessionCountToday > 5000 && sessionCountToday <= 5002) {
-    for (const email of ADMIN_EMAILS) {
-      const subject = "Veriff session count for the day exceeded 5000!!";
-      const message = `Veriff session count for the day is ${sessionCountToday}.`;
-      // await sendEmail(email, subject, message);
-    }
-  }
+  // if (sessionCountToday > 5000 && sessionCountToday <= 5002) {
+  //   for (const email of ADMIN_EMAILS) {
+  //     const subject = "Veriff session count for the day exceeded 5000!!";
+  //     const message = `Veriff session count for the day is ${sessionCountToday}.`;
+  //     // await sendEmail(email, subject, message);
+  //   }
+  // }
   if (sessionCountToday > 5000) {
     v1EndpointLogger.error(
       { sessionCountToday },
@@ -50,7 +51,7 @@ async function v1CreateSession(req, res) {
 
   // Prepare request and create session
   const frontendUrl =
-    process.NODE_ENV === "development"
+    process.env.NODE_ENV === "development"
       ? "http://localhost:3002"
       : "https://holonym.id";
   const reqBody = {
@@ -64,13 +65,13 @@ async function v1CreateSession(req, res) {
       timestamp: new Date().toISOString(),
     },
   };
-  if (process.NODE_ENV === "development") {
-    reqBody.verification.person = {
-      firstName: "John",
-      lastName: "Doe",
-      dateOfBirth: "1990-01-01",
-    };
-  }
+  // if (process.env.NODE_ENV === "development") {
+  //   reqBody.verification.person = {
+  //     firstName: "John",
+  //     lastName: "Doe",
+  //     dateOfBirth: "1990-01-01",
+  //   };
+  // }
   try {
     const config = {
       headers: {
@@ -78,6 +79,8 @@ async function v1CreateSession(req, res) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,
@@ -92,7 +95,7 @@ async function v1CreateSession(req, res) {
   }
 }
 
-async function v2CreateSession(req, res) {
+async function v2CreateSession(req: Request, res: Response) {
   const sigDigest = req.body.sigDigest;
 
   if (!sigDigest) {
@@ -107,16 +110,16 @@ async function v2CreateSession(req, res) {
     { $inc: { "veriff.sessionCount": 1 } },
     { upsert: true, returnOriginal: false }
   ).exec();
-  const sessionCountToday = verificationCountDoc.veriff.sessionCount;
+  const sessionCountToday = verificationCountDoc?.veriff?.sessionCount ?? 0;
 
   // Send 2 emails after 5k verifications
-  if (sessionCountToday > 5000 && sessionCountToday <= 5002) {
-    for (const email of ADMIN_EMAILS) {
-      const subject = "Veriff session count for the day exceeded 5000!!";
-      const message = `Veriff session count for the day is ${sessionCountToday}.`;
-      // await sendEmail(email, subject, message);
-    }
-  }
+  // if (sessionCountToday > 5000 && sessionCountToday <= 5002) {
+  //   for (const email of ADMIN_EMAILS) {
+  //     const subject = "Veriff session count for the day exceeded 5000!!";
+  //     const message = `Veriff session count for the day is ${sessionCountToday}.`;
+  //     // await sendEmail(email, subject, message);
+  //   }
+  // }
   if (sessionCountToday > 5000) {
     v2EndpointLogger.error(
       { sessionCountToday },
@@ -129,7 +132,7 @@ async function v2CreateSession(req, res) {
 
   // Prepare request and create session
   const frontendUrl =
-    process.NODE_ENV === "development"
+    process.env.NODE_ENV === "development"
       ? "http://localhost:3002"
       : "https://holonym.id";
   const reqBody = {
@@ -143,13 +146,13 @@ async function v2CreateSession(req, res) {
       timestamp: new Date().toISOString(),
     },
   };
-  if (process.NODE_ENV === "development") {
-    reqBody.verification.person = {
-      firstName: "John",
-      lastName: "Doe",
-      dateOfBirth: "1990-01-01",
-    };
-  }
+  // if (process.env.NODE_ENV === "development") {
+  //   reqBody.verification.person = {
+  //     firstName: "John",
+  //     lastName: "Doe",
+  //     dateOfBirth: "1990-01-01",
+  //   };
+  // }
   try {
     const config = {
       headers: {
@@ -157,6 +160,8 @@ async function v2CreateSession(req, res) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,
