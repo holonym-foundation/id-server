@@ -184,7 +184,7 @@ function validateReports(reports, metaSession) {
           },
         };
       }
-      const maxAllowedDeviceFingerprintReuse = 6;
+      const maxAllowedDeviceFingerprintReuse = 8;
       if (
         typeof report?.properties?.device?.device_fingerprint_reuse ===
           "number" &&
