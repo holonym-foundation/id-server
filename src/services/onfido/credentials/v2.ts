@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { pinoOptions, logger } from "../../../utils/logger.js";
 import {
   newDummyUserCreds,
@@ -25,6 +26,7 @@ import {
   getSession,
   updateSessionStatus,
 } from "./utils.js"
+import { OnfidoDocumentReport, OnfidoReport } from "../../../types.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[GET /onfido/credentials] ",
@@ -41,7 +43,7 @@ const endpointLogger = logger.child({
  *
  * Allows user to retrieve their signed verification info
  */
-export async function getCredentialsV2(req, res) {
+export async function getCredentialsV2(req: Request, res: Response) {
   try {
     const issuanceNullifier = req.params.nullifier;
 
@@ -52,7 +54,7 @@ export async function getCredentialsV2(req, res) {
       return res.status(200).json(response);
     }
 
-    const check_id = req.query.check_id;
+    const check_id = req.query.check_id as string | undefined;
     if (!check_id) {
       throw {
         status: 400,
@@ -92,8 +94,8 @@ export async function getCredentialsV2(req, res) {
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       endpointLogger.error(
-        validationResultCheck.log.data,
-        validationResultCheck.log.msg,
+        validationResultCheck.log?.data,
+        validationResultCheck.log?.msg,
         {
           tags: ["action:validateSession", "error:verificationFailed"],
         }
@@ -106,7 +108,7 @@ export async function getCredentialsV2(req, res) {
       throw {
         status: 400,
         error: validationResultCheck.error,
-        details: validationResultCheck.log.data,
+        details: validationResultCheck.log?.data,
       };
     }
 
@@ -133,7 +135,7 @@ export async function getCredentialsV2(req, res) {
       };
     }
 
-    const reportsValidation = validateReports(reports, metaSession);
+    const reportsValidation = validateReports(reports as OnfidoReport[], metaSession);
     if (validationResultCheck.error || reportsValidation.error) {
       const userErrorMessage = onfidoValidationToUserErrorMessage(
         reportsValidation,
@@ -164,7 +166,14 @@ export async function getCredentialsV2(req, res) {
       };
     }
 
-    const documentReport = reports.find((report) => report.name == "document");
+    const documentReport = reports?.find((report) => report.name == "document") as OnfidoDocumentReport | undefined;
+    if (!documentReport) {
+      throw {
+        status: 400,
+        error: "No document report found",
+        details: null,
+      };
+    }
     // Get UUID
     const uuidOld = uuidOldFromOnfidoReport(documentReport);
     const uuidNew = uuidNewFromOnfidoReport(documentReport);
@@ -214,7 +223,7 @@ export async function getCredentialsV2(req, res) {
     await updateSessionStatus(check_id, sessionStatusEnum.ISSUED);
 
     return res.status(200).json(response);
-  } catch (err) {
+  } catch (err: any) {
     // If this is our custom error, use its properties
     if (err.status && err.error) {
       return res.status(err.status).json(err);

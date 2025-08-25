@@ -1,3 +1,5 @@
+import { Request, Response } from "express";
+import { HydratedDocument } from "mongoose";
 import {
   NullifierAndCreds,
 } from "../../../init.js";
@@ -16,7 +18,7 @@ import { getSessionById, failSession } from "../../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
 import { toAlreadyRegisteredStr } from "../../../utils/errors.js"
-import { upgradeV3Logger } from "./error-logger.js";
+import { upgradeV3Logger, ValidationResult } from "./error-logger.js";
 import {
   validateCheck,
   validateReports,
@@ -29,6 +31,7 @@ import {
   getSession,
   updateSessionStatus,
 } from "./utils.js"
+import { ISession, OnfidoDocumentReport, OnfidoReport } from "../../../types.js";
 
 const endpointLoggerV3 = upgradeV3Logger(logger.child({
   msgPrefix: "[GET /onfido/v3/credentials] ",
@@ -49,7 +52,7 @@ const endpointLoggerV3 = upgradeV3Logger(logger.child({
  * credentials up to 5 days after initial issuance, if they provide the
  * same nullifier.
  */
-export async function getCredentialsV3(req, res) {
+export async function getCredentialsV3(req: Request, res: Response) {
   try {
     // Caller must specify a session ID and a nullifier. We first lookup the user's creds
     // using the nullifier. If no hit, then we lookup the credentials using the session ID.
@@ -71,13 +74,15 @@ export async function getCredentialsV3(req, res) {
     //   return res.status(200).json(response);
     // }
 
-    const { session, error: getSessionError } = await getSessionById(_id);
-    if (getSessionError) {
-      return res.status(400).json({ error: getSessionError });
+    // const { session, error: getSessionError } = await getSessionById(_id);
+    const getSessionResult = await getSessionById(_id);
+    if (getSessionResult.error) {
+      return res.status(400).json({ error: getSessionResult.error });
     }
+    const session = getSessionResult.session as HydratedDocument<ISession>;
 
     if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
-      endpointLoggerV3.verificationPreviouslyFailed(session.check_id, session)
+      endpointLoggerV3.verificationPreviouslyFailed(session.check_id as string, session)
       return res.status(400).json({
         error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
       });
@@ -131,8 +136,8 @@ export async function getCredentialsV3(req, res) {
       if (user) {
         await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
         endpointLoggerV3.alreadyRegistered(uuidNew);
-        await failSession(session, toAlreadyRegisteredStr(user._id))
-        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+        await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
       }
 
       const creds = extractCreds(documentReport);
@@ -162,15 +167,15 @@ export async function getCredentialsV3(req, res) {
     const check = await getOnfidoCheck(check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
-      endpointLoggerV3.checkValidationFailed(validationResultCheck)
-      await failSession(session, validationResultCheck.error)
+      endpointLoggerV3.checkValidationFailed(validationResultCheck as ValidationResult)
+      await failSession(session, validationResultCheck.error as string)
       return res.status(400).json({
         error: validationResultCheck.error,
-        details: validationResultCheck.log.data
+        details: validationResultCheck.log?.data
       });
     }
 
-    const reports = await getOnfidoReports(check.report_ids);
+    const reports = await getOnfidoReports(check.report_ids) as Array<OnfidoReport>;
     if (!validationResultCheck.success && (!reports || reports.length == 0)) {
       endpointLoggerV3.noReportsFound(check_id, check.report_ids)
 
@@ -195,7 +200,13 @@ export async function getCredentialsV3(req, res) {
       };
     }
 
-    const documentReport = reports.find((report) => report.name == "document");
+    const documentReport = reports.find((report) => report.name == "document") as OnfidoDocumentReport; 
+    if (!documentReport) {
+      endpointLoggerV3.noDocumentReport(reports)
+      return res.status(400).json({
+        error: "Unexpected error: Failed to get Onfido document report while executing lookup from nullifier branch."
+      });
+    }
     // Get UUID
     const uuidOld = uuidOldFromOnfidoReport(documentReport);
     const uuidNew = uuidNewFromOnfidoReport(documentReport);
@@ -209,8 +220,8 @@ export async function getCredentialsV3(req, res) {
       await saveCollisionMetadata(uuidOld, uuidNew, check_id, documentReport);
 
       endpointLoggerV3.alreadyRegistered(uuidNew);
-      await failSession(session, toAlreadyRegisteredStr(user._id))
-      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+      await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
     }
 
     // Store UUID for Sybil resistance
@@ -242,7 +253,7 @@ export async function getCredentialsV3(req, res) {
     await updateSessionStatus(check_id, sessionStatusEnum.ISSUED);
 
     return res.status(200).json(response);
-  } catch (err) {
+  } catch (err: any) {
     // If this is our custom error, use its properties
     if (err.status && err.error) {
       return res.status(err.status).json(err);

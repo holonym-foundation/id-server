@@ -5,7 +5,7 @@ import pino from "pino";
 
 import { ISession } from "../../../types.js";
 
-type ValidationResult = {
+export type ValidationResult = {
   log: {
     msg: string;
     data: Record<string, any>;

@@ -1,5 +1,68 @@
 import { Types } from 'mongoose';
 
+export type OnfidoCheck = {
+  id: string;
+  report_ids: string[];
+  status: string;
+  result: string
+};
+
+export type OnfidoReport = {
+  id: string;
+  name: string;
+  result: string;
+  status: string;
+  properties: {
+    issuing_country?: string;
+    device?: {
+      ip_reputation?: string;
+      device_fingerprint_reuse?: number;
+    };
+    ip?: {
+      address?: string;
+    };
+  };
+  breakdown?: {
+    [key: string]: {
+      result: string;
+      breakdown: {
+        [key: string]: {
+          result: string;
+          details?: string;
+          properties?: {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
+};
+
+export type OnfidoDocumentReport = OnfidoReport & {
+  properties: {
+    first_name?: string;
+    middle_name?: string;
+    last_name?: string;
+    date_of_birth?: string;
+    expiry_date?: string;
+    issuing_country?: string;
+    document_type?: string;
+    document_number?: string;
+    barcode?: Array<{
+      middle_name?: string;
+    }>;
+    city?: string;
+    state?: string;
+    houseNumber?: string;
+    street?: string;
+    unit?: string;
+    postcode?: string;
+    created_at?: string;
+  }
+}
+
+// ---------------- MongoDB schemas ----------------
+
 export type IUserVerifications = {
   _id?: Types.ObjectId;
   govId?: {

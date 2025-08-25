@@ -16,6 +16,7 @@ import {
   countryCodeToPrime,
 } from "../../../utils/constants.js";
 import { desiredOnfidoReports } from "../../../constants/onfido.js";
+import { OnfidoCheck, OnfidoReport, OnfidoDocumentReport, ISession } from "../../../types.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[GET /onfido/credentials] ",
@@ -27,7 +28,7 @@ const endpointLogger = logger.child({
   },
 });
 
-export function validateCheck(check) {
+export function validateCheck(check: OnfidoCheck) {
   if (!check?.report_ids || check.report_ids.length == 0) {
     return {
       error: "No report_ids found in check",
@@ -68,8 +69,17 @@ export function validateCheck(check) {
   return { success: true };
 }
 
-export function validateReports(reports, metaSession) {
-  const reportIssues = {};
+type ReportIssue = {
+  type: string;
+  message?: string;
+  subType?: string;
+  result?: string;
+  details?: string | { [key: string]: string };
+  properties?: { [key: string]: string };
+};
+
+export function validateReports(reports: Array<OnfidoReport>, metaSession: ISession) {
+  const reportIssues: { [key: string]: Array<ReportIssue> } = {};
   const reportNames = reports.map((report) => report.name);
   const missingReports = desiredOnfidoReports.filter(
     (report) => !reportNames.includes(report)
@@ -110,7 +120,7 @@ export function validateReports(reports, metaSession) {
       // we can ignore this check for such sessions.
       // NOTE: May 14, 2024: We are disablign the ipCountry check because it seems to be
       // turning down honest users while being game-able by sybils.
-      if (!countryCodeToPrime[report.properties.issuing_country]) {
+      if (!countryCodeToPrime[report.properties.issuing_country as keyof typeof countryCodeToPrime]) {
         return {
           error: `Verification failed. Unsupported country ${report.properties.issuing_country}`,
           log: {
@@ -215,8 +225,8 @@ export function validateReports(reports, metaSession) {
 }
 
 export function onfidoValidationToUserErrorMessage(
-  reportsValidation,
-  validationResultCheck
+  reportsValidation: ReturnType<typeof validateReports>,
+  validationResultCheck: ReturnType<typeof validateCheck>
 ) {
   return reportsValidation.reasons?.length
     ? `Verification failed: ${reportsValidation.reasons
@@ -246,7 +256,7 @@ export function onfidoValidationToUserErrorMessage(
     );
 }
 
-export function uuidOldFromOnfidoReport(documentReport) {
+export function uuidOldFromOnfidoReport(documentReport: OnfidoDocumentReport) {
   const uuidConstituents =
     (documentReport.properties.first_name || "") +
     (documentReport.properties.last_name || "") +
@@ -257,17 +267,17 @@ export function uuidOldFromOnfidoReport(documentReport) {
   return sha256(Buffer.from(uuidConstituents)).toString("hex");
 }
 
-export function uuidNewFromOnfidoReport(documentReport) {
+export function uuidNewFromOnfidoReport(documentReport: OnfidoDocumentReport) {
   return govIdUUID(
-    documentReport.properties.first_name,
-    documentReport.properties.last_name,
-    documentReport.properties.date_of_birth
+    documentReport.properties.first_name as string,
+    documentReport.properties.last_name as string,
+    documentReport.properties.date_of_birth as string
   );
 }
 
-export function extractCreds(documentReport) {
+export function extractCreds(documentReport: OnfidoDocumentReport) {
   const countryCode =
-    countryCodeToPrime[documentReport.properties.issuing_country];
+    countryCodeToPrime[documentReport.properties.issuing_country as keyof typeof countryCodeToPrime];
   const birthdate = documentReport.properties.date_of_birth ?? "";
   const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
   const firstNameStr = documentReport.properties.first_name ?? "";
@@ -403,7 +413,12 @@ export function extractCreds(documentReport) {
   };
 }
 
-export async function saveCollisionMetadata(uuid, uuidV2, check_id, documentReport) {
+export async function saveCollisionMetadata(
+  uuid: string,
+  uuidV2: string,
+  check_id: string,
+  documentReport?: OnfidoDocumentReport
+) {
   try {
     const collisionMetadataDoc = new VerificationCollisionMetadata({
       uuid: uuid,
@@ -432,7 +447,7 @@ export async function saveCollisionMetadata(uuid, uuidV2, check_id, documentRepo
   }
 }
 
-export async function saveUserToDb(uuidV2, check_id) {
+export async function saveUserToDb(uuidV2: string, check_id: string) {
   const userVerificationsDoc = new UserVerifications({
     govId: {
       uuidV2: uuidV2,
@@ -455,7 +470,7 @@ export async function saveUserToDb(uuidV2, check_id) {
   return { success: true };
 }
 
-export async function getSession(check_id) {
+export async function getSession(check_id: string) {
   const metaSession = await Session.findOne({ check_id }).exec();
 
   if (!metaSession) {
@@ -465,11 +480,12 @@ export async function getSession(check_id) {
   return metaSession;
 }
 
-export async function updateSessionStatus(check_id, status, failureReason) {
+export async function updateSessionStatus(check_id: string, status: string, failureReason?: string) {
   try {
     // TODO: Once pay-first frontend is pushed, remove the try-catch. We want
     // this endpoint to fail if we can't update the session.
     const metaSession = await Session.findOne({ check_id }).exec();
+    if (!metaSession) throw new Error("Session not found");
     metaSession.status = status;
     if (failureReason) metaSession.verificationFailureReason = failureReason;
     await metaSession.save();

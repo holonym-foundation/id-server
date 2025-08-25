@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import { issue } from "holonym-wasm-issuer";
 import { pinoOptions, logger } from "../../../utils/logger.js";
 import {
@@ -40,22 +41,22 @@ const endpointLogger = logger.child({
  *
  * Allows user to retrieve their signed verification info
  */
-export async function getCredentials(req, res) {
+export async function getCredentials(req: Request, res: Response) {
   try {
-    if (process.env.ENVIRONMENT == "dev") {
-      const creds = newDummyUserCreds;
+    // if (process.env.ENVIRONMENT == "dev") {
+    //   const creds = newDummyUserCreds;
 
-      const response = issue(
-        process.env.HOLONYM_ISSUER_PRIVKEY,
-        creds.rawCreds.countryCode.toString(),
-        creds.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
-      );
-      response.metadata = newDummyUserCreds;
+    //   const response = issue(
+    //     process.env.HOLONYM_ISSUER_PRIVKEY as string,
+    //     creds.rawCreds.countryCode.toString(),
+    //     creds.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
+    //   );
+    //   response.metadata = newDummyUserCreds;
 
-      return res.status(200).json(response);
-    }
+    //   return res.status(200).json(response);
+    // }
 
-    const check_id = req.query.check_id;
+    const check_id = req.query.check_id as string | undefined;
     if (!check_id) {
       return res.status(400).json({ error: "No check_id specified" });
     }
@@ -134,11 +135,11 @@ export async function getCredentials(req, res) {
 
     const creds = extractCreds(documentReport);
 
-    const response = issue(
-      process.env.HOLONYM_ISSUER_PRIVKEY,
+    const response = JSON.parse(issue(
+      process.env.HOLONYM_ISSUER_PRIVKEY as string,
       creds.rawCreds.countryCode.toString(),
       creds.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
-    );
+    ));
     response.metadata = creds;
 
     await deleteOnfidoApplicant(check.applicant_id);
