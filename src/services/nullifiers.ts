@@ -88,9 +88,9 @@ async function putGovIdNullifier(req: Request, res: Response) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc?.govId?.createdAt) {
+  if (encryptedNullifiersDoc) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.govId.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if ((encryptedNullifiersDoc.govId?.createdAt ?? 0) > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -147,9 +147,9 @@ async function putPhoneNullifier(req: Request, res: Response) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc?.phone?.createdAt) {
+  if (encryptedNullifiersDoc) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.phone.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if ((encryptedNullifiersDoc.phone?.createdAt ?? 0) > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -206,9 +206,9 @@ async function putCleanHandsNullifier(req: Request, res: Response) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc?.cleanHands?.createdAt) {
+  if (encryptedNullifiersDoc) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.cleanHands.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if ((encryptedNullifiersDoc.cleanHands?.createdAt ?? 0) > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
@@ -265,9 +265,9 @@ async function putBiometricsNullifier(req: Request, res: Response) {
     return { error: "An error occurred while retrieving encrypted nullifiers." };
   }
 
-  if (encryptedNullifiersDoc?.biometrics?.createdAt) {
+  if (encryptedNullifiersDoc) {
     // Make sure user doesn't already have a nullifier that was created within the last 11 months
-    if (encryptedNullifiersDoc.biometrics.createdAt > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+    if ((encryptedNullifiersDoc.biometrics?.createdAt ?? 0) > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
       return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
     }
 
