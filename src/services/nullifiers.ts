@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { HydratedDocument } from "mongoose";
-import { IEncryptedNullifiers } from "@/types.js";
+import { IEncryptedNullifiers } from "../types.js";
 import { EncryptedNullifiers } from "../init.js";
 import logger from "../utils/logger.js";
 

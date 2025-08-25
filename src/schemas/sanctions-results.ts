@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { ISanctionsResult } from "@/types.js";
+import { ISanctionsResult } from "../types.js";
 dotenv.config();
 
 const { Schema } = mongoose;

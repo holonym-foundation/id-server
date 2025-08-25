@@ -29,7 +29,7 @@ import {
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { campaignIdToWorkflowIdMap } from "../../utils/constants.js";
 import { v4 as uuidV4 } from "uuid";
-import { ISession } from "@/types.js";
+import { ISession } from "../../types.js";
 import pino from "pino";
 
 function campaignIdToWorkflowId(campaignId: string) {

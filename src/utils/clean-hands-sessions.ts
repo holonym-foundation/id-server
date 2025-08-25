@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 import { HydratedDocument } from "mongoose";
 import { AMLChecksSession } from "../init.js";
 import { sessionStatusEnum } from "../constants/misc.js";
-import { IAmlChecksSession } from "@/types.js";
+import { IAmlChecksSession } from "../types.js";
 
 export async function getSessionById(_id: string) {
   let objectId = null;

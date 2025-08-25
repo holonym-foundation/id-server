@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import {
   IHumanIDPaymentGateWhitelist,
   ICleanHandsSessionWhitelist
-} from "@/types.js";
+} from "../types.js";
 dotenv.config();
 
 const { Schema } = mongoose;

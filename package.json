@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "start": "nodemon --ext ts,js,json --exec \"node --loader ts-node/esm\" src/server.ts",
-    "build": "tsc",
+    "start": "rm -rf dist && nodemon --ext ts,js,json --exec \"node --loader ts-node/esm\" src/server.ts",
+    "build": "rm -rf dist && tsc",
     "start:dev": "bash scripts/run.sh dev",
     "start:prod": "bash scripts/run.sh prod",
     "build:prod": "bash scripts/build.sh prod",

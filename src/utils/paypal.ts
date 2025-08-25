@@ -1,6 +1,6 @@
 import axios from "axios";
 import { HydratedDocument } from "mongoose";
-import { ISession } from "@/types.js";
+import { ISession } from "../types.js";
 import { payPalApiUrlBase, sessionStatusEnum } from "../constants/misc.js";
 
 // ------------------- Simple API calls -------------------

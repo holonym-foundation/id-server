@@ -1,16 +1,41 @@
 /**
  * A file for errors logged by the endpoints in this directory
  */
+import pino from "pino";
 
-export function upgradeV3Logger(logger) {
-  logger.failedToGetCheck = (check_id) => {
+import { ISession } from "../../../types.js";
+
+type ValidationResult = {
+  log: {
+    msg: string;
+    data: Record<string, any>;
+  };
+  error: string;
+}
+
+type UpgradedLogger = pino.Logger & {
+  failedToGetCheck: (check_id: string) => void;
+  failedToGetReports: (check_id: string, report_ids: string[]) => void;
+  noReportsFound: (check_id: string, report_ids: string[]) => void;
+  noDocumentReport: (reports: any) => void;
+  alreadyRegistered: (uuidNew: string) => void;
+  verificationPreviouslyFailed: (check_id: string, session: ISession) => void;
+  checkValidationFailed: (validationResult: ValidationResult) => void;
+  verificationFailed: (check_id: string, reportsValidation: any) => void;
+  unexpected: (err: any) => void;
+}
+
+export function upgradeV3Logger(logger: pino.Logger): UpgradedLogger {
+  const upgradedLogger = logger as UpgradedLogger;
+
+  upgradedLogger.failedToGetCheck = (check_id) => {
     logger.error(
       { check_id },
       "Failed to get onfido check."
     );
   }
 
-  logger.failedToGetReports = (check_id, report_ids) => {
+  upgradedLogger.failedToGetReports = (check_id, report_ids) => {
     logger.error(
       {
         check_id,
@@ -21,7 +46,7 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  logger.noReportsFound = (check_id, report_ids) => {
+  upgradedLogger.noReportsFound = (check_id, report_ids) => {
     logger.error(
       {
         check_id,
@@ -32,14 +57,14 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  logger.noDocumentReport = (reports) => {
+  upgradedLogger.noDocumentReport = (reports) => {
     logger.error(
       { reports },
       "No documentReport"
     );
   }
 
-  logger.alreadyRegistered = (uuidNew) => {
+  upgradedLogger.alreadyRegistered = (uuidNew) => {
     logger.error(
       {
         uuidV2: uuidNew,
@@ -53,7 +78,7 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  logger.verificationPreviouslyFailed = (check_id, session) => {
+  upgradedLogger.verificationPreviouslyFailed = (check_id, session) => {
     logger.error(
       {
         check_id,
@@ -65,7 +90,7 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  logger.checkValidationFailed = (validationResult) => {
+  upgradedLogger.checkValidationFailed = (validationResult) => {
     logger.error(
       validationResult.log.data,
       validationResult.log.msg,
@@ -75,7 +100,7 @@ export function upgradeV3Logger(logger) {
     ); 
   }
 
-  logger.verificationFailed = (check_id, reportsValidation) => {
+  upgradedLogger.verificationFailed = (check_id, reportsValidation) => {
     logger.error(
       {
         check_id,
@@ -86,7 +111,7 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  logger.unexpected = (err) => {
+  upgradedLogger.unexpected = (err) => {
     logger.error(
       {
         error: err.message ?? err.toString(),
@@ -100,5 +125,5 @@ export function upgradeV3Logger(logger) {
     );
   }
 
-  return logger
+  return upgradedLogger
 }

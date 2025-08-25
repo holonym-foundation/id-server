@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { IOrder } from "@/types.js";
+import { IOrder } from "../types.js";
 dotenv.config();
 
 const { Schema } = mongoose;

@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { HydratedDocument } from "mongoose";
-import { IAmlChecksSession, ISession } from "@/types.js";
+import { IAmlChecksSession, ISession } from "../types.js";
 import { Session } from "../init.js";
 import { sessionStatusEnum } from "../constants/misc.js";
 

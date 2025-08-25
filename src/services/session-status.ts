@@ -7,7 +7,7 @@ import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
-import { IIdvSessions } from "@/types.js";
+import { IIdvSessions } from "../types.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
