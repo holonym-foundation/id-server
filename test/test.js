@@ -1,7 +1,7 @@
 import axios from "axios";
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import { getDateAsInt } from "../src/utils/utils.js";
+import { getDateAsInt } from "../dist/utils/utils.js";
 import dotenv from "dotenv";
 dotenv.config();
 
