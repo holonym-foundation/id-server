@@ -162,7 +162,7 @@ export function validateReports(reports: Array<OnfidoReport>, metaSession: ISess
           },
         };
       }
-      const maxAllowedDeviceFingerprintReuse = 6;
+      const maxAllowedDeviceFingerprintReuse = 11;
       if (
         typeof report?.properties?.device?.device_fingerprint_reuse ===
           "number" &&
