@@ -68,4 +68,38 @@ app.get("/aws-health", (req, res) => {
   return res.status(200).json({ healthy: true });
 });
 
+// ---------- SSE client manager ----------
+const sseManager = {
+  clients: new Map(), // Map user IDs to their SSE connections
+  
+  // When creating a client, it is recommended to add a namespace prefix to the sid to
+  // avoid accidentally using the same sid across different services.
+
+  addClient: (
+    sid: string,
+    sendUpdate: (data: any) => void
+  ) => {
+    sseManager.clients.set(sid, sendUpdate);
+  },
+  
+  removeClient: (sid: string) => {
+    sseManager.clients.delete(sid);
+  },
+  
+  sendToClient: (sid: string, data: any) => {
+    const sendUpdate = sseManager.clients.get(sid);
+    if (sendUpdate) {
+      sendUpdate(data);
+      return true;
+    }
+    return false;
+  },
+};
+
+// sse manager is available to all routes
+app.use((req, res, next) => {
+  req.app.locals.sseManager = sseManager;
+  next();
+});
+
 export { app };
