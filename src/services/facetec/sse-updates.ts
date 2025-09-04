@@ -1,6 +1,8 @@
+import { Request, Response } from "express"
+
 import { pinoOptions, logger } from "../../utils/logger.js";
 
-export async function sseUpdates(req, res) {
+export async function sseUpdates(req: Request, res: Response) {
   const sid = req.params.sid;
 
   // Set headers for SSE
@@ -14,7 +16,7 @@ export async function sseUpdates(req, res) {
   );
 
   // Create a function to send updates
-  const sendUpdate = (data) => {
+  const sendUpdate = (data: any) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 

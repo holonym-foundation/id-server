@@ -9,35 +9,6 @@ import { getProductionEncryptionKeyText } from "../services/facetec/encryption-k
 
 const router = express.Router();
 
-// Create a module-level SSE client manager
-const sseManager = {
-  clients: new Map(), // Map user IDs to their SSE connections
-  
-  addClient: (sid, sendUpdate) => {
-    sseManager.clients.set(sid, sendUpdate);
-  },
-  
-  removeClient: (sid) => {
-    sseManager.clients.delete(sid);
-  },
-  
-  sendToClient: (sid, data) => {
-    const sendUpdate = sseManager.clients.get(sid);
-    if (sendUpdate) {
-      sendUpdate(data);
-      return true;
-    }
-    return false;
-  },
-
-};
-
-// sse manager is available to all routes
-router.use((req, res, next) => {
-  req.app.locals.sseManager = sseManager;
-  next();
-});
-
 router.get("/test-ocr-date-parsing", testOCRDateParsing);
 router.get("/sse-updates/:sid", sseUpdates);
 router.post("/session-token", sessionToken);
