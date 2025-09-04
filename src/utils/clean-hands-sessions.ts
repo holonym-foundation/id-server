@@ -4,8 +4,10 @@ import { AMLChecksSession } from "../init.js";
 import { sessionStatusEnum } from "../constants/misc.js";
 import { IAmlChecksSession } from "../types.js";
 
-export async function getSessionById(_id: string) {
-  let objectId = null;
+export async function getSessionById(
+  _id: string
+): Promise<{ error: string } | { session: HydratedDocument<IAmlChecksSession>; objectId: ObjectId }> {
+  let objectId: ObjectId;
   try {
     objectId = new ObjectId(_id);
   } catch (err) {
@@ -18,7 +20,7 @@ export async function getSessionById(_id: string) {
     return { error: "Session not found" };
   }
 
-  return { session, objectId }
+  return { session, objectId };
 }
 
 export async function failSession(
@@ -27,5 +29,5 @@ export async function failSession(
 ) {
   session.status = sessionStatusEnum.VERIFICATION_FAILED;
   if (failureReason) session.verificationFailureReason = failureReason;
-  await session.save() 
+  await session.save();
 }
