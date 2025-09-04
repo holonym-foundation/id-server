@@ -400,3 +400,41 @@ export type ICleanHandsSessionWhitelist = {
   sessionId: string;
   reason: string;
 };
+
+// ---------------- MongoDB schemas for direct verification service ----------------
+
+export namespace DirectVerification {
+  export type ICustomer = {
+    _id?: Types.ObjectId;
+    name: string;
+  };
+
+  export type IAPIKey = {
+    _id?: Types.ObjectId;
+    customerId: Types.ObjectId
+  }
+
+  // A customer purchases credits with an order. paymentDetails specifies what they
+  // paid us, and credits specifies what they purchased.
+  // Not to be confused with orders for our "orders API".
+  export type IOrder = {
+    _id?: Types.ObjectId;
+    customerId: Types.ObjectId;
+    // paymentDetails?: {
+    //   amount?: string // e.g., '100'
+    //   denomination?: string // e.g., 'USD'
+    // };
+    credits: number
+  };
+
+  // NOT TO BE CONFUSED WITH STANDARD Human ID sessions. This session type is exclusively
+  // for the Direct Verification (non-web3) service.
+  export type ISession = {
+    _id?: Types.ObjectId;
+    // customerId is inferred by API key at time of session creation
+    customerId: Types.ObjectId;
+    // userId is supplied by integrator before session creation
+    userId: Types.ObjectId;
+    status: 'IN_PROGRESS' | 'ENROLLED' | 'PASSED_AGE_VERIFICATION' | 'VERIFICATION_FAILED'
+  };
+}

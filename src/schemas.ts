@@ -5,6 +5,7 @@ import {
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema
 } from "./schemas/whitelists.js";
+import * as DirectVerification from "./schemas/direct-verification.js"
 import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 import {
   IUserVerifications,
@@ -682,4 +683,5 @@ export {
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
   SanctionsResultSchema,
+  DirectVerification,
 };

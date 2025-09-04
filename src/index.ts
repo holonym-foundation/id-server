@@ -18,6 +18,7 @@ import nullifiers from "./routes/nullifiers.js";
 import orders from "./routes/orders.js";
 import whitelists from "./routes/whitelists.js";
 import constants from "./routes/constants.js";
+import directVerification from "./routes/direct-verification.js"
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use("/nullifiers", nullifiers);
 app.use("/orders", orders);
 app.use("/whitelists", whitelists);
 app.use("/constants", constants);
+app.use("/direct-verification", directVerification)
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

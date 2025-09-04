@@ -73,6 +73,13 @@ export const cleanHandsSessionStatusEnum = {
   NEEDS_USER_DECLARATION: "NEEDS_USER_DECLARATION",
 };
 
+export const directVerificationSessionStatusEnum = {
+  IN_PROGRESS: "IN_PROGRESS" as const,
+  ENROLLED: "ENROLLED" as const,
+  PASSED_AGE_VERIFICATION: "PASSED_AGE_VERIFICATION" as const,
+  VERIFICATION_FAILED: "VERIFICATION_FAILED" as const
+};
+
 // export const ethereumProvider = new ethers.providers.AlchemyProvider(
 //   "homestead",
 //   process.env.ALCHEMY_APIKEY
