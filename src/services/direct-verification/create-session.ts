@@ -43,6 +43,7 @@ export async function createSession(req: Request, res: Response) {
       status: newSession.status
     })
   } catch (err) {
+    console.log(err)
     return res.status(500).json({ error: 'Unexpected error' })
   }
 }

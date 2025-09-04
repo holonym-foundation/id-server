@@ -20,7 +20,7 @@ export async function createCustomer(req: Request, res: Response) {
       })
     }
 
-    const existingDoc = await DVCustomer.find({ name })
+    const existingDoc = await DVCustomer.findOne({ name })
 
     if (existingDoc) {
       return res.status(400).json({
@@ -49,3 +49,24 @@ export async function createCustomer(req: Request, res: Response) {
     return res.status(500).json({ error: "Internal server error" })
   }
 }
+
+export async function getCustomers(req: Request, res: Response) {
+  try {
+    const apiKey = req.headers["x-api-key"];
+
+    if (!apiKey || (apiKey !== process.env.DIRECT_VERIFICATION_API_KEY)) {
+      return res.status(401).json({ error: "Invalid API key." });
+    }
+
+    const customers = await DVCustomer.find({})
+
+    return res.status(200).json({
+      message: "success",
+      customers,
+    })
+  } catch (err) {
+    console.log(err)
+    return res.status(500).json({ error: "Internal server error" })
+  }
+}
+
