@@ -21,17 +21,14 @@ export async function createSession(req: Request, res: Response) {
     
     const userId = req.body.userId
 
-    // User ID must be a valid ObjectId
-    let oid = null;
-    try {
-      oid = new ObjectId(userId);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid user ID" })
+    // User ID must be a string with letters, numbers, and dashes
+    if (!/^[a-zA-Z0-9-]+$/.test(userId)) {
+      throw new Error("Invalid user ID. Must be a string with letters, numbers, and dashes")
     }
 
     const newSession = new DVSession({
       customerId: customer._id,
-      userId: oid,
+      userId,
       status: dvStatuses.IN_PROGRESS
     })
 

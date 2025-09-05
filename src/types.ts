@@ -435,7 +435,7 @@ export namespace DirectVerification {
     // customerId is inferred by API key at time of session creation
     customerId: Types.ObjectId;
     // userId is supplied by integrator before session creation
-    userId: Types.ObjectId;
+    userId: string;
     status: 'IN_PROGRESS' | 'ENROLLED' | 'PASSED_AGE_VERIFICATION' | 'VERIFICATION_FAILED'
   };
 }
