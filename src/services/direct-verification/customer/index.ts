@@ -46,7 +46,7 @@ export async function createCustomer(req: Request, res: Response) {
     return res.status(200).json({
       message: "success",
       customerId: newCustomer._id,
-      apiKey: newApiKey._id,
+      apiKey: newApiKey.key,
     })
   } catch (err) {
     console.log(err)
