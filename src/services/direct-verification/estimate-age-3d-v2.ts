@@ -22,12 +22,14 @@ const endpointLogger =logger.child({
 
 export async function estimateAge3dV2(req: Request, res: Response) {
   try {
+    // TODO: Is this check necesssary? We know the session was created by
+    // a valid customer, there's no reason to rate limit this endpoint 
+    // by customer, and the customer API key isn't secret.
     // Make sure the API key corresponds to some customer
     // TODO: Improve handling of errors thrown by customerFromAPIKey.
-    const _customer = await customerFromAPIKey(req)
+    // const _customer = await customerFromAPIKey(req)
     
     const sid = req.body.sid;
-    const faceTecParams = req.body.faceTecParams;
 
     let oid = null;
     try {
@@ -48,8 +50,6 @@ export async function estimateAge3dV2(req: Request, res: Response) {
       })
     }
     const userId = session.userId.toString()
-
-    faceTecParams.externalDatabaseRefID = userId
 
     // --- Forward request to FaceTec server ---
 
@@ -91,7 +91,10 @@ export async function estimateAge3dV2(req: Request, res: Response) {
         session.status = dvStatuses.PASSED_AGE_VERIFICATION
         await session.save()
 
-        return res.status(200).json({ message: "Success" })
+        return res.status(200).json({
+          success: true,
+          ageV2GroupEnumInt: checkAgeResponse.data.ageV2GroupEnumInt,
+        })
       } else {
         endpointLogger.error(
           { userId: session.userId.toString() },
@@ -106,7 +109,8 @@ export async function estimateAge3dV2(req: Request, res: Response) {
         });
 
         return res.status(400).json({
-          error: "Verification failed. User's age is below target age."
+          error: "Verification failed. User's age is below target age.",
+          triggerRetry: false,
         })
       }
     } catch (err: any) {

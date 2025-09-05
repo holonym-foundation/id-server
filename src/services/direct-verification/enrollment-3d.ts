@@ -1,7 +1,7 @@
 import axios from "axios";
 import { Request, Response } from "express"
 import { ObjectId } from "mongodb";
-import { DVSession } from "../../init.js";
+import { DVSession, DVCustomer } from "../../init.js";
 import {
   directVerificationSessionStatusEnum as dvStatuses
 } from "../../constants/misc.js"
@@ -22,14 +22,12 @@ const endpointLogger = logger.child({
 
 export async function enrollment3d(req: Request, res: Response) {
   try {
-    // TODO: Improve handling of errors thrown by customerFromAPIKey.
-    const customer = await customerFromAPIKey(req)
-
-    // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
-    await validateCustomerCreditUsage(customer)
-
     const sid = req.body.sid;
     const faceTecParams = req.body.faceTecParams;
+
+    if (!sid || typeof sid !== "string") {
+      return res.status(400).json({ error: "sid is required and must be a string" })
+    }
 
     let oid = null;
     try {
@@ -50,6 +48,16 @@ export async function enrollment3d(req: Request, res: Response) {
       })
     }
     const userId = session.userId.toString()
+
+    const customerId = session.customerId;
+    const customer = await DVCustomer.findOne({ _id: customerId })
+
+    if (!customer) {
+      return res.status(400).json({ error: "Customer not found" })
+    }
+
+    // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
+    await validateCustomerCreditUsage(customer)
 
     // NOTE: We might change this, depending on whether we offer other kinds of verification
     // const groupName = 'direct-verification-age'
