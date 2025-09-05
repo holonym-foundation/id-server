@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Request, Response } from "express";
 
 import { DVCustomer, DVAPIKey } from "../../../init.js";
@@ -34,7 +35,10 @@ export async function createCustomer(req: Request, res: Response) {
       name,
     })
 
-    const newApiKey = new DVAPIKey({ customerId: newCustomer._id })
+    const newApiKey = new DVAPIKey({
+      customerId: newCustomer._id,
+      key: randomBytes(24).toString('hex'),
+    })
 
     await newCustomer.save()
     await newApiKey.save()

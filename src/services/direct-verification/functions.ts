@@ -1,4 +1,3 @@
-import { ObjectId } from "mongodb";
 import { DVCustomer, DVAPIKey, DVOrder, DVSession } from "../../init.js";
 import { Request } from "express";
 import { DirectVerification } from "../../types.js";
@@ -16,14 +15,12 @@ export async function customerFromAPIKey(req: Request) {
     throw new Error("Customer API key is required and must be a string")
   }
 
-  let apiKeyOID = null;
-  try {
-    apiKeyOID = new ObjectId(customerApiKey);
-  } catch (err) {
-    throw new Error("Invalid customer API key. Invalid formatting")
+  // Validate hex string format
+  if (!/^[0-9a-fA-F]+$/.test(customerApiKey)) {
+    throw new Error("Invalid customer API key. Must be a hex string")
   }
 
-  const apiKeyDoc = await DVAPIKey.findOne({ _id: apiKeyOID })
+  const apiKeyDoc = await DVAPIKey.findOne({ key: customerApiKey })
 
   if (!apiKeyDoc) {
     throw new Error("Invalid customer API key. API key not found")

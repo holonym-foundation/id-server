@@ -412,6 +412,7 @@ export namespace DirectVerification {
   export type IAPIKey = {
     _id?: Types.ObjectId;
     customerId: Types.ObjectId
+    key: string
   }
 
   // A customer purchases credits with an order. paymentDetails specifies what they

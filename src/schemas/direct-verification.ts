@@ -16,7 +16,8 @@ export const CustomerSchema = new Schema<DirectVerification.ICustomer>({
 });
 
 export const APIKeySchema = new Schema<DirectVerification.IAPIKey>({
-  customerId: { type: Schema.Types.ObjectId, required: true }
+  customerId: { type: Schema.Types.ObjectId, required: true },
+  key: { type: String, required: true, unique: true, index: true }
 });
 
 export const OrderSchema = new Schema<DirectVerification.IOrder>({
