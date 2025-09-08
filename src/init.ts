@@ -29,7 +29,8 @@ import {
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
-  SanctionsResultSchema
+  SanctionsResultSchema,
+  DirectVerification as DirectVerificationSchemas
 } from "./schemas.js";
 import dotenv from "dotenv";
 import { 
@@ -54,7 +55,8 @@ import {
   IOrder,
   IHumanIDPaymentGateWhitelist,
   ICleanHandsSessionWhitelist,
-  ISanctionsResult
+  ISanctionsResult,
+  DirectVerification
 } from "./types.js";
 dotenv.config();
 
@@ -304,6 +306,26 @@ async function initializeMongoDb() {
     SanctionsResultSchema,
   );
 
+  const DVCustomer = mongoose.model(
+    "DirectVerificationCustomer",
+    DirectVerificationSchemas.CustomerSchema
+  )
+
+  const DVAPIKey = mongoose.model(
+    "DirectVerificationAPIKey",
+    DirectVerificationSchemas.APIKeySchema
+  )
+
+  const DVOrder = mongoose.model(
+    "DirectVerificationOrder",
+    DirectVerificationSchemas.OrderSchema
+  )
+
+  const DVSession = mongoose.model(
+    "DirectVerificationSession",
+    DirectVerificationSchemas.SessionSchema
+  )
+
   return {
     UserVerifications,
     IDVSessions,
@@ -327,6 +349,10 @@ async function initializeMongoDb() {
     HumanIDPaymentGateWhitelist,
     CleanHandsSessionWhitelist,
     SanctionsResult,
+    DVCustomer,
+    DVAPIKey,
+    DVOrder,
+    DVSession
   };
 }
 
@@ -353,7 +379,11 @@ let UserVerifications: Model<IUserVerifications>,
   Order: Model<IOrder>,
   HumanIDPaymentGateWhitelist: Model<IHumanIDPaymentGateWhitelist>,
   CleanHandsSessionWhitelist: Model<ICleanHandsSessionWhitelist>,
-  SanctionsResult: Model<ISanctionsResult>;
+  SanctionsResult: Model<ISanctionsResult>,
+  DVCustomer: Model<DirectVerification.ICustomer>,
+  DVAPIKey: Model<DirectVerification.IAPIKey>,
+  DVOrder: Model<DirectVerification.IOrder>,
+  DVSession: Model<DirectVerification.ISession>;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -378,7 +408,11 @@ initializeMongoDb().then((result) => {
     Order = result.Order;
     HumanIDPaymentGateWhitelist = result.HumanIDPaymentGateWhitelist;
     CleanHandsSessionWhitelist = result.CleanHandsSessionWhitelist;
-    SanctionsResult = result.SanctionsResult
+    SanctionsResult = result.SanctionsResult;
+    DVCustomer = result.DVCustomer;
+    DVAPIKey = result.DVAPIKey;
+    DVOrder = result.DVOrder;
+    DVSession = result.DVSession;
   } else {
     logger.error("MongoDB initialization failed");
   }
@@ -414,5 +448,9 @@ export {
   HumanIDPaymentGateWhitelist,
   CleanHandsSessionWhitelist,
   SanctionsResult,
+  DVCustomer,
+  DVAPIKey,
+  DVOrder,
+  DVSession,
   zokProvider,
 };
