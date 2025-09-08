@@ -2,6 +2,7 @@ import axios from "axios";
 import { Request, Response } from "express"
 import { ObjectId } from "mongodb";
 import { DVSession, DVCustomer } from "../../init.js";
+import { CustomError } from "../../utils/errors.js";
 import {
   directVerificationSessionStatusEnum as dvStatuses
 } from "../../constants/misc.js"
@@ -183,7 +184,11 @@ export async function enrollment3d(req: Request, res: Response) {
         triggerRetry: true,
       });
     }
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof CustomError) {
+      console.log(err.logMessage)
+      return res.status(err.httpStatusCode).json({ error: err.userFacingMessage })
+    }
     endpointLogger.error(err, "Error encountered");
     return res.status(500).json({
       error: true,

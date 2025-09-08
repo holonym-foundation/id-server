@@ -34,17 +34,17 @@ export const relayerURL =
 // We use this FaceTec server for silksecure.net. This server will be shut down eventually
 export const facetecServerBaseURL = 
   process.env.NODE_ENV === "development"
-    // ? "http://localhost:8080"
+    ? "http://localhost:8080"
     // ? "https://api.facetec.com/api/v3.1/biometrics"
-    ? "https://face-server.up.railway.app"
+    // ? "https://face-server.up.railway.app"
     : "https://facetec-server.holonym.io"
 
 // We use this FaceTec server for id.human.tech
 export const facetecServer2BaseURL = 
   process.env.NODE_ENV === "development"
-    // ? "http://localhost:8080"
+    ? "http://localhost:8080"
     // ? "https://api.facetec.com/api/v3.1/biometrics"
-    ? "https://face-server.up.railway.app"
+    // ? "https://face-server.up.railway.app"
     : "https://facetec-server-2.holonym.io"
 
 const supportedChainIds = [

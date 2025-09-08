@@ -2,6 +2,7 @@ import { Request, Response } from "express"
 import { ObjectId } from "mongodb";
 
 import { DVSession } from "../../init.js";
+import { CustomError } from "../../utils/errors.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { SSE_NAMESPACE } from "./constants.js";
 import {
@@ -11,10 +12,8 @@ import { customerFromAPIKey, validateCustomerCreditUsage } from "./functions.js"
 
 export async function createSession(req: Request, res: Response) {
   try {
-    // TODO: Improve handling of errors thrown by customerFromAPIKey.
     const customer = await customerFromAPIKey(req)
 
-    // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
     await validateCustomerCreditUsage(customer)
 
     // TODO: Should we have any rate limiting or validation here?
@@ -39,7 +38,11 @@ export async function createSession(req: Request, res: Response) {
       userId: newSession.userId,
       status: newSession.status
     })
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof CustomError) {
+      console.log(err.logMessage)
+      return res.status(err.httpStatusCode).json({ error: err.userFacingMessage })
+    }
     console.log(err)
     return res.status(500).json({ error: 'Unexpected error' })
   }

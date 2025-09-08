@@ -2,6 +2,7 @@ import axios from "axios";
 import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { DVSession } from "../../init.js";
+import { CustomError } from "../../utils/errors.js";
 import {
   directVerificationSessionStatusEnum as dvStatuses,
 } from "../../constants/misc.js";
@@ -26,7 +27,6 @@ export async function sessionToken(req: Request, res: Response) {
   try {
     const sid = req.body.sid;
 
-    // TODO: Improve handling of errors thrown by customerFromAPIKey.
     const customer = await customerFromAPIKey(req)
 
     // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
@@ -112,6 +112,10 @@ export async function sessionToken(req: Request, res: Response) {
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   } catch (err: any) {
+    if (err instanceof CustomError) {
+      console.log(err.logMessage)
+      return res.status(err.httpStatusCode).json({ error: err.userFacingMessage })
+    }
     console.log("POST /session-token: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }

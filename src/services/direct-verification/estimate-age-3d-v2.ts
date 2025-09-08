@@ -26,7 +26,6 @@ export async function estimateAge3dV2(req: Request, res: Response) {
     // a valid customer, there's no reason to rate limit this endpoint 
     // by customer, and the customer API key isn't secret.
     // Make sure the API key corresponds to some customer
-    // TODO: Improve handling of errors thrown by customerFromAPIKey.
     // const _customer = await customerFromAPIKey(req)
     
     const sid = req.body.sid;

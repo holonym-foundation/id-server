@@ -1,6 +1,7 @@
 import { DVCustomer, DVAPIKey, DVOrder, DVSession } from "../../init.js";
 import { Request } from "express";
 import { DirectVerification } from "../../types.js";
+import { CustomError } from "../../utils/errors.js";
 import {
   directVerificationSessionStatusEnum as dvStatuses
 } from "../../constants/misc.js";
@@ -12,24 +13,40 @@ export async function customerFromAPIKey(req: Request) {
   const customerApiKey = req.headers['x-customer-api-key']
 
   if (typeof customerApiKey != 'string') {
-    throw new Error("Customer API key is required and must be a string")
+    throw new CustomError({
+      userFacingMessage: "Customer API key is required and must be a string",
+      logMessage: "Customer API key is required and must be a string",
+      httpStatusCode: 400
+    })
   }
 
   // Validate hex string format
   if (!/^[0-9a-fA-F]+$/.test(customerApiKey)) {
-    throw new Error("Invalid customer API key. Must be a hex string")
+    throw new CustomError({
+      userFacingMessage: "Invalid customer API key format. Must be a hex string",
+      logMessage: "Invalid customer API key format. Must be a hex string",
+      httpStatusCode: 400
+    })
   }
 
   const apiKeyDoc = await DVAPIKey.findOne({ key: customerApiKey })
 
   if (!apiKeyDoc) {
-    throw new Error("Invalid customer API key. API key not found")
+    throw new CustomError({
+      userFacingMessage: "Invalid customer API key",
+      logMessage: "Invalid customer API key. API key not found",
+      httpStatusCode: 401
+    })
   }
 
   const customer = await DVCustomer.findOne({ _id: apiKeyDoc.customerId })
 
   if (!customer) {
-    throw new Error("Unexpected: No customer associated with the provided API key")
+    throw new CustomError({
+      userFacingMessage: "Invalid customer API key",
+      logMessage: "Invalid customer API key. No customer associated with the provided API key",
+      httpStatusCode: 401
+    })
   }
 
   return customer
@@ -55,7 +72,11 @@ export async function validateCustomerCreditUsage(customer: DirectVerification.I
   });
 
   if (totalCredits <= sessionsCount) {
-    throw new Error("Insufficient credits: Customer has used their credits");
+    throw new CustomError({
+      userFacingMessage: "Insufficient credits: Customer has used their credits",
+      logMessage: `Insufficient credits: Customer ${customer._id} has used their credits`,
+      httpStatusCode: 402
+    })
   }
 
   return true;

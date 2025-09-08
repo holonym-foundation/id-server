@@ -7,10 +7,12 @@ import { createSession } from "../services/direct-verification/create-session.js
 // import { getProductionEncryptionKeyText } from "../services/facetec/encryption-key.js";
 import { createCustomer, getCustomers } from "../services/direct-verification/customer/index.js";
 import { createOrder } from "../services/direct-verification/order/index.js"
+import { getSessionResult } from "../services/direct-verification/session-result/index.js";
 
 const router = express.Router();
 
 router.post("/sessions", createSession);
+router.get("/session-result", getSessionResult);
 router.get("/sse-updates/:sid", sseUpdates);
 router.post("/session-token", sessionToken);
 router.post("/enrollment-3d", enrollment3d);
