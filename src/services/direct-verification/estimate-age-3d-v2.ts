@@ -22,8 +22,8 @@ const endpointLogger =logger.child({
 
 export async function estimateAge3dV2(req: Request, res: Response) {
   try {
-    // TODO: Is this check necesssary? We know the session was created by
-    // a valid customer, there's no reason to rate limit this endpoint 
+    // We don't check for the API key here. We know the session was created
+    // by a valid customer, there's no reason to rate limit this endpoint 
     // by customer, and the customer API key isn't secret.
     // Make sure the API key corresponds to some customer
     // const _customer = await customerFromAPIKey(req)

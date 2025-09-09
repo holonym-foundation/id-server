@@ -57,7 +57,6 @@ export async function enrollment3d(req: Request, res: Response) {
       return res.status(400).json({ error: "Customer not found" })
     }
 
-    // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
     await validateCustomerCreditUsage(customer)
 
     // NOTE: We might change this, depending on whether we offer other kinds of verification

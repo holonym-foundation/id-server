@@ -4,6 +4,7 @@ import { sessionToken } from "../services/direct-verification/session-token.js";
 import { enrollment3d } from "../services/direct-verification/enrollment-3d.js";
 import { estimateAge3dV2 } from "../services/direct-verification/estimate-age-3d-v2.js";
 import { createSession } from "../services/direct-verification/create-session.js";
+import { getSession } from "../services/direct-verification/get-session.js";
 // import { getProductionEncryptionKeyText } from "../services/facetec/encryption-key.js";
 import { createCustomer, getCustomers } from "../services/direct-verification/customer/index.js";
 import { createOrder } from "../services/direct-verification/order/index.js"
@@ -12,7 +13,8 @@ import { getSessionResult } from "../services/direct-verification/session-result
 const router = express.Router();
 
 router.post("/sessions", createSession);
-router.get("/session-result", getSessionResult);
+router.get("/sessions", getSession); // For UI
+router.get("/session-result", getSessionResult); // For customer API
 router.get("/sse-updates/:sid", sseUpdates);
 router.post("/session-token", sessionToken);
 router.post("/enrollment-3d", enrollment3d);

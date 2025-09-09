@@ -29,7 +29,6 @@ export async function sessionToken(req: Request, res: Response) {
 
     const customer = await customerFromAPIKey(req)
 
-    // TODO: Improve handling of errors thrown by validateCustomerCreditUsage
     await validateCustomerCreditUsage(customer)
 
     if (!sid) {
