@@ -22,7 +22,8 @@ import {
   companySuiAddress,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { mistToSui, suiToMist } from "../../utils/sui.js"
+import { mistToSui, suiToMist } from "../../utils/sui.js";
+import { postNotification } from "../../utils/slack.js";
 
 // const endpointLogger = logger.child({
 //   msgPrefix: "[DELETE /admin/transfer-funds] ",
@@ -210,7 +211,10 @@ async function transferFunds(req: Request, res: Response) {
       });
 
       console.log(`Transfered ${mistToSui(amountToSend)} SUI to ${companySuiAddress}. Result:`, result)
+      txReceipts["sui"] = result.digest
     }
+
+    await notifySlack(txReceipts)
 
     return res.status(200).json(txReceipts);
   } catch (err) {
@@ -219,6 +223,46 @@ async function transferFunds(req: Request, res: Response) {
       console.log("transferFunds: Error encountered (b)", (err as any)?.response?.data);
     else console.log("transferFunds: Error encountered (b)", err);
     return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
+async function notifySlack(txReceipts: Record<string, string>) {
+  try {
+    const txLinks: Record<string, string> = {}
+    if (txReceipts.ethereum) {
+      txLinks['Ethereum'] = `https://etherscan.io/tx/${txReceipts.ethereum}`
+    }
+    if (txReceipts.optimism) {
+      txLinks['Optimism'] = `https://optimistic.etherscan.io/tx/${txReceipts.optimism}`
+    }
+    // if (txReceipts.fantom) {
+    //   txLinks['fantom'] = txReceipts.fantom
+    // }
+    if (txReceipts.base) {
+      txLinks['Base'] = `https://basescan.org/tx/${txReceipts.base}`
+    }
+    if (txReceipts.avalanche) {
+      txLinks['Avalanche'] = `https://basescan.org/tx/${txReceipts.avalanche}`
+    }
+    // if (txReceipts.aurora) {
+    //   txLinks['aurora'] = txReceipts.aurora
+    // }
+    if (txReceipts.stellar) {
+      txLinks['Stellar'] = `https://lumenscan.io/txns/${txReceipts.stellar}`
+    }
+    if (txReceipts.sui) {
+      txLinks['Sui'] = `https://suivision.xyz/txblock/${txReceipts.sui}`
+    }
+    const linksBulletPoints = Object.entries(txLinks)
+      .map(([chain, url]) => `• ${chain}: <${url}|${txLinks[chain]}>`)
+      .join('\n')
+    console.log('transfer-funds: sending slack notification')
+    await postNotification({
+      webhookURL: process.env.SLACK_WEBHOOK as string,
+      message: `id-server transferred funds from hot wallets to company cold wallets.\n\n${linksBulletPoints}`
+    })
+  } catch (err) {
+    console.log('error trying to assemble slack message', err)
   }
 }
 
