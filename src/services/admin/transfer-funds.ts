@@ -185,33 +185,37 @@ async function transferFunds(req: Request, res: Response) {
     }
 
     // Transfer SUI on Sui \\
-    const privateKeyBytes = new Uint8Array(
-      Buffer.from((process.env.SUI_PRIVATE_KEY as string).replace('0x', ''), 'hex')
-    );
-    const suiWallet = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-    const suiBalanceResult = await suiClient.getBalance({
-      owner: suiWallet.toSuiAddress()
-    })
-    const suiBalance: number = mistToSui(Number(suiBalanceResult?.totalBalance as string))
-    if (suiBalance > 150) {
-      // Send all but 30 SUI to company address
-      const amountToSend: number = suiToMist(suiBalance - 30);
-      const tx = new SuiTransaction();
+    try {
+      const privateKeyBytes = new Uint8Array(
+        Buffer.from((process.env.SUI_PRIVATE_KEY as string).replace('0x', ''), 'hex')
+      );
+      const suiWallet = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+      const suiBalanceResult = await suiClient.getBalance({
+        owner: suiWallet.toSuiAddress()
+      })
+      const suiBalance: number = mistToSui(Number(suiBalanceResult?.totalBalance as string))
+      if (suiBalance > 150) {
+        // Send all but 30 SUI to company address
+        const amountToSend: number = Math.floor(suiToMist(suiBalance - 30));
+        const tx = new SuiTransaction();
 
-      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToSend)]);
-      tx.transferObjects([coin], tx.pure.address(companySuiAddress));
+        const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountToSend)]);
+        tx.transferObjects([coin], tx.pure.address(companySuiAddress));
 
-      const result = await suiClient.signAndExecuteTransaction({
-        signer: suiWallet,
-        transaction: tx,
-        options: {
-          showEvents: true,
-          showEffects: true,
-        }
-      });
+        const result = await suiClient.signAndExecuteTransaction({
+          signer: suiWallet,
+          transaction: tx,
+          options: {
+            showEvents: true,
+            showEffects: true,
+          }
+        });
 
-      console.log(`Transfered ${mistToSui(amountToSend)} SUI to ${companySuiAddress}. Result:`, result)
-      txReceipts["sui"] = result.digest
+        console.log(`Transfered ${mistToSui(amountToSend)} SUI to ${companySuiAddress}. Result:`, result)
+        txReceipts["sui"] = result.digest
+      }
+    } catch (err) {
+      console.error('error trying to transfer sui funds', err)
     }
 
     await notifySlack(txReceipts)
