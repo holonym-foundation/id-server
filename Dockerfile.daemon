@@ -6,7 +6,7 @@ COPY ./daemon .
 
 RUN cargo install --path .
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y curl wget libssl3 ca-certificates
 
