@@ -1,11 +1,11 @@
 import express from "express";
-import { sseUpdates } from "../services/facetec/sse-updates.js";
-import { sessionToken } from "../services/facetec/session-token.js";
+import { sseUpdates } from "../services/facetec/shared/sse-updates.js";
+import { sessionToken } from "../services/facetec/shared/session-token.js";
 import { enrollment3d } from "../services/facetec/enrollment-3d.js";
 import { match3d2dIdScan } from "../services/facetec/match-3d-2d-idscan.js";
 import { testOCRDateParsing } from "../services/facetec/functions-date.js";
 import { getCredentialsV3 } from "../services/facetec/credentials.js";
-import { getProductionEncryptionKeyText } from "../services/facetec/encryption-key.js";
+import { getProductionEncryptionKeyText } from "../services/facetec/shared/encryption-key.js";
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get("/sse-updates/:sid", sseUpdates);
 router.post("/session-token", sessionToken);
 
 // enrollment-3d is for facetec face scan
-router.post("/enrollment-3d/:nullifier", enrollment3d);
+router.post("/enrollment-3d", enrollment3d);
 
 // match-3d-2d-idscan is for facetec id scan (id scan comes after face scan for KYC flow)
 // DONE - it is handled server side, for both 1-sided ID and 2-sided ID

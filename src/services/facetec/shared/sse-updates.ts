@@ -1,6 +1,6 @@
 import { Request, Response } from "express"
 
-import { pinoOptions, logger } from "../../utils/logger.js";
+import { pinoOptions, logger } from "../../../utils/logger.js";
 
 export async function sseUpdates(req: Request, res: Response) {
   try {

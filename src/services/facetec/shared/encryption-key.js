@@ -1,6 +1,6 @@
 import axios from "axios";
-import { getFaceTecBaseURL } from "../../utils/facetec.js";
-import { pinoOptions, logger } from "../../utils/logger.js";
+import { getFaceTecBaseURL } from "../../../utils/facetec.js";
+import { pinoOptions, logger } from "../../../utils/logger.js";
 
 // const postSessionsLogger = logger.child({
 //   msgPrefix: "[POST /sessions] ",

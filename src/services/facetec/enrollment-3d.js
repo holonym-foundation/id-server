@@ -39,7 +39,6 @@ export async function enrollment3d(req, res) {
   try {
     const sid = req.body.sid;
     const faceTecParams = req.body.faceTecParams;
-    const issuanceNullifier = req.params.nullifier;
 
     // sessionType = "kyc" | "biometrics"
     const sessionType = req.query.sessionType;
@@ -66,11 +65,6 @@ export async function enrollment3d(req, res) {
       return res
         .status(400)
         .json({ error: true, errorMessage: "sessionType must be either 'biometrics' or 'kyc'" });
-    }
-    if (!issuanceNullifier) {
-      return res
-        .status(400)
-        .json({ error: true, errorMessage: "issuanceNullifier is required" });
     }
     if (!faceTecParams) {
       return res

@@ -1,11 +1,11 @@
 import axios from "axios";
 import { ObjectId } from "mongodb";
-import { Session, BiometricsSession } from "../../init.js";
+import { Session, BiometricsSession } from "../../../init.js";
 import {
   sessionStatusEnum,
-} from "../../constants/misc.js";
-import { getFaceTecBaseURL } from "../../utils/facetec.js";
-import { pinoOptions, logger } from "../../utils/logger.js";
+} from "../../../constants/misc.js";
+import { getFaceTecBaseURL } from "../../../utils/facetec.js";
+import { pinoOptions, logger } from "../../../utils/logger.js";
 
 // const postSessionsLogger = logger.child({
 //   msgPrefix: "[POST /sessions] ",
