@@ -1,5 +1,5 @@
 import moment from "moment";
-import { getDateAsInt } from "../../utils/utils.js";
+import { getDateAsInt } from "../../../utils/utils.js";
 import { ethers } from "ethers";
 import { poseidon } from "circomlibjs-old";
 

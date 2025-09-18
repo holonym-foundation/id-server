@@ -273,6 +273,10 @@ async function initializeMongoDb() {
 
   const BiometricsSession = mongoose.model("BiometricsSession", biometricsSessionSchema);
 
+  // Even though we use the BiometricsSession schema here, we still want it to be
+  // a separate collection. This makes sybil resistance management easier.
+  const BiometricsAllowSybilsSession = mongoose.model("BiometricsAllowSybilsSession", biometricsSessionSchema);
+
   const GalxeCampaignZeroUser = mongoose.model(
     "GalxeCampaignZeroUser",
     GalxeCampaignZeroUserSchema
@@ -343,6 +347,7 @@ async function initializeMongoDb() {
     VerificationCollisionMetadata,
     AMLChecksSession,
     BiometricsSession,
+    BiometricsAllowSybilsSession,
     GalxeCampaignZeroUser,
     SilkPeanutCampaignsMetadata,
     Order,
@@ -374,6 +379,7 @@ let UserVerifications: Model<IUserVerifications>,
   VerificationCollisionMetadata: Model<IVerificationCollisionMetadata>,
   AMLChecksSession: Model<IAmlChecksSession>,
   BiometricsSession: Model<IBiometricsSession>,
+  BiometricsAllowSybilsSession: Model<IBiometricsSession>,
   GalxeCampaignZeroUser: Model<IGalxeCampaignZeroUser>,
   SilkPeanutCampaignsMetadata: Model<ISilkPeanutCampaignsMetadata>,
   Order: Model<IOrder>,
@@ -403,6 +409,7 @@ initializeMongoDb().then((result) => {
     VerificationCollisionMetadata = result.VerificationCollisionMetadata;
     AMLChecksSession = result.AMLChecksSession;
     BiometricsSession = result.BiometricsSession;
+    BiometricsAllowSybilsSession = result.BiometricsAllowSybilsSession;
     GalxeCampaignZeroUser = result.GalxeCampaignZeroUser;
     SilkPeanutCampaignsMetadata = result.SilkPeanutCampaignsMetadata;
     Order = result.Order;
@@ -442,6 +449,7 @@ export {
   VerificationCollisionMetadata,
   AMLChecksSession,
   BiometricsSession,
+  BiometricsAllowSybilsSession,
   GalxeCampaignZeroUser,
   SilkPeanutCampaignsMetadata,
   Order,

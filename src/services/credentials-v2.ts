@@ -159,6 +159,39 @@ async function storeOrUpdateBiometricsCredentials(
   return { success: true };
 }
 
+async function storeOrUpdateBiometricsAllowSybilsCredentials(
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
+  let userCredentialsDoc;
+  try {
+    userCredentialsDoc = await UserCredentialsV2.findOne({
+      holoUserId: holoUserId,
+    }).exec();
+  } catch (err) {
+    logger.error({ error: err }, "An error occurred while retrieving credentials");
+    return { error: "An error occurred while retrieving credentials." };
+  }
+  if (userCredentialsDoc) {
+    userCredentialsDoc.encryptedBiometricsAllowSybilsCreds = encryptedCredentials;
+  } else {
+    userCredentialsDoc = new UserCredentialsV2({
+      holoUserId,
+      encryptedBiometricsAllowSybilsCreds: encryptedCredentials,
+    });
+  }
+  try {
+    await userCredentialsDoc.save();
+  } catch (err) {
+    logger.error(
+      { error: err },
+      "An error occurred while saving user credentials to database"
+    );
+    return { error: "An error occurred while trying to save object to database." };
+  }
+  return { success: true };
+}
+
 /**
  * Get user's encrypted credentials and symmetric key from document store.
  */
@@ -301,11 +334,39 @@ async function putBiometricsCredentials(req: Request, res: Response) {
 
   return res.status(200).json({ success: true });
 }
+/**
+ * ENDPOINT
+ */
+async function putBiometricsAllowSybilsCredentials(req: Request, res: Response) {
+  const holoUserId = req?.body?.holoUserId;
+  const encryptedCredentials = req?.body?.encryptedCredentials;
+
+  const validationResult = await validatePutCredentialsArgs(
+    holoUserId,
+    encryptedCredentials
+  );
+  if (validationResult.error) {
+    logger.error({ error: validationResult.error }, "Invalid request body");
+    return res.status(400).json({ error: validationResult.error });
+  }
+
+  const storeOrUpdateResult = await storeOrUpdateBiometricsAllowSybilsCredentials(
+    holoUserId,
+    encryptedCredentials
+  );
+  if (storeOrUpdateResult.error) {
+    logger.error({ error: storeOrUpdateResult.error, holoUserId });
+    return res.status(500).json({ error: storeOrUpdateResult.error });
+  }
+
+  return res.status(200).json({ success: true });
+}
 
 export { 
   getCredentials, 
   putPhoneCredentials, 
   putGovIdCredentials, 
   putCleanHandsCredentials,
-  putBiometricsCredentials
+  putBiometricsCredentials,
+  putBiometricsAllowSybilsCredentials
 };

@@ -3,8 +3,10 @@ import { sseUpdates } from "../services/facetec/shared/sse-updates.js";
 import { sessionToken } from "../services/facetec/shared/session-token.js";
 import { enrollment3d } from "../services/facetec/enrollment-3d.js";
 import { match3d2dIdScan } from "../services/facetec/match-3d-2d-idscan.js";
-import { testOCRDateParsing } from "../services/facetec/functions-date.js";
+import { testOCRDateParsing } from "../services/facetec/shared/functions-date.js";
 import { getCredentialsV3 } from "../services/facetec/credentials.js";
+import { getCredentialsAllowSybils } from "../services/facetec/allow-sybils/credentials.js";
+import { enrollment3dAllowSybils } from "../services/facetec/allow-sybils/enrollment-3d.js";
 import { getProductionEncryptionKeyText } from "../services/facetec/shared/encryption-key.js";
 
 const router = express.Router();
@@ -29,6 +31,9 @@ router.post("/match-3d-2d-idscan/:nullifier", match3d2dIdScan);
 // router.post("/match-3d-2d-idscan-and-get-creds/:nullifier", match3d2dIdScanAndGetCreds);
 
 router.get("/credentials/v3/:_id/:nullifier/:sessionType", getCredentialsV3);
+
+router.post("/allow-sybils/enrollment-3d", enrollment3dAllowSybils);
+router.get("/allow-sybils/credentials/v3/:_id/:nullifier/:sessionType", getCredentialsAllowSybils);
 
 router.get("/production-encryption-key-text", getProductionEncryptionKeyText);
 

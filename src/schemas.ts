@@ -389,6 +389,13 @@ const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
     },
     required: false,
   },
+  encryptedBiometricsAllowSybilsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
 });
 
 const userProofMetadataSchema = new Schema<IUserProofMetadata>({

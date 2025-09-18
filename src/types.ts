@@ -205,6 +205,10 @@ export type IUserCredentialsV2 = {
     ciphertext?: string;
     iv?: string;
   };
+  encryptedBiometricsAllowSybilsCreds?: {
+    ciphertext?: string;
+    iv?: string;
+  };
 };
 
 export type IUserProofMetadata = {

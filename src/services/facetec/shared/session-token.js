@@ -1,6 +1,6 @@
 import axios from "axios";
 import { ObjectId } from "mongodb";
-import { Session, BiometricsSession } from "../../../init.js";
+import { Session, BiometricsSession, BiometricsAllowSybilsSession } from "../../../init.js";
 import {
   sessionStatusEnum,
 } from "../../../constants/misc.js";
@@ -35,8 +35,10 @@ export async function sessionToken(req, res) {
     }
 
     let session;
-    if(sessionType === "biometrics") {
+    if (sessionType === "biometrics") {
       session = await BiometricsSession.findOne({ _id: objectId }).exec();
+    } else if (sessionType === "biometrics-allow-sybils") {
+      session = await BiometricsAllowSybilsSession.findOne({ _id: objectId }).exec();
     } else if(sessionType === "kyc") {
       session = await Session.findOne({ _id: objectId }).exec();
     } else {
