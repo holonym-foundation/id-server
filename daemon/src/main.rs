@@ -68,12 +68,15 @@ async fn trigger_deletion_of_user_idv_data() {
 }
 
 async fn trigger_transfer_of_funds() {
+    println!("trigger_transfer_of_funds ---- starting");
     let url = get_id_server_url() + "/admin/transfer-funds";
 
     let api_key = env::var("ADMIN_API_KEY").expect("ADMIN_API_KEY must be set");
 
     let client = reqwest::Client::new();
     let req_result = client.post(url).header("x-api-key", api_key).send().await;
+
+    println!("trigger_transfer_of_funds ---- got response");
 
     match req_result {
         Ok(resp) => {
