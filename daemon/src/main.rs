@@ -131,12 +131,12 @@ async fn main() {
         trigger_transfer_of_funds().await;
 
         // Run the transaction scanner every 3 hours
-        let current_hour = get_hours_since_epoch();
-        if (current_hour - started_at_hour) % 3 == 0 {
-            println!("Running transaction scanner");
-            tokio::spawn(async {
-                run_transaction_scanner().await;
-            });
-        }
+        // let current_hour = get_hours_since_epoch();
+        // if (current_hour - started_at_hour) % 3 == 0 {
+        //     println!("Running transaction scanner");
+        //     tokio::spawn(async {
+        //         run_transaction_scanner().await;
+        //     });
+        // }
     }
 }
