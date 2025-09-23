@@ -230,23 +230,23 @@ async function transferFunds(req: Request, res: Response) {
   }
 }
 
-async function notifySlack(txReceipts: Record<string, string>) {
+async function notifySlack(txReceipts: Record<string, any>) {
   try {
     const txLinks: Record<string, string> = {}
     if (txReceipts.ethereum) {
-      txLinks['Ethereum'] = `https://etherscan.io/tx/${txReceipts.ethereum}`
+      txLinks['Ethereum'] = `https://etherscan.io/tx/${txReceipts.ethereum.transactionHash}`
     }
     if (txReceipts.optimism) {
-      txLinks['Optimism'] = `https://optimistic.etherscan.io/tx/${txReceipts.optimism}`
+      txLinks['Optimism'] = `https://optimistic.etherscan.io/tx/${txReceipts.optimism.transactionHash}`
     }
     // if (txReceipts.fantom) {
     //   txLinks['fantom'] = txReceipts.fantom
     // }
     if (txReceipts.base) {
-      txLinks['Base'] = `https://basescan.org/tx/${txReceipts.base}`
+      txLinks['Base'] = `https://basescan.org/tx/${txReceipts.base.transactionHash}`
     }
     if (txReceipts.avalanche) {
-      txLinks['Avalanche'] = `https://basescan.org/tx/${txReceipts.avalanche}`
+      txLinks['Avalanche'] = `https://basescan.org/tx/${txReceipts.avalanche.transactionHash}`
     }
     // if (txReceipts.aurora) {
     //   txLinks['aurora'] = txReceipts.aurora
@@ -260,11 +260,13 @@ async function notifySlack(txReceipts: Record<string, string>) {
     const linksBulletPoints = Object.entries(txLinks)
       .map(([chain, url]) => `• ${chain}: <${url}|${txLinks[chain]}>`)
       .join('\n')
-    console.log('transfer-funds: sending slack notification')
-    await postNotification({
-      webhookURL: process.env.SLACK_WEBHOOK as string,
-      message: `id-server transferred funds from hot wallets to company cold wallets.\n\n${linksBulletPoints}`
-    })
+    if (Object.entries(txLinks).length > 0) {
+      console.log('transfer-funds: sending slack notification')
+      await postNotification({
+        webhookURL: process.env.SLACK_WEBHOOK as string,
+        message: `id-server transferred funds from hot wallets to company cold wallets.\n\n${linksBulletPoints}`
+      })
+    }
   } catch (err) {
     console.log('error trying to assemble slack message', err)
   }
