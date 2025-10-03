@@ -8,6 +8,8 @@ import { getCredentialsV3 } from "../services/facetec/credentials.js";
 import { getCredentialsAllowSybils } from "../services/facetec/allow-sybils/credentials.js";
 import { enrollment3dAllowSybils } from "../services/facetec/allow-sybils/enrollment-3d.js";
 import { getProductionEncryptionKeyText } from "../services/facetec/shared/encryption-key.js";
+import { processRequest } from "../services/facetec/v2/no-sybils/process-request.js";
+import { getCredentials } from "../services/facetec/v2/no-sybils/credentials.js";
 
 const router = express.Router();
 
@@ -36,5 +38,9 @@ router.post("/allow-sybils/enrollment-3d", enrollment3dAllowSybils);
 router.get("/allow-sybils/credentials/v3/:_id/:nullifier/:sessionType", getCredentialsAllowSybils);
 
 router.get("/production-encryption-key-text", getProductionEncryptionKeyText);
+
+router.post("/v2/no-sybils/process-request", processRequest);
+router.get("/v2/no-sybils/credentials/:_id/:nullifier", getCredentials);
+
 
 export default router;
