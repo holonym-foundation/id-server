@@ -9,6 +9,7 @@ import { getSession } from "../services/direct-verification/get-session.js";
 import { createCustomer, getCustomers } from "../services/direct-verification/customer/index.js";
 import { createOrder } from "../services/direct-verification/order/index.js"
 import { getSessionResult } from "../services/direct-verification/session-result/index.js";
+import { processRequest } from "../services/direct-verification/age-check/process-request.js"
 
 const router = express.Router();
 
@@ -19,6 +20,8 @@ router.get("/sse-updates/:sid", sseUpdates);
 router.post("/session-token", sessionToken);
 router.post("/enrollment-3d", enrollment3d);
 router.post("/estimate-age-3d-v2", estimateAge3dV2);
+
+// router.post("/v2/age-check/process-request", processRequest);
 
 // Use the /production-encryption-key-text endpoint under the /facetec route
 // router.get("/production-encryption-key-text", getProductionEncryptionKeyText);
