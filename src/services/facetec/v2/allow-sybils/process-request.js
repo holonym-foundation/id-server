@@ -1,30 +1,15 @@
 import axios from "axios";
 import { ObjectId } from "mongodb";
-import { Session, BiometricsSession } from "../../../../init.js";
+import { BiometricsAllowSybilsSession } from "../../../../init.js";
 import {
-  sessionStatusEnum,
+  biometricsAllowSybilsSessionStatusEnum,
 } from "../../../../constants/misc.js";
-// import {
-//   getDateAsInt,
-//   sha256,
-//   govIdUUID,
-//   objectIdElevenMonthsAgo,
-// } from "../../utils/utils.js";
-// import {
-//   validateFaceTecResponse,
-//   saveCollisionMetadata,
-//   saveUserToDb,
-//   updateSessionStatus,
-// } from "./functions-creds.js";
-// import { ethers } from "ethers";
-// import { poseidon } from "circomlibjs-old";
-// import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
 // import { upgradeV3Logger } from "./error-logger.js";
 
 const endpointLogger = logger.child({
-  msgPrefix: "[POST /facetec/v2/no-sybils/process-request] ",
+  msgPrefix: "[POST /facetec/v2/allow-sybils/process-request] ",
   base: {
     ...pinoOptions.base,
     idvProvider: "facetec",
@@ -51,13 +36,13 @@ export async function processRequest(req, res) {
       return res.status(400).json({ error: true, errorMessage: "Invalid sid" });
     }
 
-    const session = await BiometricsSession.findOne({ _id: objectId }).exec();
+    const session = await BiometricsAllowSybilsSession.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(400).json({ error: true, errorMessage: "Session not found" });
     }
 
-    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+    if (session.status !== biometricsAllowSybilsSessionStatusEnum.IN_PROGRESS) {
       return res
         .status(400)
         .json({ error: true, errorMessage: `Session is not in progress. It is ${session.status}.` });
@@ -69,7 +54,7 @@ export async function processRequest(req, res) {
       // Fail session so user can collect refund
       await updateSessionStatus(
         session,
-        sessionStatusEnum.VERIFICATION_FAILED,
+        biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED,
         failureReason
       );
 
@@ -80,14 +65,16 @@ export async function processRequest(req, res) {
 
     // TODO: SSE and IP-based rate limiting
 
-    const groupName = process.env.FACETEC_GROUP_NAME_FOR_BIOMETRICS;
+    // const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
 
     // Process Request
     const resp = await axios.post(
       `${getFaceTecBaseURL(req)}/process-request`,
       {
         ...faceTecParams,
-        externalDatabaseRefID: session.externalDatabaseRefID,
+        // We specifically do not pass an externalDatabaseRefID here because
+        // we want FaceTec to only do a liveness check, not an enrollment
+        // externalDatabaseRefID: session.externalDatabaseRefID,
       },
       {
         headers: {
@@ -107,32 +94,12 @@ export async function processRequest(req, res) {
     // "livenessProven", we assume that a liveness check was performed; and in this case,
     // we want to enroll the user.
     if (data?.result?.livenessProven) {
-      // 3d-db/enroll
-      try {
-        const resp = await axios.post(
-          `${getFaceTecBaseURL(req)}/3d-db/enroll`,
-          {
-            externalDatabaseRefID: session.externalDatabaseRefID,
-            groupName: groupName,
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Device-Key": req.headers["x-device-key"],
-              "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
-              "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
-            },
-          }
-        );
-        // console.log("3d-db/enroll response:", resp.data);
-        
-        await BiometricsSession.updateOne(
-          { _id: objectId },
-          { $inc: { num_facetec_liveness_checks: 1 } }
-        );
-      } catch (err) {
-        console.error("Error during 3d-db/enroll:", err.response ? err.response.data : err.message);
-      }
+      await BiometricsAllowSybilsSession.updateOne(
+        { _id: objectId },
+        { $inc: { num_facetec_liveness_checks: 1 } }
+      );
+      session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+      await session.save();
     }
 
     return res.status(200).json(data);

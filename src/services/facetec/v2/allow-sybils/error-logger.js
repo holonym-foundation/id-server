@@ -6,10 +6,9 @@ import e from "express";
 
 export function upgradeV3Logger(logger) {
 
-  logger.verificationPreviouslyFailed = (externalDatabaseRefID, session) => {
+  logger.verificationPreviouslyFailed = (session) => {
     logger.error(
       {
-        externalDatabaseRefID,
         session_status: session.status,
         failure_reason: session.verificationFailureReason,
         tags: ["action:validateSession", "error:verificationFailed"],
