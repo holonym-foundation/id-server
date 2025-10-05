@@ -68,6 +68,12 @@ export const sessionStatusEnum = {
   REFUNDED: "REFUNDED",
 };
 
+export const biometricsAllowSybilsSessionStatusEnum = {
+  ...sessionStatusEnum,
+  // PASSED_LIVENESS_CHECK is after IN_PROGRESS, before ISSUED
+  PASSED_LIVENESS_CHECK: "PASSED_LIVENESS_CHECK",
+};
+
 export const cleanHandsSessionStatusEnum = {
   ...sessionStatusEnum,
   NEEDS_USER_DECLARATION: "NEEDS_USER_DECLARATION",
