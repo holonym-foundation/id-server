@@ -2,6 +2,10 @@ import { Request, Response } from "express"
 
 import { pinoOptions, logger } from "../../../utils/logger.js";
 
+// TODO: Namespace each SSE channel by both _session type_ (e.g., BiometricsSession vs.
+// BiometricsAllowSybilsSession) AND session ID, not just session ID. It's unlikely
+// but possible for two different session documents to have the same ID.
+
 export async function sseUpdates(req: Request, res: Response) {
   try {
     const sid = req.params.sid;

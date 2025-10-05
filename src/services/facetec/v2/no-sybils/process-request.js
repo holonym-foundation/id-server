@@ -107,6 +107,11 @@ export async function processRequest(req, res) {
     // "livenessProven", we assume that a liveness check was performed; and in this case,
     // we want to enroll the user.
     if (data?.result?.livenessProven) {
+      req.app.locals.sseManager.sendToClient(sid, {
+        status: "in_progress",
+        message: "liveness check: sending to server",
+      });
+
       // 3d-db/enroll
       try {
         const resp = await axios.post(
@@ -130,8 +135,49 @@ export async function processRequest(req, res) {
           { _id: objectId },
           { $inc: { num_facetec_liveness_checks: 1 } }
         );
+
+        if (!resp.data.success || !resp.data.wasProcessed) {
+          endpointLogger.info(
+            {
+              externalDatabaseRefID: session.externalDatabaseRefID,
+              responseData: resp.data,
+            },
+            `/3d-db/enroll failed`
+          );
+          
+          // one of the reason might be that verification enrollment does not exit
+          // just return and exit the flow, do not proceed with issuance
+          return res
+            .status(400)
+            .json({ error: "duplicate check: /3d-db enrollment failed" });
+        } else {
+          req.app.locals.sseManager.sendToClient(sid, {
+            status: "completed",
+            message: "biometrics verification successful, proceed to next step",
+          });
+        }
       } catch (err) {
-        console.error("Error during 3d-db/enroll:", err.response ? err.response.data : err.message);
+        endpointLogger.error(err, "Error during /3d-db/enroll");
+        if (err.request) {
+          return res.status(502).json({
+            error: true,
+            errorMessage: "Did not receive a response from the server during /3d-db/enroll",
+            triggerRetry: true,
+          });
+        } else if (err.response) {
+          return res.status(err.response.status).json({
+            error: true,
+            errorMessage: "The server returned an error during /3d-db/enroll",
+            data: err.response.data,
+            triggerRetry: true,
+          }); 
+        } else {
+          return res.status(500).json({
+            error: true,
+            errorMessage: "An unknown error occurred during /3d-db/enroll",
+            triggerRetry: true,
+          });
+        }
       }
     }
 
