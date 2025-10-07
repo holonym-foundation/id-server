@@ -1,4 +1,5 @@
 import axios from "axios";
+import logger from "./logger.js"
 import { desiredOnfidoReports } from "../constants/onfido.js";
 
 export async function createOnfidoApplicant() {
@@ -58,7 +59,13 @@ export async function createOnfidoSdkToken(applicant_id: string, referrer?: stri
     );
     return resp.data;
   } catch (err: any) {
-    console.error("Error creating Onfido SDK token", err.message, err.response?.data);
+    logger.error(
+      {
+        errMsg: err.message,
+        errResponseData: err.response?.data
+      },
+      "Error creating Onfido SDK token"
+    )
   }
 }
 
