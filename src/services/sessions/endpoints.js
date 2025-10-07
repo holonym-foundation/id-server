@@ -22,7 +22,7 @@ import {
   handleIdvSessionCreation,
   campaignIdToWorkflowId,
 } from "./functions.js";
-import { rateLimit } from "../../utils/rate-limiting.js";
+import { rateLimit, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
 import { objectIdFiveDaysAgo } from "../../utils/utils.js";
@@ -741,6 +741,13 @@ async function refreshOnfidoToken(req, res) {
 
     if (!session.applicant_id) {
       return res.status(400).json({ error: "Session is missing applicant_id" });
+    }
+
+    const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
+    if (rateLimitResult.limitExceeded) {
+      return res.status(429).json({
+        error: 'Too many requests. Please try again later'
+      })
     }
 
     // creating workflow run returns sdk_token as well

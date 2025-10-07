@@ -28,6 +28,7 @@ import {
 } from "../../utils/onfido.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { campaignIdToWorkflowIdMap } from "../../utils/constants.js";
+import { onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js"
 import { v4 as uuidV4 } from "uuid";
 import { ISession } from "../../types.js";
 import pino from "pino";
@@ -79,6 +80,11 @@ async function handleIdvSessionCreation(
       scanRef: tokenData.scanRef,
     };
   } else if (session.idvProvider === "onfido") {
+    const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
+    if (rateLimitResult.limitExceeded) {
+      throw new Error('Too many requests. Please try again later')
+    }
+
     const applicant = await createOnfidoApplicant();
     if (!applicant) {
       throw new Error("Error creating Onfido applicant");
