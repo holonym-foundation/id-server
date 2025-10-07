@@ -63,7 +63,7 @@ export async function processRequest(req, res) {
         .json({ error: true, errorMessage: `Session is not in progress. It is ${session.status}.` });
     }
 
-    if (session.num_facetec_liveness_checks >= 5) {
+    if (session.num_facetec_liveness_checks >= 15) {
       const failureReason =
         "User has reached the maximum number of allowed FaceTec liveness checks";
       // Fail session so user can collect refund
@@ -99,6 +99,14 @@ export async function processRequest(req, res) {
       }
     )
 
+    // Technically, a request to /process-request is not necessarily a liveness
+    // check. However, it seems that our biometrics flow makes only two calls
+    // to process-request, so it is close enough for rate limiting purposes. 
+    await BiometricsSession.updateOne(
+      { _id: objectId },
+      { $inc: { num_facetec_liveness_checks: 1 } }
+    );
+
     const data = resp.data;
     // console.log('/process-request response:', data);
 
@@ -130,11 +138,6 @@ export async function processRequest(req, res) {
           }
         );
         // console.log("3d-db/enroll response:", resp.data);
-        
-        await BiometricsSession.updateOne(
-          { _id: objectId },
-          { $inc: { num_facetec_liveness_checks: 1 } }
-        );
 
         if (!resp.data.success || !resp.data.wasProcessed) {
           endpointLogger.info(
