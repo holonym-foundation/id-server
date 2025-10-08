@@ -10,12 +10,12 @@ import {
 //   govIdUUID,
 //   objectIdElevenMonthsAgo,
 // } from "../../utils/utils.js";
-// import {
-//   validateFaceTecResponse,
-//   saveCollisionMetadata,
-//   saveUserToDb,
-//   updateSessionStatus,
-// } from "./functions-creds.js";
+import {
+  // validateFaceTecResponse,
+  // saveCollisionMetadata,
+  // saveUserToDb,
+  updateSessionStatus,
+} from "./functions-creds.js";
 // import { ethers } from "ethers";
 // import { poseidon } from "circomlibjs-old";
 // import { issue as issuev2 } from "holonym-wasm-issuer-v2";
