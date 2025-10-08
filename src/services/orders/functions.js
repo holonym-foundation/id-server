@@ -50,8 +50,31 @@ function getTransaction(chainId, txHash) {
  * - Ensure amount is > desired amount (within 5%).
  * - Ensure tx is confirmed.
  * - Ensure tx is on a supported chain.
+ * - Ensure tx.data == keccak(externalOrderId)
  */
 async function validateTx(chainId, txHash, externalOrderId, desiredAmount) {
+  const tx = await getTxWithRetries(txHash, chainId)
+
+  await validateTxIsToIDServer(tx)
+
+  await validateTxDataAgainstOrderId(tx, externalOrderId)
+
+  await validateTxAmount(tx, chainId, desiredAmount)
+
+  return tx;
+}
+
+async function validateTxNoOrderId(chainId, txHash, desiredAmount) {
+  const tx = await getTxWithRetries(txHash, chainId)
+
+  await validateTxIsToIDServer(tx)
+
+  await validateTxAmount(tx, chainId, desiredAmount)
+
+  return tx;
+}
+
+async function getTxWithRetries(txHash, chainId) {
   // Transactions on L2s mostly go through within a few seconds.
   // Mainnet can take 15s or possibly even longer.
   const tx = await retry(
@@ -74,18 +97,25 @@ async function validateTx(chainId, txHash, externalOrderId, desiredAmount) {
     );
   }
 
+  return tx
+}
+
+async function validateTxIsToIDServer(tx) {
   if (idServerPaymentAddress !== tx.to.toLowerCase()) {
     throw new Error(
       `Invalid transaction recipient. Recipient must be ${idServerPaymentAddress}`
     );
   }
+}
 
-  // validate tx.data equals externalOrderIdDigest
+async function validateTxDataAgainstOrderId(tx, externalOrderId) {
   const externalOrderIdDigest = ethers.utils.keccak256(externalOrderId);
   if (tx.data !== externalOrderIdDigest) {
     throw new Error("Invalid transaction data: invalid digest");
   }
+}
 
+async function validateTxAmount(tx, chainId, desiredAmount) {
   // NOTE: This const must stay in sync with the frontend.
   // We allow a 5% margin of error.
   const expectedAmountInUSD = desiredAmount * 0.95;
@@ -120,8 +150,6 @@ async function validateTx(chainId, txHash, externalOrderId, desiredAmount) {
       `Invalid transaction amount. Expected: ${expectedAmount.toString()}. Found: ${tx.value.toString()}. (chain ID: ${chainId})`
     );
   }
-
-  return tx;
 }
 
 async function validateTxConfirmation(tx) {
@@ -141,7 +169,6 @@ async function validateTxConfirmation(tx) {
  */
 async function handleRefund(order) {
   const tx = await getTransaction(order.chainId, order.txHash);
-  const provider = getProvider(order.chainId);
 
   if (!tx) {
     return {
@@ -180,6 +207,21 @@ async function handleRefund(order) {
     };
   }
 
+  const receipt = await sendRefundTx(order, tx);
+
+  return {
+    status: 200,
+    data: {
+      txReceipt: receipt,
+    },
+  };
+}
+
+/**
+ * Refund the given order. DOES NOT VALIDATE the provided order or transaction. 
+ */
+async function sendRefundTx(order, tx) {
+  const provider = getProvider(order.chainId);
   const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY, provider);
 
   // Refund 50% of the transaction amount. This approximates the mint cost.
@@ -204,29 +246,23 @@ async function handleRefund(order) {
     value: refundAmount,
   });
 
+  // We have disabled Fantom payments in Human ID
   // For some reason gas estimates from Fantom are way off. We manually increase
   // gas to avoid "transaction underpriced" error. Hopefully this is unnecessary
   // in the future. The following values happened to be sufficient at the time
   // of adding this block.
-  if (order.chainId === 250) {
-    txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
-    txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
+  // if (order.chainId === 250) {
+  //   txReq.maxFeePerGas = txReq.maxFeePerGas.mul(2);
+  //   txReq.maxPriorityFeePerGas = txReq.maxPriorityFeePerGas.mul(14);
 
-    if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
-      txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
-    }
-  }
+  //   if (txReq.maxPriorityFeePerGas.gt(txReq.maxFeePerGas)) {
+  //     txReq.maxPriorityFeePerGas = txReq.maxFeePerGas;
+  //   }
+  // }
 
   const txResponse = await wallet.sendTransaction(txReq);
 
-  const receipt = await txResponse.wait();
-
-  return {
-    status: 200,
-    data: {
-      txReceipt: receipt,
-    },
-  };
+  return txResponse.wait();
 }
 
 async function getOrderByTxHash(req, res) {
@@ -268,7 +304,9 @@ export {
   getTransaction,
   getProvider,
   validateTx,
+  validateTxNoOrderId,
   validateTxConfirmation,
   handleRefund,
+  sendRefundTx,
   getOrderByTxHash,
 };

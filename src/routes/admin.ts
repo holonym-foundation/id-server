@@ -19,15 +19,20 @@ import { whitelistCleanHandsSession } from "../services/admin/whitelist-clean-ha
 
 const router = express.Router();
 
+// Note that admin endpoints for the orders API are with the other orders routes
+
 router.get("/user-verification", getUserVerification);
 router.delete("/user-verification", deleteUserVerification);
 router.delete("/user-idv-data", deleteUserData);
 router.post("/transfer-funds", transferFunds);
 router.post("/set-session-idv-provider", setSessionIdvProvider);
 router.post("/user-sessions", userSessions);
-router.post("/fail-session", failSession);
-router.post("/refund-unused-transaction", refundUnusedTransaction);
-router.post("/refund-failed-session", refundFailedSession);
+
+// Old endpoints for when we charged for sessions, instead of charging for SBTs
+// router.post("/fail-session", failSession);
+// router.post("/refund-unused-transaction", refundUnusedTransaction);
+// router.post("/refund-failed-session", refundFailedSession);
+
 router.post("/issue-verax-attestation", issueVeraxAttestation);
 router.get("/user-has-backedup-credentials", getUserHasBackedupCredentials);
 // ---- Clean hands ----

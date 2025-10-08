@@ -2,8 +2,10 @@ import {
   getProvider,
   getTransaction,
   validateTx,
+  validateTxNoOrderId,
   validateTxConfirmation,
   handleRefund,
+  sendRefundTx,
   getOrderByTxHash,
 } from "./functions.js";
 import { idvSessionUSDPrice } from "../../constants/misc.js";
@@ -269,8 +271,9 @@ async function setOrderFulfilled(req, res) {
   }
 }
 
-// GET /:externalOrderId/refund.
-// Refunds an unfulfilled order.
+// POST /refund.
+// Refunds an unfulfilled order OR if there is no order for the given txHash+chainId
+// combination, it validates the tx, creates an order, and refunds it.
 // Gated by admin API key. Why? Because if an order is unfulfilled, a user could trigger
 // SBT minting and a refund at the same time, to effectively not pay for the SBT.
 async function refundOrder(req, res) {
@@ -292,8 +295,55 @@ async function refundOrder(req, res) {
     // Query the DB for the order
     const order = await Order.findOne({ txHash, chainId });
 
+    // If there's no order associated with this txHash, maybe the user sent
+    // a valid transaction but it wasn't successfully associated with an order
+    // (due to a malfunction of our server). In this case, we want to (a) create
+    // an order for the valid transaction, then (b) refund it.
     if (!order) {
-      return res.status(404).json({ error: "Order not found" });
+      const validTx = await validateTxNoOrderId(
+        chainId,
+        txHash,
+        idvSessionUSDPrice
+      )
+
+      const order = new Order({
+        holoUserId: 'n/a',
+        externalOrderId: 'n/a',
+        category: orderCategoryEnums.MINT_ZERONYM_V3_SBT,
+        txHash,
+        chainId,
+        // Mark the order as fulfilled so that this tx cannot be refunded again
+        fulfilled: true,
+        // Wait to set order.refunded until refund is successful
+        refunded: false,
+      });
+      await order.save();
+
+      let txReceipt;
+      try {
+        txReceipt = await sendRefundTx(order, validTx);
+
+        order.refunded = true
+        order.refundTxHash = txReceipt.transactionHash
+        await order.save();
+
+        ordersLogger.info(
+          {
+            order
+          },
+          "Order refunded"
+        );
+      } catch (err) {
+        ordersLogger.error({ err }, "Failed to refund order")
+
+        return res.status(500).json({
+          error: 'An unkown error occurred while trying to refund the order',
+          internalError: err.message
+        })
+      }
+      return res.status(200).json({
+        txReceipt
+      });
     }
 
     // Refund the order
@@ -313,6 +363,15 @@ async function refundOrder(req, res) {
         order.refundTxHash = response.data.txReceipt.transactionHash;
         order.refunded = true;
         await order.save();
+
+        ordersLogger.info(
+          {
+            order
+          },
+          "Order refunded"
+        );
+      } else {
+        ordersLogger.error({ response }, "Failed to refund order")
       }
 
       return res.status(response.status).json(response.data);
