@@ -286,6 +286,10 @@ async function refundOrder(req, res) {
         .json({ error: "txHash and chainId are required for refund" });
     }
 
+    if (Number.isNaN(Number(chainId))) {
+      return res.status(400).json({ error: "chainId must be a number" })
+    }
+
     const apiKey = req.headers["x-api-key"];
 
     if (apiKey !== process.env.ADMIN_API_KEY_LOW_PRIVILEGE) {

@@ -16,20 +16,22 @@ import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 
 function getProvider(chainId) {
   let provider;
-  if (chainId === 1) {
+  if (chainId == 1) {
     provider = ethereumProvider;
-  } else if (chainId === 10) {
+  } else if (chainId == 10) {
     provider = optimismProvider;
-  } else if (chainId === 250) {
+  } else if (chainId == 250) {
     provider = fantomProvider;
-  } else if (chainId === 8453) {
+  } else if (chainId == 8453) {
     provider = baseProvider;
-  } else if (chainId === 43114) {
+  } else if (chainId == 43114) {
     provider = avalancheProvider;
-  } else if (chainId === 1313161554) {
+  } else if (chainId == 1313161554) {
     provider = auroraProvider;
-  } else if (process.env.NODE_ENV === "development" && chainId === 420) {
+  } else if (process.env.NODE_ENV == "development" && chainId == 420) {
     provider = optimismGoerliProvider;
+  } else {
+    throw new Error(`Invalid chainId (${chainId}). Could not get provider`)
   }
 
   return provider;
