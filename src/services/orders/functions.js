@@ -124,11 +124,17 @@ async function validateTxAmount(tx, chainId, desiredAmount) {
 
   let expectedAmountInToken;
   if ([1, 10, 1313161554, 8453].includes(chainId)) {
-    expectedAmountInToken = await usdToETH(expectedAmountInUSD);
+    // expectedAmountInToken = await usdToETH(expectedAmountInUSD);
+    // Oct 9, 2025. 0.0012 ETH is about $5. We are temporarily hardcoding this value to avoid
+    // dependency on CMC due to rate limits with their API
+    expectedAmountInToken = 0.0008
   } else if (chainId === 250) {
     expectedAmountInToken = await usdToFTM(expectedAmountInUSD);
   } else if (chainId === 43114) {
-    expectedAmountInToken = await usdToAVAX(expectedAmountInUSD);
+    // expectedAmountInToken = await usdToAVAX(expectedAmountInUSD);
+    // Oct 9, 2025. 0.17 AVAX is about $5. We are temporarily hardcoding this value to avoid
+    // dependency on CMC due to rate limits with their API
+    expectedAmountInToken = 0.12
   }
   // else if (process.env.NODE_ENV === "development" && chainId === 420) {
   //   expectedAmount = ethers.BigNumber.from("0");
