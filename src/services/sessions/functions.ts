@@ -82,7 +82,7 @@ async function handleIdvSessionCreation(
   } else if (session.idvProvider === "onfido") {
     const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
     if (rateLimitResult.limitExceeded) {
-      throw new Error('Too many requests. Please try again later')
+      throw new Error('The network is busy. Please try again in 10 minutes')
     }
 
     const applicant = await createOnfidoApplicant();

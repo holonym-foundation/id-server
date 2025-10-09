@@ -746,7 +746,7 @@ async function refreshOnfidoToken(req, res) {
     const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
     if (rateLimitResult.limitExceeded) {
       return res.status(429).json({
-        error: 'Too many requests. Please try again later'
+        error: 'The network is busy. Please try again in 10 minutes'
       })
     }
 
