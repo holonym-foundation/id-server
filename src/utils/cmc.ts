@@ -8,6 +8,12 @@ import {
   xlmCMCID,
   suiCMCID
 } from "../constants/cmc.js";
+import { 
+  getPriceFromRedisCache, 
+  setPriceInRedisCache,
+  getMultiplePricesFromRedisCache,
+  setMultiplePricesInRedisCache
+} from "./crypto-prices-cache.js";
 
 export type CryptoPriceSlug = keyof typeof slugToID;
 
@@ -18,24 +24,22 @@ export type CryptoPricesCache = {
   }
 }
 
-// TODO: Use redis instead. This is a temporary solution to avoid hitting
-// CMC's rate limit. key-value pair is { slug: { price: number, lastUpdatedAt: Date } }
-const cryptoPricesCache: CryptoPricesCache = {};
-
-export function getPriceFromCache(slug: CryptoPriceSlug) {
-  const now = new Date();
-  const cachedPrice = cryptoPricesCache[slug];
-  // If price was last updated less than 30 seconds ago, use cached price
-  if (
-    cachedPrice?.lastUpdatedAt &&
-    (now.getTime() - cachedPrice.lastUpdatedAt.getTime() < 30 * 1000)
-  ) {
-    return cachedPrice.price;
-  }
+// Redis-based cache for crypto prices
+export async function getPriceFromCache(slug: CryptoPriceSlug): Promise<number | null> {
+  return await getPriceFromRedisCache(slug);
 }
 
-export function setPriceInCache(slug: CryptoPriceSlug, price: number) {
-  cryptoPricesCache[slug] = { price, lastUpdatedAt: new Date() };
+export async function setPriceInCache(slug: CryptoPriceSlug, price: number): Promise<void> {
+  await setPriceInRedisCache(slug, price);
+}
+
+// Batch operations for better performance
+export async function getMultiplePricesFromCache(slugs: CryptoPriceSlug[]): Promise<Partial<Record<CryptoPriceSlug, number>>> {
+  return await getMultiplePricesFromRedisCache(slugs);
+}
+
+export async function setMultiplePricesInCache(prices: Record<CryptoPriceSlug, number>): Promise<void> {
+  await setMultiplePricesInRedisCache(prices);
 }
 
 /**
@@ -59,13 +63,13 @@ export function getLatestCryptoPrice(id: number | string) {
  */
 export async function getPriceFromCacheOrAPI(id: keyof typeof idToSlug) {
   const slug = idToSlug[id];
-  const cachedPrice = getPriceFromCache(slug);
+  const cachedPrice = await getPriceFromCache(slug);
   if (cachedPrice) {
     return cachedPrice;
   }
   const resp = await getLatestCryptoPrice(id)
   const price = resp?.data?.data?.[id]?.quote?.USD?.price;
-  setPriceInCache(slug, price);
+  await setPriceInCache(slug, price);
   return price;
 }
 

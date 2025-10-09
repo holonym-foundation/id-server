@@ -4,6 +4,8 @@ import { pinoOptions, logger } from "../utils/logger.js";
 import {
   getPriceFromCache,
   setPriceInCache,
+  getMultiplePricesFromCache,
+  setMultiplePricesInCache,
   getLatestCryptoPrice,
   CryptoPriceSlug
 } from "../utils/cmc.js";
@@ -58,18 +60,13 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     const slugs = (slug as string).split(",");
+    
+    // Remove duplicates from requested slugs
+    const uniqueSlugs = [...new Set(slugs)];
 
-    // Check cache first
-    const cachedPrices: Partial<Record<CryptoPriceSlug, number | undefined>> = {};
-    const cachedSlugs: string[] = [];
-    for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i];
-      const cachedPrice = getPriceFromCache(slug as CryptoPriceSlug);
-      if (cachedPrice) {
-        cachedPrices[slug as CryptoPriceSlug] = cachedPrice;
-        cachedSlugs.push(slug);
-      }
-    }
+    // Check cache first - batch operation for better performance
+    const cachedPrices = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
+    const cachedSlugs = Object.keys(cachedPrices);
 
     // Log cache hits
     if (cachedSlugs.length > 0) {
@@ -80,13 +77,13 @@ async function getPriceV2(req: Request, res: Response) {
         totalRequested: slugs.length,
         cacheHitRate: (cachedSlugs.length / slugs.length * 100).toFixed(1) + "%",
         tags: ["service:crypto-prices", "action:cache-hit"]
-      }, `Crypto prices from cache: ${cachedSlugs.join(", ")}`);
+      }, `CMC API from cache: ${cachedSlugs.join(", ")}`);
     }
 
     // Get ids of cryptos whose prices weren't retrieved from cache
     const ids = [];
-    for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i] as CryptoPriceSlug;
+    for (let i = 0; i < uniqueSlugs.length; i++) {
+      const slug = uniqueSlugs[i] as CryptoPriceSlug;
       if (!cachedPrices[slug]) {
         ids.push(slugToID[slug]);
       }
@@ -97,29 +94,32 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     // Log API request
+    const requestedSlugs = uniqueSlugs.filter(s => !cachedSlugs.includes(s));
     endpointLogger.info({
       service: "crypto-prices",
       action: "api-request",
-      requestedSlugs: slugs.filter(s => !cachedSlugs.includes(s)),
+      requestedSlugs,
       cmcIds: ids,
       tags: ["service:crypto-prices", "action:api-request"]
-    }, `Making CMC API request for: ${slugs.filter(s => !cachedSlugs.includes(s)).join(", ")}`);
+    }, `CMC API request for: ${requestedSlugs.join(", ")}`);
 
     const resp = await getLatestCryptoPrice(ids.join(","));
 
     const newPrices: Partial<Record<CryptoPriceSlug, number>> = {};
 
-    for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i] as CryptoPriceSlug;
+    for (let i = 0; i < uniqueSlugs.length; i++) {
+      const slug = uniqueSlugs[i] as CryptoPriceSlug;
 
       // Ignore slugs whose prices were retrieved from cache
       if (cachedPrices[slug]) continue;
 
       const id = slugToID[slug];
       newPrices[slug] = Number(resp?.data?.data?.[id]?.quote?.USD?.price);
+    }
 
-      // Update cache
-      setPriceInCache(slug, newPrices[slug]);
+    // Batch update cache for better performance
+    if (Object.keys(newPrices).length > 0) {
+      await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
     }
 
     // Log successful API response
@@ -128,7 +128,7 @@ async function getPriceV2(req: Request, res: Response) {
       action: "api-success",
       fetchedSlugs: Object.keys(newPrices),
       tags: ["service:crypto-prices", "action:api-success"]
-    }, `Successfully fetched crypto prices from CMC API`);
+      }, `CMC API success request: ${Object.keys(newPrices).join(", ")}`);
 
     return res.status(200).json({ ...newPrices, ...cachedPrices });
   } catch (err: any) {
