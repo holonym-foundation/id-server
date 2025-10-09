@@ -1,3 +1,6 @@
+// Import axios interceptor for Onfido API logging
+import "./utils/axios-onfido-interceptor.js";
+
 import express from "express";
 import cors from "cors";
 import veriff from "./routes/veriff-kyc.js";
