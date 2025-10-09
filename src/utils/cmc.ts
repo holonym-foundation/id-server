@@ -76,7 +76,9 @@ export async function getPriceFromCacheOrAPI(id: keyof typeof idToSlug) {
 // TODO: getBatchPricesFromCacheOrAPI
 
 export async function usdToETH(usdAmount: number) {
-  const ethPrice = await getPriceFromCacheOrAPI(ethereumCMCID)
+  // TEMPORARILY HARD CODING CONVERSION RATE TO GET AROUND CMC RATE LIMITS
+  // const ethPrice = await getPriceFromCacheOrAPI(ethereumCMCID)
+  const ethPrice = 4339.08
   const ethAmount = usdAmount / ethPrice;
   return ethAmount;
 }
@@ -88,7 +90,8 @@ export async function usdToFTM(usdAmount: number) {
 }
 
 export async function usdToAVAX(usdAmount: number) {
-  const avalanchePrice = await getPriceFromCacheOrAPI(avalancheCMCID)
+  // const avalanchePrice = await getPriceFromCacheOrAPI(avalancheCMCID)
+  const avalanchePrice = 28
   const ftmAmount = usdAmount / avalanchePrice;
   return ftmAmount;
 }
