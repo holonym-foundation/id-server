@@ -1,5 +1,6 @@
 import { valkeyClient } from "./valkey-glide.js";
 import { CryptoPriceSlug } from "./cmc.js";
+import { logger } from "./logger.js";
 
 const CACHE_PREFIX = "crypto_price:";
 const DEFAULT_TTL = 60; // 60 seconds in Redis
@@ -63,13 +64,32 @@ export async function setPriceInRedisCache(slug: CryptoPriceSlug, price: number)
 }
 
 export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]): Promise<Partial<Record<CryptoPriceSlug, number>>> {
-  if (!valkeyClient || slugs.length === 0) {
+  if (!valkeyClient) {
+    logger.warn({
+      service: "crypto-cache",
+      action: "client-unavailable",
+      requestedSlugs: slugs,
+      tags: ["service:crypto-cache", "action:client-unavailable"]
+    }, "Valkey client not available, falling back to no cache");
+    return {};
+  }
+  
+  if (slugs.length === 0) {
     return {};
   }
 
   try {
     const keys = slugs.map(slug => `${CACHE_PREFIX}${slug}`);
     const cachedValues = await valkeyClient.mget(keys);
+    
+    logger.info({
+      service: "crypto-cache",
+      action: "cache-lookup-result",
+      requestedSlugs: slugs,
+      cacheKeys: keys,
+      retrievedValues: cachedValues,
+      tags: ["service:crypto-cache", "action:cache-lookup-result"]
+    }, "Retrieved values from Redis cache");
     
     const result: Partial<Record<CryptoPriceSlug, number>> = {};
     
@@ -100,7 +120,17 @@ export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]):
 }
 
 export async function setMultiplePricesInRedisCache(prices: Record<CryptoPriceSlug, number>): Promise<void> {
-  if (!valkeyClient || Object.keys(prices).length === 0) {
+  if (!valkeyClient) {
+    logger.warn({
+      service: "crypto-cache",
+      action: "client-unavailable",
+      pricesToCache: Object.keys(prices),
+      tags: ["service:crypto-cache", "action:client-unavailable"]
+    }, "Valkey client not available, skipping cache");
+    return;
+  }
+  
+  if (Object.keys(prices).length === 0) {
     return;
   }
 
@@ -117,6 +147,17 @@ export async function setMultiplePricesInRedisCache(prices: Record<CryptoPriceSl
     });
     
     await Promise.all(promises);
+    
+    // Log successful cache setting
+    logger.info({
+      service: "crypto-cache",
+      action: "cache-set",
+      pricesToCache: Object.keys(prices),
+      priceCount: Object.keys(prices).length,
+      ttl: DEFAULT_TTL,
+      tags: ["service:crypto-cache", "action:cache-set"]
+    }, `Cached ${Object.keys(prices).length} prices in Redis with ${DEFAULT_TTL}s TTL`);
+    
   } catch (error) {
     console.error("Error setting multiple prices in Redis cache:", error);
   }

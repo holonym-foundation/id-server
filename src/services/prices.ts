@@ -67,6 +67,16 @@ async function getPriceV2(req: Request, res: Response) {
     // Check cache first - batch operation for better performance
     const cachedPrices = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
     const cachedSlugs = Object.keys(cachedPrices);
+    
+    // Debug logging
+    endpointLogger.info({
+      service: "crypto-prices",
+      action: "cache-debug",
+      requestedSlugs: uniqueSlugs,
+      cachedSlugs,
+      cacheResult: cachedPrices,
+      tags: ["service:crypto-prices", "action:cache-debug"]
+    }, `CMC API Cache debug - Requested: ${uniqueSlugs.join(", ")}, Cached: ${cachedSlugs.join(", ")}`);
 
     // Log cache hits
     if (cachedSlugs.length > 0) {
