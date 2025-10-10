@@ -84,13 +84,11 @@ export async function tryGetLatestCryptoPriceWithFallback(
       }
     }
   } catch (err: any) {
+    const errorMessage = err?.response?.data?.status?.error_message ?? err?.response?.data ?? err.message;
+    const statusCode = err?.response?.status;
+    
     logger.error(
-      { 
-        error: err,
-        status: err?.response?.status,
-        message: err?.response?.data ?? err.message 
-       },
-      "Error querying CMC API"
+      `Error querying CMC API - Status: ${statusCode || 'N/A'}, Message: ${errorMessage}`
     )
   }
 
