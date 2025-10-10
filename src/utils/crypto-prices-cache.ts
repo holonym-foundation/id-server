@@ -78,9 +78,10 @@ export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]):
     return {};
   }
 
+  let cachedValues;
   try {
     const keys = slugs.map(slug => `${CACHE_PREFIX}${slug}`);
-    const cachedValues = await valkeyClient.mget(keys);
+    cachedValues = await valkeyClient.mget(keys);
     
     logger.info({
       service: "crypto-cache",
@@ -115,6 +116,14 @@ export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]):
     return result;
   } catch (error) {
     console.error("Error getting multiple prices from Redis cache:", error);
+    // log to datadog, error
+    logger.error({
+      service: "crypto-cache",
+      action: "cache-get-error",
+      error,
+      retrievedValues: cachedValues,
+      tags: ["service:crypto-cache", "action:cache-get-error"]
+    }, "Error getting multiple prices from Redis cache");
     return {};
   }
 }
@@ -160,6 +169,14 @@ export async function setMultiplePricesInRedisCache(prices: Record<CryptoPriceSl
     
   } catch (error) {
     console.error("Error setting multiple prices in Redis cache:", error);
+    // log to datadog, error
+    logger.error({
+      service: "crypto-cache",
+      action: "cache-set-error",
+      error,
+      pricesToCache: Object.keys(prices),
+      tags: ["service:crypto-cache", "action:cache-set-error"]
+    }, "Error setting multiple prices in Redis cache");
   }
 }
 
