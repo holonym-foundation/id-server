@@ -130,7 +130,7 @@ async function getPriceV2(req: Request, res: Response) {
 
     // Batch update cache for better performance
     if (Object.keys(newPrices).length > 0) {
-      await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
+      // await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
     }
 
     // Log successful API response

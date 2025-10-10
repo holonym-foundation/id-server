@@ -29,7 +29,7 @@ export const idToSlug = {
 // Hardcoded USD prices of cryptocurrencies, in case the CMC API fails us
 export const ETH_PRICE_FALLBACK = 4378.26
 export const AVAX_PRICE_FALLBACK = 28
-export const FTM_PRICE_FALLBACK = 0
+export const FTM_PRICE_FALLBACK = 0.1
 export const NEAR_PRICE_FALLBACK = 2.86
 export const XLM_PRICE_FALLBACK = 0.38
 export const SUI_PRICE_FALLBACK = 3.39
