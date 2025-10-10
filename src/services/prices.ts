@@ -123,6 +123,16 @@ async function getPriceV2(req: Request, res: Response) {
       await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
     }
 
+    // try getting the prices from the cache again
+    const cachedPrices2 = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
+    endpointLogger.info({
+      service: "crypto-prices",
+      action: "cache-lookup-result",
+      requestedSlugs: uniqueSlugs,
+      cachedSlugs: Object.keys(cachedPrices2),
+      tags: ["service:crypto-prices", "action:cache-lookup-result"]
+    }, "Retrieved values from Redis cache");
+
     // Log successful API response
     endpointLogger.info({
       service: "crypto-prices",
