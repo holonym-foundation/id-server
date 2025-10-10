@@ -99,7 +99,7 @@ export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]):
     const keys = slugs.map(slug => `${CACHE_PREFIX}${slug}`);
     
     // Use individual GET commands instead of MGET to avoid CrossSlot error
-    const getPromises = keys.map(key => valkeyClient.get(key));
+    const getPromises = keys.map(key => valkeyClient!.get(key));
     const cachedValues = await Promise.all(getPromises);
     
     logger.info({
