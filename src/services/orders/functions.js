@@ -195,15 +195,16 @@ async function handleRefund(order) {
   );
   const validTxConfirmation = await validateTxConfirmation(validTx);
 
+  // TEMPORARILY DISABLED
   // check if tx is already fulfilled
-  if (order.fulfilled) {
-    return {
-      status: 400,
-      data: {
-        error: "The order has already been fulfilled, cannot refund.",
-      },
-    };
-  }
+  // if (order.fulfilled) {
+  //   return {
+  //     status: 400,
+  //     data: {
+  //       error: "The order has already been fulfilled, cannot refund.",
+  //     },
+  //   };
+  // }
 
   // check if tx is already refunded
   if (order.refunded) {
