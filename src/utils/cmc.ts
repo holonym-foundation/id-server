@@ -6,8 +6,10 @@ import {
   slugToID,
   idToSlug,
   xlmCMCID,
-  suiCMCID
+  suiCMCID,
+  idToPriceFallback
 } from "../constants/cmc.js";
+import logger from "./logger.js"
 import { 
   getPriceFromRedisCache, 
   setPriceInRedisCache,
@@ -43,7 +45,7 @@ export async function setMultiplePricesInCache(prices: Record<CryptoPriceSlug, n
 }
 
 /**
- * Get price of the crypto designated by the given CMC ID.
+ * Wrapper around the CMC price API.
  */
 export function getLatestCryptoPrice(id: number | string) {
   // @ts-ignore
@@ -51,12 +53,41 @@ export function getLatestCryptoPrice(id: number | string) {
     `https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id=${id}`,
     {
       headers: {
-        // "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
-        "X-CMC_PRO_API_KEY": "0020b880-fbe2-4ce6-8596-cc6ba66ad15e", // throw-away key
+        "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
         Accept: "application/json",
       },
     }
   );
+}
+
+/**
+ * Call the CMC API. If it fails for any reason, return a default, hardcoded price
+ * for the given cryptocurrency.
+ * @param id - CMC ID for the cryptocurrency
+ */
+export async function tryGetLatestCryptoPriceWithFallback(
+  id: number | string
+): Promise<number> {
+  let price = null
+  try {
+    const resp = await getLatestCryptoPrice(id)
+    price = resp?.data?.data?.[id]?.quote?.USD?.price;
+  } catch (err: any) {
+    logger.error(
+      { error: err?.response?.data ?? err.message },
+      "Error querying CMC API"
+    )
+  }
+
+  if (!price) {
+    price = idToPriceFallback[id as keyof typeof idToPriceFallback]
+  }
+
+  if (price === undefined || price === null) {
+    throw new Error(`Could not get price for cryptocurrency with CMC ID ${id}. CMC API call failed, and no fallback price was found.`)
+  }
+
+  return price
 }
 
 /**
@@ -68,8 +99,7 @@ export async function getPriceFromCacheOrAPI(id: keyof typeof idToSlug) {
   if (cachedPrice) {
     return cachedPrice;
   }
-  const resp = await getLatestCryptoPrice(id)
-  const price = resp?.data?.data?.[id]?.quote?.USD?.price;
+  const price = await tryGetLatestCryptoPriceWithFallback(id)
   await setPriceInCache(slug, price);
   return price;
 }
@@ -77,9 +107,7 @@ export async function getPriceFromCacheOrAPI(id: keyof typeof idToSlug) {
 // TODO: getBatchPricesFromCacheOrAPI
 
 export async function usdToETH(usdAmount: number) {
-  // TEMPORARILY HARD CODING CONVERSION RATE TO GET AROUND CMC RATE LIMITS
-  // const ethPrice = await getPriceFromCacheOrAPI(ethereumCMCID)
-  const ethPrice = 4339.08
+  const ethPrice = await getPriceFromCacheOrAPI(ethereumCMCID)
   const ethAmount = usdAmount / ethPrice;
   return ethAmount;
 }
@@ -91,8 +119,7 @@ export async function usdToFTM(usdAmount: number) {
 }
 
 export async function usdToAVAX(usdAmount: number) {
-  // const avalanchePrice = await getPriceFromCacheOrAPI(avalancheCMCID)
-  const avalanchePrice = 28
+  const avalanchePrice = await getPriceFromCacheOrAPI(avalancheCMCID)
   const ftmAmount = usdAmount / avalanchePrice;
   return ftmAmount;
 }
