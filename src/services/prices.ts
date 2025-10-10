@@ -90,6 +90,7 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     if (ids.length === 0) {
+      console.log("all fulfilled from cache");
       return res.status(200).json(cachedPrices);
     }
 
@@ -112,7 +113,7 @@ async function getPriceV2(req: Request, res: Response) {
       const slug = uniqueSlugs[i] as CryptoPriceSlug;
 
       // Ignore slugs whose prices were retrieved from cache
-      if (cachedPrices[slug]) continue;
+      // if (cachedPrices[slug]) continue;
 
       const id = slugToID[slug];
       newPrices[slug] = pricesById[String(id)];
@@ -123,6 +124,15 @@ async function getPriceV2(req: Request, res: Response) {
       await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
     }
 
+    // log to datadog, newPrices, pricesById
+    endpointLogger.info({
+      service: "crypto-prices",
+      action: "api-response",
+      newPrices,
+      pricesById,
+      tags: ["service:crypto-prices", "action:api-response"]
+    }, "CMC API response with fallback");
+
     // try getting the prices from the cache again
     const cachedPrices2 = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
     endpointLogger.info({
@@ -131,7 +141,7 @@ async function getPriceV2(req: Request, res: Response) {
       requestedSlugs: uniqueSlugs,
       cachedSlugs: Object.keys(cachedPrices2),
       tags: ["service:crypto-prices", "action:cache-lookup-result"]
-    }, "Retrieved values from Redis cache");
+    }, "CMC API cache lookup result");
 
     // Log successful API response
     endpointLogger.info({
