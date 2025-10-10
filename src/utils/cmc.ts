@@ -85,7 +85,11 @@ export async function tryGetLatestCryptoPriceWithFallback(
     }
   } catch (err: any) {
     logger.error(
-      { error: err?.response?.data ?? err.message },
+      { 
+        error: err,
+        status: err?.response?.status,
+        message: err?.response?.data ?? err.message 
+       },
       "Error querying CMC API"
     )
   }
