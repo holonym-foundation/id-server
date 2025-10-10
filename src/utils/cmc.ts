@@ -53,7 +53,8 @@ export function getLatestCryptoPrice(id: number | string) {
     `https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id=${id}`,
     {
       headers: {
-        "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
+        // "X-CMC_PRO_API_KEY": process.env.CMC_API_KEY,
+        "X-CMC_PRO_API_KEY": "0020b880-fbe2-4ce6-8596-cc6ba66ad15e",
         Accept: "application/json",
       },
     }

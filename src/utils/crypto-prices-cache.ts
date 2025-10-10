@@ -3,7 +3,7 @@ import { CryptoPriceSlug } from "./cmc.js";
 import { logger } from "./logger.js";
 
 const CACHE_PREFIX = "crypto_price:";
-const DEFAULT_TTL = 60; // 60 seconds in Redis
+const DEFAULT_TTL = 300; // 300 seconds in Redis
 
 interface CachedPrice {
   price: number;
