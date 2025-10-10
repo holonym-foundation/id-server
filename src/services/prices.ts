@@ -71,12 +71,12 @@ async function getPriceV2(req: Request, res: Response) {
     // Log cache hits
     if (cachedSlugs.length > 0) {
       endpointLogger.info({
-        service: "crypto-prices",
+        service: "cmc-api",
         action: "cache-hit",
         cachedSlugs,
         totalRequested: slugs.length,
-        cacheHitRate: (cachedSlugs.length / slugs.length * 100).toFixed(1) + "%",
-        tags: ["service:crypto-prices", "action:cache-hit"]
+        cacheHitRate: (cachedSlugs.length / uniqueSlugs.length * 100).toFixed(1) + "%",
+        tags: ["service:cmc-api", "action:cache-hit"]
       }, `CMC API from cache: ${cachedSlugs.join(", ")}`);
     }
 
@@ -96,13 +96,12 @@ async function getPriceV2(req: Request, res: Response) {
 
     // Log API request
     const requestedSlugs = uniqueSlugs.filter(s => !cachedSlugs.includes(s));
-    // const requestedSlugs = uniqueSlugs;
     endpointLogger.info({
-      service: "crypto-prices",
+      service: "cmc-api",
       action: "api-request",
       requestedSlugs,
       cmcIds: ids,
-      tags: ["service:crypto-prices", "action:api-request"]
+      tags: ["service:cmc-api", "action:api-request"]
     }, `CMC API request for: ${requestedSlugs.join(", ")}`);
 
     const pricesById = await tryGetLatestCryptoPriceWithFallback(ids);
@@ -113,7 +112,7 @@ async function getPriceV2(req: Request, res: Response) {
       const slug = uniqueSlugs[i] as CryptoPriceSlug;
 
       // Ignore slugs whose prices were retrieved from cache
-      // if (cachedPrices[slug]) continue;
+      if (cachedPrices[slug]) continue;
 
       const id = slugToID[slug];
       newPrices[slug] = pricesById[String(id)];
@@ -124,41 +123,22 @@ async function getPriceV2(req: Request, res: Response) {
       await setMultiplePricesInCache(newPrices as Record<CryptoPriceSlug, number>);
     }
 
-    // log to datadog, newPrices, pricesById
-    endpointLogger.info({
-      service: "crypto-prices",
-      action: "api-response",
-      newPrices,
-      pricesById,
-      tags: ["service:crypto-prices", "action:api-response"]
-    }, "CMC API response with fallback");
-
-    // try getting the prices from the cache again
-    const cachedPrices2 = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
-    endpointLogger.info({
-      service: "crypto-prices",
-      action: "cache-lookup-result",
-      requestedSlugs: uniqueSlugs,
-      cachedSlugs: Object.keys(cachedPrices2),
-      tags: ["service:crypto-prices", "action:cache-lookup-result"]
-    }, "CMC API cache lookup result");
-
     // Log successful API response
     endpointLogger.info({
-      service: "crypto-prices",
+      service: "cmc-api",
       action: "api-success",
       fetchedSlugs: Object.keys(newPrices),
-      tags: ["service:crypto-prices", "action:api-success"]
+      cachedSlugs: Object.keys(cachedPrices),
+      tags: ["service:cmc-api", "action:api-success"]
       }, `CMC API success request: ${Object.keys(newPrices).join(", ")}`);
 
     return res.status(200).json({ ...newPrices, ...cachedPrices });
-    //return res.status(200).json({ ...newPrices });
   } catch (err: any) {
     const isRateLimit = err.response?.status === 429 || err.response?.status === 403;
     
     if (isRateLimit) {
       endpointLogger.error({
-        service: "crypto-prices",
+        service: "cmc-api",
         action: "api-error",
         errorType: "rate-limit",
         statusCode: err.response?.status,
@@ -168,11 +148,11 @@ async function getPriceV2(req: Request, res: Response) {
           rateLimit: true
         },
         theUserIp: req.ip,
-        tags: ["service:crypto-prices", "action:api-error", "error:rate-limit"]
+        tags: ["service:cmc-api", "action:api-error", "error:rate-limit"]
       }, `CMC API RATE LIMIT ERROR from IP: ${req.ip}`);
     } else if (err.response) {
       endpointLogger.error({
-        service: "crypto-prices",
+        service: "cmc-api",
         action: "api-error",
         errorType: "api-error",
         statusCode: err.response?.status,
@@ -181,11 +161,11 @@ async function getPriceV2(req: Request, res: Response) {
           responseData: err.response?.data
         },
         theUserIp: req.ip,
-        tags: ["service:crypto-prices", "action:api-error", "error:api-error"]
+        tags: ["service:cmc-api", "action:api-error", "error:api-error"]
       }, `CMC API error from IP: ${req.ip}`);
     } else if (err.request) {
       endpointLogger.error({
-        service: "crypto-prices",
+        service: "cmc-api",
         action: "api-error",
         errorType: "network-error",
         error: {
@@ -193,18 +173,18 @@ async function getPriceV2(req: Request, res: Response) {
           requestData: err.request?.data
         },
         theUserIp: req.ip,
-        tags: ["service:crypto-prices", "action:api-error", "error:network-error"]
+        tags: ["service:cmc-api", "action:api-error", "error:network-error"]
       }, `CMC API network error from IP: ${req.ip}`);
     } else {
       endpointLogger.error({
-        service: "crypto-prices",
+        service: "cmc-api",
         action: "api-error",
         errorType: "unknown-error",
         error: {
           message: err.message
         },
         theUserIp: req.ip,
-        tags: ["service:crypto-prices", "action:api-error", "error:unknown-error"]
+        tags: ["service:cmc-api", "action:api-error", "error:unknown-error"]
       }, `CMC API unknown error from IP: ${req.ip}`);
     }
     return res.status(500).json({ error: "An unknown error occurred" });
