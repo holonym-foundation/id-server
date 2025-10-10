@@ -63,15 +63,26 @@ export function getLatestCryptoPrice(id: number | string) {
 /**
  * Call the CMC API. If it fails for any reason, return a default, hardcoded price
  * for the given cryptocurrency.
- * @param id - CMC ID for the cryptocurrency
+ * @param ids - Array of CMC IDs for the cryptocurrencies.
+ * @returns A record mapping each ID to its price.
  */
 export async function tryGetLatestCryptoPriceWithFallback(
-  id: number | string
-): Promise<number> {
-  let price = null
+  ids: (number | string)[]
+): Promise<Record<string, number>> {
+  const idString = ids.join(',');
+
+  let prices: Record<string, number> = {};
+
   try {
-    const resp = await getLatestCryptoPrice(id)
-    price = resp?.data?.data?.[id]?.quote?.USD?.price;
+    const resp = await getLatestCryptoPrice(idString);
+    const data = resp?.data?.data;
+
+    for (const id of ids) {
+      const price = data?.[id]?.quote?.USD?.price;
+      if (price) {
+        prices[String(id)] = price;
+      }
+    }
   } catch (err: any) {
     logger.error(
       { error: err?.response?.data ?? err.message },
@@ -79,15 +90,24 @@ export async function tryGetLatestCryptoPriceWithFallback(
     )
   }
 
-  if (!price) {
-    price = idToPriceFallback[id as keyof typeof idToPriceFallback]
+  // Fill in missing prices with fallbacks
+  for (const id of ids) {
+    if (!prices[String(id)]) {
+      const fallbackPrice = idToPriceFallback[id as keyof typeof idToPriceFallback];
+      if (fallbackPrice) {
+        prices[String(id)] = fallbackPrice;
+      }
+    }
   }
 
-  if (price === undefined || price === null) {
-    throw new Error(`Could not get price for cryptocurrency with CMC ID ${id}. CMC API call failed, and no fallback price was found.`)
+  // Check if any IDs are still missing prices
+  for (const id of ids) {
+    if (prices[String(id)] === undefined || prices[String(id)] === null) {
+      throw new Error(`Could not get price for cryptocurrency with CMC ID ${id}. CMC API call failed, and no fallback price was found.`);
+    }
   }
 
-  return price
+  return prices;
 }
 
 /**
@@ -99,7 +119,8 @@ export async function getPriceFromCacheOrAPI(id: keyof typeof idToSlug) {
   if (cachedPrice) {
     return cachedPrice;
   }
-  const price = await tryGetLatestCryptoPriceWithFallback(id)
+  const prices = await tryGetLatestCryptoPriceWithFallback([id])
+  const price = prices[String(id)];
   await setPriceInCache(slug, price);
   return price;
 }

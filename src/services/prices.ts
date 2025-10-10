@@ -6,7 +6,7 @@ import {
   setPriceInCache,
   getMultiplePricesFromCache,
   setMultiplePricesInCache,
-  getLatestCryptoPrice,
+  tryGetLatestCryptoPriceWithFallback,
   CryptoPriceSlug
 } from "../utils/cmc.js";
 import { slugToID } from "../constants/cmc.js";
@@ -27,8 +27,8 @@ async function getPrice(req: Request, res: Response) {
 
     const id = slugToID[slug as keyof typeof slugToID];
 
-    const resp = await getLatestCryptoPrice(id);
-    const price = resp?.data?.data?.[id]?.quote?.USD?.price;
+    const prices = await tryGetLatestCryptoPriceWithFallback([id]);
+    const price = prices[String(id)];
 
     return res.status(200).json({
       price,
@@ -113,7 +113,7 @@ async function getPriceV2(req: Request, res: Response) {
       tags: ["service:crypto-prices", "action:api-request"]
     }, `CMC API request for: ${requestedSlugs.join(", ")}`);
 
-    const resp = await getLatestCryptoPrice(ids.join(","));
+    const pricesById = await tryGetLatestCryptoPriceWithFallback(ids);
 
     const newPrices: Partial<Record<CryptoPriceSlug, number>> = {};
 
@@ -124,7 +124,7 @@ async function getPriceV2(req: Request, res: Response) {
       if (cachedPrices[slug]) continue;
 
       const id = slugToID[slug];
-      newPrices[slug] = Number(resp?.data?.data?.[id]?.quote?.USD?.price);
+      newPrices[slug] = pricesById[String(id)];
     }
 
     // Batch update cache for better performance
