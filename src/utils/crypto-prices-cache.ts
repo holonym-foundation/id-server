@@ -38,6 +38,14 @@ export async function getPriceFromRedisCache(slug: CryptoPriceSlug): Promise<num
 
     return cachedPrice.price;
   } catch (error) {
+    // add to datadog, error
+    logger.error({
+      service: "crypto-cache",
+      action: "cache-get-error",
+      error,
+      slug,
+      tags: ["service:crypto-cache", "action:cache-get-error"]
+    }, "Error getting price from Redis cache");
     console.error("Error getting price from Redis cache:", error);
     return null;
   }
@@ -60,6 +68,15 @@ export async function setPriceInRedisCache(slug: CryptoPriceSlug, price: number)
     await valkeyClient.customCommand(["SETEX", key, DEFAULT_TTL.toString(), JSON.stringify(cachedPrice)]);
   } catch (error) {
     console.error("Error setting price in Redis cache:", error);
+    // add to datadog, error
+    logger.error({
+      service: "crypto-cache",
+      action: "cache-set-error",
+      error,
+      slug,
+      price,
+      tags: ["service:crypto-cache", "action:cache-set-error"]
+    }, "Error setting price in Redis cache");
   }
 }
 
