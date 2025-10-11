@@ -59,7 +59,7 @@ async function rateLimitOccurrencesPerSecs(
 async function onfidoSDKTokenAndApplicantRateLimiter() {
   // onfido's rate limit is 400, so limiting early requests to 350 gives us
   // room to make API requests associated with later parts of the flow.
-  const maxOccurrences = 350
+  const maxOccurrences = 250
   const result = await rateLimitOccurrencesPerSecs(
     'onfido-api',
     maxOccurrences,
