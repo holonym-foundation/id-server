@@ -274,20 +274,35 @@ async function sendRefundTx(order, tx) {
 }
 
 async function getOrderByTxHash(req, res) {
-  const { txHash, chainId } = req.query;
+  const { txHash, chainId, platform } = req.query;
 
-  if (!txHash || !chainId) {
-    return res
-      .status(400)
-      .json({ error: "txHash and chainId are required" });
+  let chainPlatform = platform ?? 'evm'
+
+  if (!['evm', 'sui', 'stellar'].includes(chainPlatform)) {
+    return res.status(400).json({ error: `Invalid platform '${platform}'` })
   }
 
-  const order = await Order.findOne({ txHash, chainId });
+  if (chainPlatform === 'evm' && (!txHash || !chainId)) {
+    return res
+      .status(400)
+      .json({ error: "txHash and chainId are required for EVM orders" });
+  }
+
+  let order = null
+
+  if (chainPlatform === 'evm') {
+    order = await Order.findOne({ txHash, chainId });
+  } else if (chainPlatform === 'sui') {
+    order = await Order.findOne({ 'sui.txHash': txHash });
+  } else if (chainPlatform === 'stellar') {
+    order = await Order.findOne({ 'stellar.txHash': txHash });
+  }
 
   if (!order) {
-    return res.status(404).json({
-      error: `No order has the associated txHash (${txHash}) and chainId (${chainId})`
-    })
+    let msg = `No order has the associated txHash (${txHash})`
+    if (chainPlatform === 'evm') msg += ` and chainId (${chainId})`
+    else msg += ` on ${chainPlatform}`
+    return res.status(404).json({ error: msg })
   }
 
   return res.status(200).json({
