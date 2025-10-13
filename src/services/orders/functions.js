@@ -303,7 +303,9 @@ async function getOrderByTxHash(req, res) {
       refunded: order.refunded,
       refundTxHash: order.refundTxHash,
       // For Stellar payments
-      stellar: order.stellar
+      stellar: order.stellar,
+      // For Sui payments
+      sui: order.sui
     }
   })
 }
