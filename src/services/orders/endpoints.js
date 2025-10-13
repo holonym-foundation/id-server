@@ -12,8 +12,8 @@ import { idvSessionUSDPrice } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSuiOrderTransactionStatus } from "./sui/endpoints.js"
 import { getOrderTransactionStatus as getStellarOrderTransactionStatus } from "./stellar/endpoints.js"
-import { validateTx as validateSuiTx } from "./sui/functions.js"
-import { validateTx as validateStellarTx } from "./stellar/functions.js"
+import { validateTx as validateSuiTx, validateTxNoOrderId as validateSuiTxNoOrderId, sendRefundTx as sendSuiRefundTx, handleRefund as handleSuiRefund } from "./sui/functions.js"
+import { validateTx as validateStellarTx, validateTxNoOrderId as validateStellarTxNoOrderId, sendRefundTx as sendStellarRefundTx, handleRefund as handleStellarRefund } from "./stellar/functions.js"
 
 import { Order } from "../../init.js";
 import { orderCategoryEnums } from './constants.js';
@@ -278,16 +278,28 @@ async function setOrderFulfilled(req, res) {
 // SBT minting and a refund at the same time, to effectively not pay for the SBT.
 async function refundOrder(req, res) {
   try {
-    const { txHash, chainId } = req.body;
+    const { txHash, chainId, platform } = req.body;
 
-    if (!txHash || !chainId) {
-      return res
-        .status(400)
-        .json({ error: "txHash and chainId are required for refund" });
+    let chainPlatform = platform ?? 'evm'
+
+    if (!['evm', 'sui', 'stellar'].includes(chainPlatform)) {
+      return res.status(400).json({ error: `Invalid platform '${platform}'` })
     }
 
-    if (Number.isNaN(Number(chainId))) {
+    if (chainPlatform === 'evm' && (!txHash || !chainId)) {
+      return res
+        .status(400)
+        .json({ error: "txHash and chainId are required for EVM refund" });
+    }
+
+    if (chainPlatform === 'evm' && Number.isNaN(Number(chainId))) {
       return res.status(400).json({ error: "chainId must be a number" })
+    }
+
+    if (!txHash) {
+      return res
+        .status(400)
+        .json({ error: 'txHash is required' });
     }
 
     const apiKey = req.headers["x-api-key"];
@@ -297,38 +309,74 @@ async function refundOrder(req, res) {
     }
 
     // Query the DB for the order
-    const order = await Order.findOne({ txHash, chainId });
+    let order = null
+    if (chainPlatform === 'evm') {
+      order = await Order.findOne({ txHash, chainId });
+    } else if (chainPlatform === 'sui') {
+      order = await Order.findOne({ 'sui.txHash': txHash });
+    } else if (chainPlatform === 'stellar') {
+      order = await Order.findOne({ 'stellar.txHash': txHash });
+    }
 
     // If there's no order associated with this txHash, maybe the user sent
     // a valid transaction but it wasn't successfully associated with an order
     // (due to a malfunction of our server). In this case, we want to (a) create
     // an order for the valid transaction, then (b) refund it.
     if (!order) {
-      const validTx = await validateTxNoOrderId(
-        chainId,
-        txHash,
-        idvSessionUSDPrice
-      )
-
-      const order = new Order({
+      let validTx;
+      let newOrderData = {
         holoUserId: 'n/a',
         externalOrderId: 'n/a',
         category: orderCategoryEnums.MINT_ZERONYM_V3_SBT,
-        txHash,
-        chainId,
         // Mark the order as fulfilled so that this tx cannot be refunded again
         fulfilled: true,
         // Wait to set order.refunded until refund is successful
         refunded: false,
-      });
+      };
+
+      if (chainPlatform === 'evm') {
+        validTx = await validateTxNoOrderId(
+          chainId,
+          txHash,
+          idvSessionUSDPrice
+        );
+        newOrderData.txHash = txHash;
+        newOrderData.chainId = chainId;
+      } else if (chainPlatform === 'sui') {
+        validTx = await validateSuiTxNoOrderId(
+          txHash,
+          idvSessionUSDPrice
+        );
+        newOrderData.sui = { txHash };
+      } else if (chainPlatform === 'stellar') {
+        validTx = await validateStellarTxNoOrderId(
+          txHash,
+          idvSessionUSDPrice
+        );
+        newOrderData.stellar = { txHash };
+      }
+
+      const order = new Order(newOrderData);
       await order.save();
 
       let txReceipt;
       try {
-        txReceipt = await sendRefundTx(order, validTx);
+        if (chainPlatform === 'evm') {
+          txReceipt = await sendRefundTx(order, validTx);
+          order.refunded = true;
+          order.refundTxHash = txReceipt.transactionHash;
+        } else if (chainPlatform === 'sui') {
+          txReceipt = await sendSuiRefundTx(order, validTx);
+          order.refunded = true;
+          if (!order.sui) order.sui = {};
+          order.sui.refundTxHash = txReceipt.hash;
+        } else if (chainPlatform === 'stellar') {
+          txReceipt = await sendStellarRefundTx(order, validTx);
+          order.refunded = true;
+          if (!order.stellar) order.stellar = {};
+          order.stellar.refundTxHash = txReceipt.hash;
+        }
 
-        order.refunded = true
-        order.refundTxHash = txReceipt.transactionHash
         await order.save();
 
         ordersLogger.info(
@@ -352,20 +400,28 @@ async function refundOrder(req, res) {
 
     // Refund the order
     try {
-      // Validate TX (check tx.data, tx.to, tx.value, etc)
-      const validTx = await validateTx(
-        order.chainId,
-        order.txHash,
-        order.externalOrderId,
-        idvSessionUSDPrice
-      );
+      let response;
 
-      const response = await handleRefund(order);
+      if (chainPlatform === 'evm') {
+        response = await handleRefund(order);
+      } else if (chainPlatform === 'sui') {
+        response = await handleSuiRefund(order);
+      } else if (chainPlatform === 'stellar') {
+        response = await handleStellarRefund(order);
+      }
 
       if (response.status === 200) {
         // Update the order refundTxHash and refunded
-        order.refundTxHash = response.data.txReceipt.transactionHash;
         order.refunded = true;
+        if (chainPlatform === 'evm') {
+          order.refundTxHash = response.data.txHash || response.data.txReceipt?.transactionHash;
+        } else if (chainPlatform === 'sui') {
+          if (!order.sui) order.sui = {};
+          order.sui.refundTxHash = response.data.txHash;
+        } else if (chainPlatform === 'stellar') {
+          if (!order.stellar) order.stellar = {};
+          order.stellar.refundTxHash = response.data.txHash;
+        }
         await order.save();
 
         ordersLogger.info(

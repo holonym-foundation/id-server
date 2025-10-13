@@ -1,4 +1,6 @@
 import { ethers } from "ethers";
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction as SuiTransaction } from '@mysten/sui/transactions';
 
 import { usdToSui } from "../../../utils/cmc.js";
 import { suiToMist, mistToSui } from "../../../utils/sui.js";
@@ -26,13 +28,14 @@ const MEMO_EVENT_TYPE = `${PACKAGE_ID}::payment_memo::PaymentMemo`;
  */
 
 /**
- * Validates a Sui transaction for payment amount and memo
+ * Internal function to validate a Sui transaction
  * @param {string} txDigest
- * @param {string} externalOrderId
  * @param {number} desiredAmount - Expected transaction amount in USD
+ * @param {Object} options - Validation options
+ * @param {string} [options.externalOrderId] - External order ID to validate memo against
  * @returns {Promise<ValidationResult>} Validation result
  */
-async function validateTx(txDigest, externalOrderId, desiredAmount) {
+async function _validateSuiTx(txDigest, desiredAmount, options = {}) {
   try {
     // Fetch the transaction block with all details
     const txBlock = await suiClient.getTransactionBlock({
@@ -69,20 +72,22 @@ async function validateTx(txDigest, externalOrderId, desiredAmount) {
     // Extract sender
     validation.details.sender = txBlock.transaction?.data?.sender;
 
-    // 1. Validate the memo from events
-    const memoEvent = findMemoEvent(txBlock.events);
-    if (!memoEvent) {
-      validation.errors.push('No payment memo event found');
-    } else {
-      validation.details.actualMemo = memoEvent.parsedJson.memo;
-      validation.details.timestamp = memoEvent.parsedJson.timestamp;
-      console.log('memoEvent', JSON.stringify(memoEvent, null, 2))
-      
-      const externalOrderIdDigest = ethers.utils.keccak256(externalOrderId);
-      console.log('externalOrderIdDigest', externalOrderIdDigest)
-      console.log('externalOrderId', externalOrderId)
-      if (memoEvent.parsedJson.memo !== externalOrderIdDigest) {
-        validation.errors.push(`Memo mismatch. Expected: "${externalOrderIdDigest}", Got: "${memoEvent.parsedJson.memo}"`);
+    // 1. Validate the memo from events (if externalOrderId is provided)
+    if (options.externalOrderId) {
+      const memoEvent = findMemoEvent(txBlock.events);
+      if (!memoEvent) {
+        validation.errors.push('No payment memo event found');
+      } else {
+        validation.details.actualMemo = memoEvent.parsedJson.memo;
+        validation.details.timestamp = memoEvent.parsedJson.timestamp;
+        console.log('memoEvent', JSON.stringify(memoEvent, null, 2))
+
+        const externalOrderIdDigest = ethers.utils.keccak256(options.externalOrderId);
+        console.log('externalOrderIdDigest', externalOrderIdDigest)
+        console.log('externalOrderId', options.externalOrderId)
+        if (memoEvent.parsedJson.memo !== externalOrderIdDigest) {
+          validation.errors.push(`Memo mismatch. Expected: "${externalOrderIdDigest}", Got: "${memoEvent.parsedJson.memo}"`);
+        }
       }
     }
 
@@ -110,7 +115,7 @@ async function validateTx(txDigest, externalOrderId, desiredAmount) {
 
     // Set validation result
     validation.isValid = validation.errors.length === 0;
-    
+
     return validation;
 
   } catch (error) {
@@ -125,12 +130,33 @@ async function validateTx(txDigest, externalOrderId, desiredAmount) {
 }
 
 /**
+ * Validates a Sui transaction for payment amount and memo
+ * @param {string} txDigest
+ * @param {string} externalOrderId
+ * @param {number} desiredAmount - Expected transaction amount in USD
+ * @returns {Promise<ValidationResult>} Validation result
+ */
+async function validateTx(txDigest, externalOrderId, desiredAmount) {
+  return _validateSuiTx(txDigest, desiredAmount, { externalOrderId });
+}
+
+/**
+ * Validates a Sui transaction for payment amount (without checking memo/externalOrderId)
+ * @param {string} txDigest
+ * @param {number} desiredAmount - Expected transaction amount in USD
+ * @returns {Promise<ValidationResult>} Validation result
+ */
+async function validateTxNoOrderId(txDigest, desiredAmount) {
+  return _validateSuiTx(txDigest, desiredAmount);
+}
+
+/**
  * @param {Array} events - Transaction events array
  * @returns {Object|null} The memo event or null if not found
  */
 function findMemoEvent(events) {
   if (!events || !Array.isArray(events)) return null;
-  
+
   return events.find(event => event.type === MEMO_EVENT_TYPE);
 }
 
@@ -167,9 +193,116 @@ function extractPaymentDetails(balanceChanges, sender) {
   return null;
 }
 
+/**
+ * Validate the order and the transaction, and refund the order.
+ * @param {Object} order - The order to refund
+ * @returns {Promise<Object>} Response object with status and data
+ */
+async function handleRefund(order) {
+  const validationResult = await validateTx(
+    order.sui.txHash,
+    order.externalOrderId,
+    5 // idvSessionUSDPrice - we'll import this if needed
+  );
+
+  if (!validationResult.isValid) {
+    return {
+      status: 400,
+      data: {
+        error: `Transaction validation failed: ${validationResult.errors.join(', ')}`,
+      },
+    };
+  }
+
+  // check if tx is already fulfilled
+  if (order.fulfilled) {
+    return {
+      status: 400,
+      data: {
+        error: "The order has already been fulfilled, cannot refund.",
+      },
+    };
+  }
+
+  // check if tx is already refunded
+  if (order.refunded) {
+    return {
+      status: 400,
+      data: {
+        error: "The order has already been refunded, cannot refund again.",
+      },
+    };
+  }
+
+  const receipt = await sendRefundTx(order, validationResult);
+
+  return {
+    status: 200,
+    data: {
+      txHash: receipt.hash,
+    },
+  };
+}
+
+/**
+ * Refund the given order. DOES NOT VALIDATE the provided order or transaction.
+ * @param {Object} _order - The order to refund (unused, kept for API consistency)
+ * @param {Object} validationResult - The validation result from validateTx or validateTxNoOrderId
+ * @returns {Promise<Object>} Transaction receipt with hash property
+ */
+async function sendRefundTx(_order, validationResult) {
+  if (!validationResult.isValid) {
+    throw new Error(`Cannot refund: Transaction validation failed: ${validationResult.errors.join(', ')}`);
+  }
+
+  const amountInMist = validationResult.details.actualAmount;
+  const userAddress = validationResult.details.sender;
+
+  if (!amountInMist || !userAddress) {
+    throw new Error('Cannot refund: Missing amount or sender address from validation result');
+  }
+
+  // Initialize wallet from private key
+  const privateKeyBytes = new Uint8Array(
+    Buffer.from(process.env.SUI_PRIVATE_KEY.replace('0x', ''), 'hex')
+  );
+  const suiWallet = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+
+  // Check wallet balance
+  const suiBalanceResult = await suiClient.getBalance({
+    owner: suiWallet.toSuiAddress()
+  });
+  const walletBalanceInMist = Number(suiBalanceResult?.totalBalance);
+
+  if (walletBalanceInMist < amountInMist) {
+    throw new Error("Wallet does not have enough funds to refund.");
+  }
+
+  // Create and send refund transaction
+  const tx = new SuiTransaction();
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(amountInMist)]);
+  tx.transferObjects([coin], tx.pure.address(userAddress));
+
+  const result = await suiClient.signAndExecuteTransaction({
+    signer: suiWallet,
+    transaction: tx,
+    options: {
+      showEvents: true,
+      showEffects: true,
+    }
+  });
+
+  return {
+    hash: result.digest,
+  };
+}
+
 // Export functions for use in other modules
 export {
   validateTx,
+  validateTxNoOrderId,
+  handleRefund,
+  sendRefundTx,
   findMemoEvent,
   extractPaymentDetails,
   mistToSui
