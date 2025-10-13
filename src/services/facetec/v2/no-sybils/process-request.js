@@ -81,7 +81,7 @@ export async function processRequest(req, res) {
       });
     }
 
-    // TODO: SSE and IP-based rate limiting
+    // TODO: IP-based rate limiting
 
     const groupName = process.env.FACETEC_GROUP_NAME_FOR_BIOMETRICS;
 
