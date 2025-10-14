@@ -100,6 +100,12 @@ export type IIdvSessions = {
   onfido?: {
     checks?: Array<{
       check_id?: string;
+      status?: string; // 'in_progress', 'awaiting_applicant', 'complete', 'withdrawn', 'paused', 'reopened'
+      result?: string; // 'clear', 'consider'
+      report_ids?: string[];
+      completed_reports?: string[]; // Track which reports are completed
+      webhookReceivedAt?: Date; // When webhook last updated this check
+      lastPolledAt?: Date; // When we last polled Onfido API as fallback
       createdAt?: Date;
     }>;
   };

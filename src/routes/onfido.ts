@@ -4,6 +4,8 @@ import { v1CreateCheck, v2CreateCheck } from "../services/onfido/check.js";
 import { getCredentials } from "../services/onfido/credentials/v1.js";
 import { getCredentialsV2 } from "../services/onfido/credentials/v2.js";
 import { getCredentialsV3 } from "../services/onfido/credentials/v3.js";
+import { handleOnfidoWebhook } from "../services/onfido/webhooks.js";
+import { debugOnfidoSession } from "../services/onfido/debug.js";
 
 const router = express.Router();
 
@@ -15,5 +17,10 @@ router.post("/v2/check", v2CreateCheck);
 router.get("/credentials", getCredentials);
 router.get("/credentials/v2/:nullifier", getCredentialsV2);
 router.get("/credentials/v3/:_id/:nullifier", getCredentialsV3);
+
+router.post("/webhooks", handleOnfidoWebhook);
+
+// for debugging webhooks
+router.get("/webhooks/debug", debugOnfidoSession);
 
 export default router;
