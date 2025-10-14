@@ -2,6 +2,7 @@ import axios from "axios";
 import { DailyVerificationCount } from "../../init.js";
 import { sendEmail } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { ADMIN_EMAILS } from "../../utils/constants.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /onfido/applicant] ",
