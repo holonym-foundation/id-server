@@ -12,7 +12,7 @@ import {
 } from "../../../utils/onfido.js";
 import {
   findOneUserVerificationLast11Months
-} from "../../../utils/user-verifications.js"
+} from "../../../utils/user-verifications.js";
 import {
   validateCheck,
   validateReports,

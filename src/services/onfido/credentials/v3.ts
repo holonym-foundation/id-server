@@ -13,11 +13,11 @@ import {
 import {
   findOneUserVerificationLast11Months,
   findOneUserVerification11Months5Days
-} from "../../../utils/user-verifications.js"
+} from "../../../utils/user-verifications.js";
 import { getSessionById, failSession } from "../../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
-import { toAlreadyRegisteredStr } from "../../../utils/errors.js"
+import { toAlreadyRegisteredStr } from "../../../utils/errors.js";
 import { upgradeV3Logger, ValidationResult } from "./error-logger.js";
 import {
   validateCheck,

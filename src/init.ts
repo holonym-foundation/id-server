@@ -237,7 +237,7 @@ async function initializeMongoDb() {
   const EncryptedNullifiers = mongoose.model(
     "EncryptedNullifiers",
     EncryptedNullifiersSchema
-  )
+  );
 
   const NullifierAndCreds = mongoose.model(
     "NullifierAndCreds",
@@ -313,22 +313,22 @@ async function initializeMongoDb() {
   const DVCustomer = mongoose.model(
     "DirectVerificationCustomer",
     DirectVerificationSchemas.CustomerSchema
-  )
+  );
 
   const DVAPIKey = mongoose.model(
     "DirectVerificationAPIKey",
     DirectVerificationSchemas.APIKeySchema
-  )
+  );
 
   const DVOrder = mongoose.model(
     "DirectVerificationOrder",
     DirectVerificationSchemas.OrderSchema
-  )
+  );
 
   const DVSession = mongoose.model(
     "DirectVerificationSession",
     DirectVerificationSchemas.SessionSchema
-  )
+  );
 
   return {
     UserVerifications,
