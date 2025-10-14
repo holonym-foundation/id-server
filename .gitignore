@@ -17,3 +17,5 @@ global-bundle.pem
 FaceTecSDK-standard-server*
 
 pnpm-lock.yaml
+
+local-scripts

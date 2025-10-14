@@ -4,6 +4,15 @@ import { valkeyClient } from './valkey-glide.js'
 const TEN = 10
 const THIRTY_DAYS_IN_SECS = 60 * 60 * 24 * 30
 
+// Define tier limits mapping
+const TIER_LIMITS: Record<number, number> = {
+  0: 10,  // default/non-whitelisted
+  1: 12,  // tier 1 whitelisted
+  2: 15,
+  // Future tiers can be added here. If added, be sure to also update the db schema
+  // 3: 30,
+}
+
 /**
  * Simple IP-based rate limiter.
  * Limits the number of requests from IP to 10 requests per 30 days
@@ -12,6 +21,26 @@ const THIRTY_DAYS_IN_SECS = 60 * 60 * 24 * 30
 async function rateLimit(ip: string, subKey: string) {
   const key = `NUM_REQUESTS_BY_IP:${subKey}:${ip}`
   return rateLimitOccurrencesPerSecs(key, TEN, THIRTY_DAYS_IN_SECS)
+}
+
+/**
+ * Rate limiter that applies different limits based on tier.
+ *
+ * @param tier - The rate limit tier (0 for default, 1+ for whitelisted)
+ * @param ip - The IP address to rate limit
+ * @param subKey - The subkey for the rate limit (e.g., 'kyc-sessions')
+ * @returns Object with count, limitExceeded, and maxForTier
+ */
+async function rateLimitByTier(tier: 0 | 1 | 2, ip: string, subKey: string) {
+  const maxForTier = TIER_LIMITS[tier]
+  const key = `NUM_REQUESTS_BY_IP:${subKey}:${ip}`
+
+  const result = await rateLimitOccurrencesPerSecs(key, maxForTier, THIRTY_DAYS_IN_SECS)
+
+  return {
+    ...result,
+    maxForTier
+  }
 }
 
 /**
@@ -81,6 +110,7 @@ async function onfidoSDKTokenAndApplicantRateLimiter() {
 
 export {
   rateLimit,
+  rateLimitByTier,
   rateLimitOccurrencesPerSecs,
   onfidoSDKTokenAndApplicantRateLimiter
 }

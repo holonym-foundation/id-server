@@ -411,6 +411,12 @@ export type ICleanHandsSessionWhitelist = {
   reason: string;
 };
 
+export type ISessionRetryWhitelist = {
+  _id?: Types.ObjectId;
+  address: string;  // Blockchain address (e.g., Ethereum address)
+  tier: number;     // Rate limit tier (e.g., 1 = 15 requests, 2 = 20 requests, etc.)
+};
+
 // ---------------- MongoDB schemas for direct verification service ----------------
 
 export namespace DirectVerification {

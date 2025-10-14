@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import { OrderSchema } from "./schemas/orders.js";
 import {
   HumanIDPaymentGateWhitelistSchema,
-  CleanHandsSessionWhitelistSchema
+  CleanHandsSessionWhitelistSchema,
+  SessionRetryWhitelistSchema
 } from "./schemas/whitelists.js";
 import * as DirectVerification from "./schemas/direct-verification.js"
 import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
@@ -25,7 +26,8 @@ import {
   IDailyVerificationDeletions,
   IVerificationCollisionMetadata,
   IGalxeCampaignZeroUser,
-  ISilkPeanutCampaignsMetadata
+  ISilkPeanutCampaignsMetadata,
+  ISessionRetryWhitelist
 } from "./types.js"
 dotenv.config();
 
@@ -695,6 +697,7 @@ export {
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
+  SessionRetryWhitelistSchema,
   SanctionsResultSchema,
   DirectVerification,
 };
