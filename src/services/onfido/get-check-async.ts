@@ -24,19 +24,11 @@ function shouldCallCheckAPI(
   
   // If status is complete but missing result, call API
   if (session?.check_status === "complete" && !session?.check_result) {
-    checkAsyncLogger.info(
-      { check_id: session.check_id, status: session.check_status, hasResult: !!session?.check_result, hasReportIds: !!session?.check_report_ids },
-      "Status is complete but missing result or report_ids, calling API"
-    );
     return true;
   }
   
   // If no check_status field exists (ongoing check from old schema), always call API
   if (!session?.check_status) {
-    checkAsyncLogger.info(
-      { check_id: session.check_id },
-      "No check_status field found (ongoing check from old schema), calling API"
-    );
     return true;
   }
   
@@ -57,15 +49,19 @@ function shouldCallCheckAPI(
     }
     
     const checkAgeSeconds = (now.getTime() - mostRecentTime.getTime()) / 1000;
+    const checkCreatedAgeSeconds = (now.getTime() - checkCreatedAt.getTime()) / 1000;
     
-    if (checkAgeSeconds > 30) {
+    // If check was created more than 10 minutes (600 seconds) ago, use 70 second threshold, otherwise 35 seconds
+    const thresholdSeconds = checkCreatedAgeSeconds > 900 ? 70 : 35;
+    
+    if (checkAgeSeconds > thresholdSeconds) {
       return true;
     }
   }
   
   // If we have complete data with result, don't call API
   if (session?.check_status === "complete" && session?.check_result) {
-    checkAsyncLogger.info(
+    checkAsyncLogger.debug(
       { check_id: session.check_id, status: session.check_status },
       "Check is complete with all data, no API call needed"
     );
@@ -102,7 +98,7 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
     const shouldCall = shouldCallCheckAPI(session, createdAt);
     
     if (!shouldCall) {
-      checkAsyncLogger.info({ check_id, shouldCall }, "Onfido check data from cache");
+      // checkAsyncLogger.debug({ check_id, shouldCall }, "Onfido check data from cache");
 
       // Return cached data if we don't need to call API yet
       return {
@@ -114,7 +110,6 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
     }
 
     // Call Onfido API to get result and report_ids
-    checkAsyncLogger.info({ check_id, reason: "missing_data_or_old_check" }, "Calling Onfido check API to get complete check data");
     const apiResult = await callOnfidoCheckAPI(check_id);
     
     if (apiResult) {
@@ -184,11 +179,6 @@ async function updateCheckInDB(session: any, check_id: string, apiResult: any) {
     session.check_last_updated_at = new Date();
 
     await session.save();
-        
-    checkAsyncLogger.info(
-      { check_id, status: apiResult.status },
-      "Updated check data in database from API"
-    );
   } catch (err) {
     checkAsyncLogger.error(
       { error: err, check_id },
