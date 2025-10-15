@@ -40,7 +40,9 @@ function shouldCallCheckAPI(
     return true;
   }
   
-  // If status is not complete, check if the more recent of createdAt vs last_updated_at is older than 1 minute
+  // If status is not complete
+  // get the more recent of createdAt vs last_updated_at
+  // and check if it's older than 30 seconds
   if (session?.check_status !== "complete") {
     const now = new Date();
     
@@ -54,9 +56,9 @@ function shouldCallCheckAPI(
       }
     }
     
-    const checkAgeMinutes = (now.getTime() - mostRecentTime.getTime()) / (1000 * 60);
+    const checkAgeSeconds = (now.getTime() - mostRecentTime.getTime()) / 1000;
     
-    if (checkAgeMinutes > 1) {
+    if (checkAgeSeconds > 30) {
       return true;
     }
   }
