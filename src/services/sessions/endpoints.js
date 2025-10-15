@@ -823,6 +823,7 @@ async function createOnfidoCheckEndpoint(req, res) {
     const check = await createOnfidoCheck(session.applicant_id);
 
     session.check_id = check.id;
+    session.check_status = check.status;
     await session.save();
 
     createOnfidoCheckLogger.info(
