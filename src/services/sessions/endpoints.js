@@ -801,6 +801,8 @@ async function refreshOnfidoToken(req, res) {
     session.onfido_sdk_token = sdkTokenData.token;
     await session.save();
 
+    refreshOnfidoTokenLogger.info({ sessionId: _id }, `Refreshed Onfido token for ${_id}`);
+
     return res.status(200).json({
       sdk_token: sdkTokenData.token,
     });
