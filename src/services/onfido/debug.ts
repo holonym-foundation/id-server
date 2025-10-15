@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Session } from "../../init.js";
+import { getOnfidoCheckAsync } from "./get-check-async.js";
 
 /**
  * Debug endpoint to look up session details by check_id
@@ -16,6 +17,10 @@ export async function debugOnfidoSession(req: Request, res: Response) {
         example: "/onfido/webhooks/debug?check_id=abc123"
       });
     }
+
+    // also debug getOnfidoCheckAsync
+    const check = await getOnfidoCheckAsync(check_id as string);
+    console.log("check", check);
 
     let session = null;
 
