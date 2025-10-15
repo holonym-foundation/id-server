@@ -98,10 +98,10 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
 
     // Check if we need to call the check API
     const shouldCall = shouldCallCheckAPI(session, createdAt);
-
-    checkAsyncLogger.info({ check_id, shouldCall }, "Should call check API");
     
     if (!shouldCall) {
+      checkAsyncLogger.info({ check_id, shouldCall }, "Onfido check data from cache");
+
       // Return cached data if we don't need to call API yet
       return {
         id: check_id,
@@ -112,7 +112,7 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
     }
 
     // Call Onfido API to get result and report_ids
-    checkAsyncLogger.info({ check_id, reason: "missing_data_or_old_check" }, "Calling Onfido API to get complete check data");
+    checkAsyncLogger.info({ check_id, reason: "missing_data_or_old_check" }, "Calling Onfido check API to get complete check data");
     const apiResult = await callOnfidoCheckAPI(check_id);
     
     if (apiResult) {
