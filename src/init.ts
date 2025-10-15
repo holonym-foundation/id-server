@@ -29,13 +29,14 @@ import {
   OrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
+  SessionRetryWhitelistSchema,
   SanctionsResultSchema,
   DirectVerification as DirectVerificationSchemas
 } from "./schemas.js";
 import dotenv from "dotenv";
-import { 
-  IDailyVerificationCount, 
-  IDailyVerificationDeletions, 
+import {
+  IDailyVerificationCount,
+  IDailyVerificationDeletions,
   IUserVerifications,
   IIdvSessions,
   ISession,
@@ -55,6 +56,7 @@ import {
   IOrder,
   IHumanIDPaymentGateWhitelist,
   ICleanHandsSessionWhitelist,
+  ISessionRetryWhitelist,
   ISanctionsResult,
   DirectVerification
 } from "./types.js";
@@ -305,6 +307,13 @@ async function initializeMongoDb() {
     cleanHandsSessionWhitelistName
   );
 
+  const sessionRetryWhitelistName = "SessionRetryWhitelist"
+  const SessionRetryWhitelist = mongoose.model(
+    sessionRetryWhitelistName,
+    SessionRetryWhitelistSchema,
+    sessionRetryWhitelistName
+  );
+
   const SanctionsResult = mongoose.model(
     "SanctionsResult",
     SanctionsResultSchema,
@@ -353,6 +362,7 @@ async function initializeMongoDb() {
     Order,
     HumanIDPaymentGateWhitelist,
     CleanHandsSessionWhitelist,
+    SessionRetryWhitelist,
     SanctionsResult,
     DVCustomer,
     DVAPIKey,
@@ -385,6 +395,7 @@ let UserVerifications: Model<IUserVerifications>,
   Order: Model<IOrder>,
   HumanIDPaymentGateWhitelist: Model<IHumanIDPaymentGateWhitelist>,
   CleanHandsSessionWhitelist: Model<ICleanHandsSessionWhitelist>,
+  SessionRetryWhitelist: Model<ISessionRetryWhitelist>,
   SanctionsResult: Model<ISanctionsResult>,
   DVCustomer: Model<DirectVerification.ICustomer>,
   DVAPIKey: Model<DirectVerification.IAPIKey>,
@@ -415,6 +426,7 @@ initializeMongoDb().then((result) => {
     Order = result.Order;
     HumanIDPaymentGateWhitelist = result.HumanIDPaymentGateWhitelist;
     CleanHandsSessionWhitelist = result.CleanHandsSessionWhitelist;
+    SessionRetryWhitelist = result.SessionRetryWhitelist;
     SanctionsResult = result.SanctionsResult;
     DVCustomer = result.DVCustomer;
     DVAPIKey = result.DVAPIKey;
@@ -455,6 +467,7 @@ export {
   Order,
   HumanIDPaymentGateWhitelist,
   CleanHandsSessionWhitelist,
+  SessionRetryWhitelist,
   SanctionsResult,
   DVCustomer,
   DVAPIKey,

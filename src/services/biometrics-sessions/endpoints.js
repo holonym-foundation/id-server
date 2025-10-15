@@ -6,7 +6,8 @@ import {
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { v4 as uuidV4 } from "uuid";
-import { rateLimit } from "../../utils/rate-limiting.js";
+import { rateLimitByTier } from "../../utils/rate-limiting.js";
+import { getRateLimitTier } from "../../utils/whitelist.js";
 
 // const postSessionsLogger = logger.child({
 //   msgPrefix: "[POST /sessions] ",
@@ -26,21 +27,29 @@ const createBiometricsSessionLogger = logger.child({
  */
 async function postSessionV2(req, res) {
   try {
-    // Rate limiting
+    // Rate limiting with whitelist support
+    const address = req.body.address || null // Optional blockchain address for whitelist lookup
     const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress
     const rateLimitKey = 'biometrics-sessions'
-    const { count, limitExceeded } = await rateLimit(ip, rateLimitKey)
+
+    // Check whitelist tier based on blockchain address (defaults to 0 if address is null or not whitelisted)
+    const tier = await getRateLimitTier(address)
+
+    const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey)
+
     if (limitExceeded) {
       logger.warn(
         {
           ip,
+          address,
           rateLimitKey,
           count,
+          tier,
         },
         'Rate limit exceeded'
       )
       return res.status(429).json({
-        error: 'This device has reached the maximum number of allowed biometrics sessions (10). Please try again in 30 days.'
+        error: `This device has reached the maximum number of allowed biometrics sessions (${maxForTier}). Please try again in 30 days.`
       })
     }
 

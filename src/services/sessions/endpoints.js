@@ -22,10 +22,11 @@ import {
   handleIdvSessionCreation,
   campaignIdToWorkflowId,
 } from "./functions.js";
-import { rateLimit, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
+import { rateLimitByTier, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
 import { objectIdFiveDaysAgo } from "../../utils/utils.js";
+import { getRateLimitTier } from "../../utils/whitelist.js";
 
 const postSessionsV2Logger = logger.child({
   msgPrefix: "[POST /sessions/v2] ",
@@ -173,6 +174,7 @@ async function postSessionV2(req, res) {
   try {
     const sigDigest = req.body.sigDigest;
     const idvProvider = req.body.idvProvider;
+    const address = req.body.address || null // Optional blockchain address for whitelist lookup
     if (!sigDigest) {
       return res.status(400).json({ error: "sigDigest is required" });
     }
@@ -207,21 +209,28 @@ async function postSessionV2(req, res) {
       return res.status(500).json({ error: "Could not determine country from IP" });
     }
 
-    // Rate limiting
+    // Rate limiting with whitelist support
     const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress
     const rateLimitKey = 'kyc-sessions'
-    const { count, limitExceeded } = await rateLimit(ip, rateLimitKey)
+
+    // Check whitelist tier based on blockchain address (defaults to 0 if address is null or not whitelisted)
+    const tier = await getRateLimitTier(address)
+
+    const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey)
+
     if (limitExceeded) {
       postSessionsV2Logger.warn(
         {
           ip,
+          // address, // do not log user addresses
           rateLimitKey,
           count,
+          tier,
         },
         'Rate limit exceeded'
       )
       return res.status(429).json({
-        error: 'This device has reached the maximum number of allowed KYC sessions (10). Please try again in 30 days.'
+        error: `This device has reached the maximum number of allowed KYC sessions (${maxForTier}). Please try again in 30 days.`
       })
     }
 

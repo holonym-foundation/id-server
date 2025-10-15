@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import {
   IHumanIDPaymentGateWhitelist,
-  ICleanHandsSessionWhitelist
+  ICleanHandsSessionWhitelist,
+  ISessionRetryWhitelist
 } from "../types.js";
 dotenv.config();
 
@@ -24,4 +25,11 @@ export const CleanHandsSessionWhitelistSchema = new Schema<
 >({
   sessionId: { type: String, required: true },
   reason: { type: String, required: true }
+});
+
+export const SessionRetryWhitelistSchema = new Schema<
+  ISessionRetryWhitelist
+>({
+  address: { type: String, required: true },
+  tier: { type: Number, required: true, enum: [0, 1, 2] }
 });
