@@ -50,11 +50,6 @@ async function handleCheckCompleted(payload: any) {
     return;
   }
 
-  webhookLogger.info(
-    { checkId, status, result, reportIds },
-    "Processing check.completed webhook"
-  );
-
   try {
     // Find the session by check_id
     const session = await Session.findOne({
@@ -102,20 +97,19 @@ export async function handleOnfidoWebhook(req: Request, res: Response) {
     // Parse the JSON for processing
     const body = JSON.parse(rawBody);
 
-    // if (!signature) {
-    //   webhookLogger.warn("Webhook received without signature header");
-    //   return res.status(401).json({ error: "Missing signature" });
-    // }
+    if (!signature) {
+      webhookLogger.warn("Webhook received without signature header");
+      return res.status(401).json({ error: "Missing signature" });
+    }
 
     // Verify the webhook signature
-    // const webhookToken = process.env.ONFIDO_WEBHOOK_TOKEN;
-    // if (!webhookToken) {
-    //   webhookLogger.error("ONFIDO_WEBHOOK_TOKEN environment variable not set");
-    //   return res.status(500).json({ error: "Server configuration error" });
-    // }
+    const webhookToken = process.env.ONFIDO_WEBHOOK_TOKEN;
+    if (!webhookToken) {
+      webhookLogger.error("ONFIDO_WEBHOOK_TOKEN environment variable not set");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
 
-    // const isValid = verifyWebhookSignature(rawBody, signature, webhookToken);
-    const isValid = true;
+    const isValid = verifyWebhookSignature(rawBody, signature, webhookToken);
     if (!isValid) {
       webhookLogger.warn(
         { signature },
@@ -128,8 +122,6 @@ export async function handleOnfidoWebhook(req: Request, res: Response) {
     let eventType = body?.payload.resource_type;
     let action = body?.payload.action;
     let object = body?.payload.object;
-
-    webhookLogger.info({ eventType, action }, "Processing webhook event");
 
     // Handle different event types
     switch (eventType) {
