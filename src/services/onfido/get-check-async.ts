@@ -24,7 +24,7 @@ function shouldCallCheckAPI(
   
   // If status is complete but missing result, call API
   if (session?.check_status === "complete" && !session?.check_result) {
-    checkAsyncLogger.debug(
+    checkAsyncLogger.info(
       { check_id: session.check_id, status: session.check_status, hasResult: !!session?.check_result, hasReportIds: !!session?.check_report_ids },
       "Status is complete but missing result or report_ids, calling API"
     );
@@ -33,7 +33,7 @@ function shouldCallCheckAPI(
   
   // If no check_status field exists (ongoing check from old schema), always call API
   if (!session?.check_status) {
-    checkAsyncLogger.debug(
+    checkAsyncLogger.info(
       { check_id: session.check_id },
       "No check_status field found (ongoing check from old schema), calling API"
     );
@@ -63,7 +63,7 @@ function shouldCallCheckAPI(
   
   // If we have complete data with result, don't call API
   if (session?.check_status === "complete" && session?.check_result) {
-    checkAsyncLogger.debug(
+    checkAsyncLogger.info(
       { check_id: session.check_id, status: session.check_status },
       "Check is complete with all data, no API call needed"
     );
@@ -99,14 +99,10 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
     // Check if we need to call the check API
     const shouldCall = shouldCallCheckAPI(session, createdAt);
 
-    checkAsyncLogger.debug({ check_id, shouldCall }, "Should call check API");
+    checkAsyncLogger.info({ check_id, shouldCall }, "Should call check API");
     
     if (!shouldCall) {
       // Return cached data if we don't need to call API yet
-      checkAsyncLogger.debug(
-        { check_id, status: session.check_status },
-        "Returning cached check data (no API call needed)"
-      );
       return {
         id: check_id,
         status: session.check_status || "in_progress",
@@ -187,7 +183,7 @@ async function updateCheckInDB(session: any, check_id: string, apiResult: any) {
 
     await session.save();
         
-    checkAsyncLogger.debug(
+    checkAsyncLogger.info(
       { check_id, status: apiResult.status },
       "Updated check data in database from API"
     );
