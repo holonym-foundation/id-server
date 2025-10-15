@@ -32,6 +32,7 @@ import {
   updateSessionStatus,
 } from "./utils.js"
 import { ISession, OnfidoDocumentReport, OnfidoReport } from "../../../types.js";
+import { getOnfidoCheckAsync } from "../get-check-async.js";
 
 const endpointLoggerV3 = upgradeV3Logger(logger.child({
   msgPrefix: "[GET /onfido/v3/credentials] ",
@@ -92,7 +93,7 @@ export async function getCredentialsV3(req: Request, res: Response) {
     const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
     const checkIdFromNullifier = nullifierAndCreds?.idvSessionIds?.onfido?.check_id
     if (checkIdFromNullifier) {
-      const check = await getOnfidoCheck(checkIdFromNullifier);
+      const check = await getOnfidoCheckAsync(checkIdFromNullifier);
       
       if (!check) {
         endpointLoggerV3.failedToGetCheck(checkIdFromNullifier);
@@ -164,7 +165,7 @@ export async function getCredentialsV3(req: Request, res: Response) {
       });
     }
 
-    const check = await getOnfidoCheck(check_id);
+    const check = await getOnfidoCheckAsync(check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       endpointLoggerV3.checkValidationFailed(validationResultCheck as ValidationResult)

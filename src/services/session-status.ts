@@ -8,6 +8,7 @@ import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
 import { IIdvSessions } from "../types.js";
+import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
@@ -179,7 +180,7 @@ async function getOnfidoSessionStatus(
 
   const sessionsWithTimestamps = [];
   for (const sessionMetadata of sessions.onfido.checks) {
-    const check = await getOnfidoCheck(sessionMetadata.check_id as string);
+    const check = await getOnfidoCheckAsync(sessionMetadata.check_id as string);
     if (!check) continue;
     sessionsWithTimestamps.push({
       check,
@@ -376,7 +377,7 @@ async function getSessionStatusV2(req: Request, res: Response) {
         });
       }
 
-      const check = await getOnfidoCheck(session.check_id);
+      const check = await getOnfidoCheckAsync(session.check_id);
       if (!check) {
         return res.status(404).json({ error: "IDV Session not found" });
       }
