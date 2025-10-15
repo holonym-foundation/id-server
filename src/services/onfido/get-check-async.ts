@@ -98,6 +98,8 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
 
     // Check if we need to call the check API
     const shouldCall = shouldCallCheckAPI(session, createdAt);
+
+    checkAsyncLogger.debug({ check_id, shouldCall }, "Should call check API");
     
     if (!shouldCall) {
       // Return cached data if we don't need to call API yet
