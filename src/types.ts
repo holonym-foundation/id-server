@@ -103,7 +103,6 @@ export type IIdvSessions = {
       status?: string; // 'in_progress', 'awaiting_applicant', 'complete', 'withdrawn', 'paused', 'reopened'
       result?: string; // 'clear', 'consider'
       report_ids?: string[];
-      completed_reports?: string[]; // Track which reports are completed
       webhookReceivedAt?: Date; // When webhook last updated this check
       lastPolledAt?: Date; // When we last polled Onfido API as fallback
       createdAt?: Date;
@@ -134,6 +133,10 @@ export type ISession = {
   idenfyAuthToken?: string;
   applicant_id?: string;
   check_id?: string;
+  check_status?: string;
+  check_result?: string;
+  check_report_ids?: string[];
+  check_last_updated_at?: Date;
   onfido_sdk_token?: string;
   num_facetec_liveness_checks?: number;
   externalDatabaseRefID?: string;

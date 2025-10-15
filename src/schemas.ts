@@ -111,7 +111,6 @@ const idvSessionsSchema = new Schema<IIdvSessions>({
           status: String, // 'in_progress', 'awaiting_applicant', 'complete', 'withdrawn', 'paused', 'reopened'
           result: String, // 'clear', 'consider'
           report_ids: [String],
-          completed_reports: [String], // Track which reports are completed
           webhookReceivedAt: Date, // When webhook last updated this check
           lastPolledAt: Date, // When we last polled Onfido API as fallback
           createdAt: Date,
@@ -200,6 +199,22 @@ const sessionSchema = new Schema<ISession>({
   // Onfido check_id
   check_id: {
     type: String,
+    required: false,
+  },
+  check_status: {
+    type: String,
+    required: false,
+  },
+  check_result: {
+    type: String,
+    required: false,
+  },
+  check_report_ids: {
+    type: [String],
+    required: false,
+  },
+  check_last_updated_at: {
+    type: Date,
     required: false,
   },
   onfido_sdk_token: {
