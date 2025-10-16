@@ -38,7 +38,7 @@ router.get("/user-has-backedup-credentials", getUserHasBackedupCredentials);
 // ---- Clean hands ----
 router.post("/user-clean-hands-sessions", userCleanHandsSessions);
 router.post("/fail-clean-hands-session", failCleanHandsSession);
-router.post("/refund-failed-clean-hands-session", refundFailedCleanHandsSession);
-router.post("/whitelist-clean-hands-session", whitelistCleanHandsSession);
+// router.post("/refund-failed-clean-hands-session", refundFailedCleanHandsSession);
+// router.post("/whitelist-clean-hands-session", whitelistCleanHandsSession);
 
 export default router;
