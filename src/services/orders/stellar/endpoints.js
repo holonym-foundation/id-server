@@ -138,7 +138,7 @@ async function getOrderTransactionStatus(req, res) {
           fulfilled: order.fulfilled,
           txHash: order.stellar.txHash,
           refunded: order.refunded,
-          refundTxHash: order.refundTxHash,
+          stellar: order.stellar,
         }
       });
   } catch (error) {
