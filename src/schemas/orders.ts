@@ -51,3 +51,5 @@ export const OrderSchema = new Schema<IOrder>({
   // createdAt: { type: Date, default: Date.now },
   // updatedAt: { type: Date, default: Date.now },
 });
+OrderSchema.index({ externalOrderId: 1 })
+OrderSchema.index({ txHash: 1 })

@@ -197,14 +197,16 @@ async function initializeMongoDb() {
   }
 
   try {
-    const mongoConfig = {
+    const mongoProdConfig = {
       ssl: true,
       sslValidate: true,
       sslCA: `${__dirname}/../../${process.env.MONGO_CERT_FILE_NAME}`,
+      autoIndex: false
     };
+    const mongoDevConfig = { autoIndex: true }
     await mongoose.connect(
       process.env.MONGO_DB_CONNECTION_STR as string,
-      process.env.ENVIRONMENT == "dev" ? {} : mongoConfig
+      process.env.ENVIRONMENT == "dev" ? mongoDevConfig : mongoProdConfig
     );
     logger.info("Connected to MongoDB database.");
   } catch (err) {

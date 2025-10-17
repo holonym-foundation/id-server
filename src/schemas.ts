@@ -251,6 +251,7 @@ const sessionSchema = new Schema<ISession>({
     required: false,
   },
 });
+sessionSchema.index({ sigDigest: 1 })
 
 const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
   sigDigest: String,
@@ -323,6 +324,7 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
     required: false,
   }
 });
+amlChecksSessionSchema.index({ sigDigest: 1 })
 
 const biometricsSessionSchema = new Schema<IBiometricsSession>({
   sigDigest: String,
@@ -352,6 +354,7 @@ const biometricsSessionSchema = new Schema<IBiometricsSession>({
     required: false,
   },
 });
+biometricsSessionSchema.index({ sigDigest: 1 })
 
 // TODO: Do not use MongoDB for mutex purposes. Use something like Redis instead.
 const sessionRefundMutexSchema = new Schema<ISessionRefundMutex>({
@@ -420,6 +423,7 @@ const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
     required: false,
   },
 });
+userCredentialsV2Schema.index({ holoUserId: 1 })
 
 const userProofMetadataSchema = new Schema<IUserProofMetadata>({
   sigDigest: String,
