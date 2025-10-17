@@ -66,19 +66,19 @@ async function getPriceV2(req: Request, res: Response) {
 
     // Check cache first - batch operation for better performance
     const cachedPrices = await getMultiplePricesFromCache(uniqueSlugs as CryptoPriceSlug[]);
-    const cachedSlugs = Object.keys(cachedPrices);
     
     // Log cache hits
-    if (cachedSlugs.length > 0) {
-      endpointLogger.info({
-        service: "cmc-api",
-        action: "cache-hit",
-        cachedSlugs,
-        totalRequested: slugs.length,
-        cacheHitRate: (cachedSlugs.length / uniqueSlugs.length * 100).toFixed(1) + "%",
-        tags: ["service:cmc-api", "action:cache-hit"]
-      }, `CMC API from cache: ${cachedSlugs.join(", ")}`);
-    }
+    // const cachedSlugs = Object.keys(cachedPrices);
+    // if (cachedSlugs.length > 0) {
+    //   endpointLogger.info({
+    //     service: "cmc-api",
+    //     action: "cache-hit",
+    //     cachedSlugs,
+    //     totalRequested: slugs.length,
+    //     cacheHitRate: (cachedSlugs.length / uniqueSlugs.length * 100).toFixed(1) + "%",
+    //     tags: ["service:cmc-api", "action:cache-hit"]
+    //   }, `CMC API from cache: ${cachedSlugs.join(", ")}`);
+    // }
 
     // Get ids of cryptos whose prices weren't retrieved from cache
     const ids = [];
@@ -95,14 +95,14 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     // Log API request
-    const requestedSlugs = uniqueSlugs.filter(s => !cachedSlugs.includes(s));
-    endpointLogger.info({
-      service: "cmc-api",
-      action: "api-request",
-      requestedSlugs,
-      cmcIds: ids,
-      tags: ["service:cmc-api", "action:api-request"]
-    }, `CMC API request for: ${requestedSlugs.join(", ")}`);
+    // const requestedSlugs = uniqueSlugs.filter(s => !cachedSlugs.includes(s));
+    // endpointLogger.info({
+    //   service: "cmc-api",
+    //   action: "api-request",
+    //   requestedSlugs,
+    //   cmcIds: ids,
+    //   tags: ["service:cmc-api", "action:api-request"]
+    // }, `CMC API request for: ${requestedSlugs.join(", ")}`);
 
     const pricesById = await tryGetLatestCryptoPriceWithFallback(ids);
 
@@ -124,13 +124,13 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     // Log successful API response
-    endpointLogger.info({
-      service: "cmc-api",
-      action: "api-success",
-      fetchedSlugs: Object.keys(newPrices),
-      cachedSlugs: Object.keys(cachedPrices),
-      tags: ["service:cmc-api", "action:api-success"]
-      }, `CMC API success request: ${Object.keys(newPrices).join(", ")}`);
+    // endpointLogger.info({
+    //   service: "cmc-api",
+    //   action: "api-success",
+    //   fetchedSlugs: Object.keys(newPrices),
+    //   cachedSlugs: Object.keys(cachedPrices),
+    //   tags: ["service:cmc-api", "action:api-success"]
+    //   }, `CMC API success request: ${Object.keys(newPrices).join(", ")}`);
 
     return res.status(200).json({ ...newPrices, ...cachedPrices });
   } catch (err: any) {
