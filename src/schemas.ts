@@ -252,6 +252,7 @@ const sessionSchema = new Schema<ISession>({
   },
 });
 sessionSchema.index({ sigDigest: 1 })
+sessionSchema.index({ check_id: 1 })
 
 const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
   sigDigest: String,
