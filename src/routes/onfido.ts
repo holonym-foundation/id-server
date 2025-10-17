@@ -20,7 +20,7 @@ router.get("/credentials/v3/:_id/:nullifier", getCredentialsV3);
 
 router.post("/webhooks", handleOnfidoWebhook);
 
-// for debugging webhooks
-router.get("/webhooks/debug", debugOnfidoSession);
+// for debugging onfido session by check_id
+// router.get("/debug", debugOnfidoSession);
 
 export default router;

@@ -4,7 +4,7 @@ import { getOnfidoCheckAsync } from "./get-check-async.js";
 
 /**
  * Debug endpoint to look up session details by check_id
- * Usage: GET /onfido/webhooks/debug?check_id=xxx
+ * Usage: GET /onfido/debug?check_id=xxx
  */
 export async function debugOnfidoSession(req: Request, res: Response) {
   try {
