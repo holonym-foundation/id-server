@@ -23,13 +23,6 @@ export const holonymIssuers = [
   "0xb625e69ab86db23c23682875ba10fbc8f8756d16", // phone
   "0xfc8a8de489efefb91b42bb8b1a6014b71211a513", // phone dev
 ];
-export const relayerURL =
-  process.env.NODE_ENV === "development"
-    ? process.env.ON_LINUX === "true"
-      ? "http://172.17.0.1:6969"
-      : "http://host.docker.internal:6969"
-    : // : "https://relayer.holonym.id";
-      "https://relayer.holonym-internal.net";
 
 // We use this FaceTec server for silksecure.net. This server will be shut down eventually
 export const facetecServerBaseURL = 

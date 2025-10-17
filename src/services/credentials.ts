@@ -6,7 +6,7 @@ const { ethers } = ethersPkg;
 import { mongoose, UserCredentials, zokProvider } from "../init.js";
 import logger from "../utils/logger.js";
 import contractAddresses from "../constants/contractAddresses.js";
-import { holonymIssuers, relayerURL } from "../constants/misc.js";
+import { holonymIssuers } from "../constants/misc.js";
 
 const postEndpointLogger = logger.child({ msgPrefix: "[POST /credentials] " });
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /credentials] " });
@@ -17,55 +17,6 @@ async function validatePostCredentialsArgs(
   encryptedCredentials: string,
   encryptedSymmetricKey: string
 ) {
-  // if (!proof) {
-  //   return { error: "proof is empty" };
-  // }
-  // const root = ethers.BigNumber.from(proof?.inputs?.[0]).toString();
-
-  // try {
-  //   const rootIsRecent = (await axios.get(`${relayerURL}/v3/rootIsRecent/${root}`))
-  //     .data?.isRecent;
-  //   if (!rootIsRecent) {
-  //     return { error: "Root is not recent" };
-  //   }
-  // } catch (err) {
-  //   if (err.response) {
-  //     postEndpointLogger.error(
-  //       { error: err.response.data },
-  //       "An error occurred calling relayer"
-  //     );
-  //   } else if (err.request) {
-  //     postEndpointLogger.error(
-  //       { error: err.request.data },
-  //       "An error occurred calling relayer"
-  //     );
-  //   } else {
-  //     postEndpointLogger.error(
-  //       { error: err.message },
-  //       "An error occurred calling relayer"
-  //     );
-  //   }
-  //   return { error: "An error occurred while checking whether the root is recent" };
-  // }
-
-  // // Verify proof of knowledge of leaf preimage
-  // try {
-  //   const verifKeyResp = await axios.get(
-  //     "https://preproc-zkp.s3.us-east-2.amazonaws.com/knowledgeOfLeafPreimage.verifying.key"
-  //   );
-  //   const verificationKey = verifKeyResp.data;
-  //   const isVerified = zokProvider.verify(verificationKey, proof);
-  //   if (!isVerified) {
-  //     return { error: "Proof is invalid" };
-  //   }
-  // } catch (err) {
-  //   postEndpointLogger.error(
-  //     { error: err },
-  //     "An error occurred while verifying KOLP proof"
-  //   );
-  //   return { error: "An error occurred while verifying proof" };
-  // }
-
   // Require that args are present
   if (!sigDigest || sigDigest == "null" || sigDigest == "undefined") {
     return { error: "No sigDigest specified" };
