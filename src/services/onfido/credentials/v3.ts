@@ -89,6 +89,14 @@ export async function getCredentialsV3(req: Request, res: Response) {
       });
     }
 
+    endpointLoggerV3.info({
+      _id,
+      issuanceNullifier,
+      timestamp: new Date().toISOString(),
+      userAgent: req.get('User-Agent'),
+      ip: req.ip
+    }, `Onfido getCredentialsV3 endpoint called - ID: ${_id}`);
+    
     // First, check if the user is looking up their credentials using their nullifier
     const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
     const checkIdFromNullifier = nullifierAndCreds?.idvSessionIds?.onfido?.check_id
