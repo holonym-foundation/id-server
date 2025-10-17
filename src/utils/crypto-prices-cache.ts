@@ -102,14 +102,14 @@ export async function getMultiplePricesFromRedisCache(slugs: CryptoPriceSlug[]):
     const getPromises = keys.map(key => valkeyClient!.get(key));
     const cachedValues = await Promise.all(getPromises);
     
-    logger.info({
-      service: "cmc-api-cache",
-      action: "cache-lookup-result",
-      requestedSlugs: slugs,
-      cacheKeys: keys,
-      retrievedValues: cachedValues,
-      tags: ["service:cmc-api-cache", "action:cache-lookup-result"]
-    }, "CMC API cache lookup result");
+    // logger.info({
+    //   service: "cmc-api-cache",
+    //   action: "cache-lookup-result",
+    //   requestedSlugs: slugs,
+    //   cacheKeys: keys,
+    //   retrievedValues: cachedValues,
+    //   tags: ["service:cmc-api-cache", "action:cache-lookup-result"]
+    // }, "CMC API cache lookup result");
     
     const result: Partial<Record<CryptoPriceSlug, number>> = {};
     
@@ -177,14 +177,14 @@ export async function setMultiplePricesInRedisCache(prices: Record<CryptoPriceSl
     await Promise.all(promises);
     
     // Log successful cache setting
-    logger.info({
-      service: "cmc-api-cache",
-      action: "cache-set",
-      pricesToCache: Object.keys(prices),
-      priceCount: Object.keys(prices).length,
-      ttl: DEFAULT_TTL,
-      tags: ["service:cmc-api-cache", "action:cache-set"]
-    }, `CMC API cached ${Object.keys(prices).length} prices in Redis with ${DEFAULT_TTL}s TTL`);
+    // logger.info({
+    //   service: "cmc-api-cache",
+    //   action: "cache-set",
+    //   pricesToCache: Object.keys(prices),
+    //   priceCount: Object.keys(prices).length,
+    //   ttl: DEFAULT_TTL,
+    //   tags: ["service:cmc-api-cache", "action:cache-set"]
+    // }, `CMC API cached ${Object.keys(prices).length} prices in Redis with ${DEFAULT_TTL}s TTL`);
     
   } catch (error) {
     console.error("Error setting multiple prices in Redis cache:", error);
