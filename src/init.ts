@@ -211,7 +211,7 @@ async function initializeMongoDb() {
     logger.info("Connected to MongoDB database.");
   } catch (err) {
     logger.error({ error: err }, "Unable to connect to MongoDB database.");
-    return;
+    throw err
   }
   const UserVerifications = mongoose.model(
     "UserVerifications",
@@ -436,6 +436,7 @@ initializeMongoDb().then((result) => {
     DVSession = result.DVSession;
   } else {
     logger.error("MongoDB initialization failed");
+    throw new Error("MongoDB initialization failed");
   }
 });
 
