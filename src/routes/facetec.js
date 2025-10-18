@@ -39,8 +39,8 @@ router.post("/session-token", sessionToken);
 router.post("/v2/no-sybils/process-request", processRequest);
 router.get("/v2/no-sybils/credentials/:_id/:nullifier", getCredentials);
 
-// router.post("/v2/allow-sybils/process-request", processRequestAllowSybils);
-// router.get("/v2/allow-sybils/credentials/:_id/:nullifier", getCredentialsAllowSybils);
+router.post("/v2/allow-sybils/process-request", processRequestAllowSybils);
+router.get("/v2/allow-sybils/credentials/:_id/:nullifier", getCredentialsAllowSybils);
 
 
 export default router;
