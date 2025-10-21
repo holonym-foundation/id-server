@@ -10,13 +10,13 @@ export const companyENS = "holonym.eth";
 // Holonym multisig on Optimism
 export const companyAddressOP = "0x03627Ac5A08056B50084d8B9cf550EB74a13C78A";
 
-export const companyAddressFTM = "0xbe20d0A27B79BA2E53c9DF150BadAa21D4783D42";
+export const companyAddressFTM = "0x790f8e64449944fc81949a43b3450fd8c842dbed";
 
-export const companyAddressBase = "0xbe20d0A27B79BA2E53c9DF150BadAa21D4783D42";
+export const companyAddressBase = "0x790f8e64449944fc81949a43b3450fd8c842dbed";
 
-export const companyAddressAVAX = "0xbe20d0A27B79BA2E53c9DF150BadAa21D4783D42";
+export const companyAddressAVAX = "0x790f8e64449944fc81949a43b3450fd8c842dbed";
 
-export const companyAddressAurora = "0xbe20d0A27B79BA2E53c9DF150BadAa21D4783D42";
+export const companyAddressAurora = "0x790f8e64449944fc81949a43b3450fd8c842dbed";
 
 export const holonymIssuers = [
   "0x8281316ac1d51c94f2de77575301cef615adea84", // gov-id
