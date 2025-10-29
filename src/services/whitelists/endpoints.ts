@@ -9,8 +9,6 @@ async function getHumanIDPaymentgateWhitelistItem(req: Request, res: Response) {
       return res.status(400).json({ error: "Missing 'address' or 'chain' query param" });
     }
 
-    const items = await HumanIDPaymentGateWhitelist.find()
-    console.log('items', items) 
     const item = await HumanIDPaymentGateWhitelist.findOne({
       address: (address as string).toLowerCase(),
       chain
