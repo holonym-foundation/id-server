@@ -86,15 +86,18 @@ export async function processRequest(req, res) {
       }
     )
 
-    // Technically, a request to /process-request is not necessarily a liveness
-    // check. However, it seems that our biometrics flow makes only two calls
-    // to process-request, so it is close enough for rate limiting purposes. 
-    await BiometricsAllowSybilsSession.updateOne(
-      { _id: objectId },
-      { $inc: { num_facetec_liveness_checks: 1 } }
-    );
-    session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
-    await session.save();
+    // The /process-request endpoint handles multiple request types. (The FaceTec docs and code
+    // are unforunately not transparent about what it does exactly.) When it returns
+    // "livenessProven", we assume that a liveness check was performed; and in this case,
+    // we want to enroll the user.
+    if (data?.result?.livenessProven) {
+      await BiometricsAllowSybilsSession.updateOne(
+        { _id: objectId },
+        { $inc: { num_facetec_liveness_checks: 1 } }
+      );
+      session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+      await session.save();
+    }
 
     const data = resp.data;
     // console.log('/process-request response:', data);
