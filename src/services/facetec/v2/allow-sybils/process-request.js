@@ -86,6 +86,9 @@ export async function processRequest(req, res) {
       }
     )
 
+    const data = resp.data;
+    // console.log('/process-request response:', data);
+
     // The /process-request endpoint handles multiple request types. (The FaceTec docs and code
     // are unforunately not transparent about what it does exactly.) When it returns
     // "livenessProven", we assume that a liveness check was performed; and in this case,
@@ -98,9 +101,6 @@ export async function processRequest(req, res) {
       session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
       await session.save();
     }
-
-    const data = resp.data;
-    // console.log('/process-request response:', data);
 
     return res.status(200).json(data);
   } catch (err) {
