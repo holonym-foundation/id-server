@@ -63,9 +63,14 @@ export async function processRequest(req, res) {
       });
     }
 
-    // TODO: SSE and IP-based rate limiting
+    // TODO: IP-based rate limiting
 
     // const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
+
+    req.app.locals.sseManager.sendToClient(sid, {
+      status: "in_progress",
+      message: "liveness check: sending to server",
+    });
 
     // Process Request
     const resp = await axios.post(
@@ -100,6 +105,11 @@ export async function processRequest(req, res) {
       );
       session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
       await session.save();
+
+      req.app.locals.sseManager.sendToClient(sid, {
+        status: "completed",
+        message: "biometrics verification successful, proceed to mint SBT",
+      });
     }
 
     return res.status(200).json(data);
