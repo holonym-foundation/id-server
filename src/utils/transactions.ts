@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { ObjectId } from "mongodb";
+import { HydratedDocument } from "mongoose";
 import {
   sessionStatusEnum,
   idServerPaymentAddress,
@@ -13,6 +14,7 @@ import {
 } from "../constants/misc.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "./cmc.js";
 import { retry } from './utils.js';
+import { ISession } from "../types.js";
 
 function getTransaction(chainId: number, txHash: string) {
   if (chainId === 1) {
@@ -127,13 +129,7 @@ async function validateTxForSessionCreation(session: { _id: ObjectId }, chainId:
  * Sets session.refundTxHash and session.status after successful refund.
  */
 async function refundMintFeeOnChain(
-  session: {
-    chainId: number,
-    txHash: string,
-    refundTxHash: string,
-    status: string,
-    save: () => Promise<void>
-  },
+  session: HydratedDocument<ISession>,
   to: string
 ) {
   let provider;
@@ -155,7 +151,7 @@ async function refundMintFeeOnChain(
     throw new Error(`Session has an unsupported chain ID: ${session.chainId}`)
   }
 
-  const tx = await provider.getTransaction(session.txHash);
+  const tx = await provider.getTransaction(session.txHash!);
 
   if (!tx) {
     return {

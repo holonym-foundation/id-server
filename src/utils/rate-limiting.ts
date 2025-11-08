@@ -31,15 +31,22 @@ async function rateLimit(ip: string, subKey: string) {
  * @param subKey - The subkey for the rate limit (e.g., 'kyc-sessions')
  * @returns Object with count, limitExceeded, and maxForTier
  */
-async function rateLimitByTier(tier: 0 | 1 | 2, ip: string, subKey: string) {
-  const maxForTier = TIER_LIMITS[tier]
+async function rateLimitByTier(tier: number, ip: string, subKey: string) {
+  let limit = TIER_LIMITS[tier]
+
+  if (typeof limit != 'number') {
+    console.warn(`No rate limit configured for tier ${tier}. Using default rate limit`)
+    
+    limit = TIER_LIMITS[0]
+  }
+
   const key = `NUM_REQUESTS_BY_IP:${subKey}:${ip}`
 
-  const result = await rateLimitOccurrencesPerSecs(key, maxForTier, THIRTY_DAYS_IN_SECS)
+  const result = await rateLimitOccurrencesPerSecs(key, limit, THIRTY_DAYS_IN_SECS)
 
   return {
     ...result,
-    maxForTier
+    maxForTier: limit
   }
 }
 

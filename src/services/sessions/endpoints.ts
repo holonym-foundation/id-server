@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { ethers } from "ethers";
 import { Session, SessionRefundMutex } from "../../init.js";
@@ -112,7 +113,7 @@ const createOnfidoCheckLogger = logger.child({
 /**
  * Creates a session.
  */
-async function postSession(req, res) {
+async function postSession(req: Request, res: Response) {
   try {
     const sigDigest = req.body.sigDigest;
     const idvProvider = req.body.idvProvider;
@@ -141,6 +142,8 @@ async function postSession(req, res) {
 
     // Get country from IP address
     const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.get(
       `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
     );
@@ -161,7 +164,7 @@ async function postSession(req, res) {
     await session.save();
 
     return res.status(201).json({ session });
-  } catch (err) {
+  } catch (err: any) {
     console.log("POST /sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -170,7 +173,7 @@ async function postSession(req, res) {
 /**
  * Creates a session V2. Identical to v1, except it immediately sets session status to IN_PROGRESS.
  */
-async function postSessionV2(req, res) {
+async function postSessionV2(req: Request, res: Response) {
   try {
     const sigDigest = req.body.sigDigest;
     const idvProvider = req.body.idvProvider;
@@ -200,6 +203,8 @@ async function postSessionV2(req, res) {
 
     // Get country from IP address
     const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.get(
       `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
     );
@@ -210,7 +215,7 @@ async function postSessionV2(req, res) {
     }
 
     // Rate limiting with whitelist support
-    const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress
+    const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress) as string
     const rateLimitKey = 'kyc-sessions'
 
     // Check whitelist tier based on blockchain address (defaults to 0 if address is null or not whitelisted)
@@ -274,20 +279,21 @@ async function postSessionV2(req, res) {
     const _idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
 
     return res.status(201).json({ session });
-  } catch (err) {
+  } catch (err: any) {
     console.log("POST /sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
 
-async function createPayPalOrder(req, res) {
+async function createPayPalOrder(req: Request, res: Response) {
   try {
     const _id = req.params._id;
 
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     const accessToken = await getPayPalAccessToken();
 
@@ -325,12 +331,14 @@ async function createPayPalOrder(req, res) {
       },
     };
 
+    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(url, body, config);
 
     const order = resp.data;
 
     if ((session.payPal?.orders ?? []).length > 0) {
-      session.payPal.orders.push({ id: order.id, createdAt: new Date() });
+      session.payPal!.orders!.push({ id: order.id, createdAt: new Date() });
     } else {
       session.payPal = {
         orders: [{ id: order.id, createdAt: new Date() }],
@@ -340,7 +348,7 @@ async function createPayPalOrder(req, res) {
     await session.save();
 
     return res.status(201).json(order);
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       createPayPalOrderLogger.error(
         { error: err.response.data },
@@ -362,7 +370,7 @@ async function createPayPalOrder(req, res) {
  * Allows a user to create an IDV session by associating a transaction
  * with an id-server session.
  */
-async function createIdvSession(req, res) {
+async function createIdvSession(req: Request, res: Response) {
   try {
     const _id = req.params._id;
     const chainId = Number(req.body.chainId);
@@ -378,10 +386,11 @@ async function createIdvSession(req, res) {
       return res.status(400).json({ error: "txHash is required" });
     }
 
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (session.status !== sessionStatusEnum.NEEDS_PAYMENT) {
       return res.status(400).json({
@@ -427,7 +436,7 @@ async function createIdvSession(req, res) {
 
     const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       createIdvSessionLogger.error(
         { error: err.response.data },
@@ -451,7 +460,7 @@ async function createIdvSession(req, res) {
  * transaction with an id-server session or (b) associating a PayPal
  * order with an id-server session.
  */
-async function createIdvSessionV2(req, res) {
+async function createIdvSessionV2(req: Request, res: Response) {
   try {
     if (req.body.chainId && req.body.txHash) {
       return createIdvSession(req, res);
@@ -464,10 +473,11 @@ async function createIdvSessionV2(req, res) {
       return res.status(400).json({ error: "orderId is required" });
     }
 
-    const { session, error: getSessionError, objectId } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError, objectId } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (session.status !== sessionStatusEnum.NEEDS_PAYMENT) {
       return res.status(400).json({
@@ -534,7 +544,7 @@ async function createIdvSessionV2(req, res) {
 
     const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       createIdvSessionV2Logger.error(
         { error: err.response.data },
@@ -557,7 +567,7 @@ async function createIdvSessionV2(req, res) {
  * Create an IDV session. Use on-chain payment. Does not validate
  * transaction data. Requires admin API key.
  */
-async function createIdvSessionV3(req, res) {
+async function createIdvSessionV3(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -579,10 +589,11 @@ async function createIdvSessionV3(req, res) {
       return res.status(400).json({ error: "txHash is required" });
     }
 
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (session.status !== sessionStatusEnum.NEEDS_PAYMENT) {
       return res.status(400).json({
@@ -646,7 +657,7 @@ async function createIdvSessionV3(req, res) {
 
     const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
-  } catch (err) {
+  } catch (err: any) {
     console.log("err.message", err.message);
     if (err.response) {
       createIdvSessionLogger.error(
@@ -670,7 +681,7 @@ async function createIdvSessionV3(req, res) {
  * Set IDV Provider in the session document
  * 
  */
-async function setIdvProvider(req, res) {
+async function setIdvProvider(req: Request, res: Response) {
   try {
     const _id = req.params._id;
     const idvProvider = req.params.idvProvider;
@@ -680,10 +691,11 @@ async function setIdvProvider(req, res) {
       return res.status(400).json({ error: "IDV provider can only be either onfido or veriff" });
     }
 
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     // check the session idvProvider
     if (session.idvProvider === idvProvider) {
@@ -717,7 +729,7 @@ async function setIdvProvider(req, res) {
 
     const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       createIdvSessionLogger.error(
         { error: err.response.data },
@@ -736,17 +748,18 @@ async function setIdvProvider(req, res) {
   }
 }
 
-async function refreshOnfidoToken(req, res) {
+async function refreshOnfidoToken(req: Request, res: Response) {
   const _id = req.params._id;
 
   // Optional req body parameter. Either 'holonym' or 'silk'
   const referrer = req.body.referrer;
 
   try {
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (!session.applicant_id) {
       return res.status(400).json({ error: "Session is missing applicant_id" });
@@ -767,7 +780,7 @@ async function refreshOnfidoToken(req, res) {
       console.log("refreshOnfidoToken: workflowRun", workflowRun);
 
       session.onfido_sdk_token = workflowRun.sdk_token;
-      session.onfido_workflowId = workflowRun.workflow_id;
+      session.workflowId = workflowRun.workflow_id;
       await session.save();
 
       return res.status(200).json({
@@ -806,13 +819,13 @@ async function refreshOnfidoToken(req, res) {
     return res.status(200).json({
       sdk_token: sdkTokenData.token,
     });
-  } catch (err) {
+  } catch (err: any) {
     refreshOnfidoTokenLogger.error({ error: err }, "Error refreshing Onfido token");
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
 
-async function createOnfidoCheckEndpoint(req, res) {
+async function createOnfidoCheckEndpoint(req: Request, res: Response) {
   // NOTE:
   // From Onfido docs:
   // "If you're requesting multiple checks for the same individual, you
@@ -822,10 +835,11 @@ async function createOnfidoCheckEndpoint(req, res) {
   try {
     const _id = req.params._id;
 
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (!session.applicant_id) {
       return res.status(400).json({ error: "Session is missing applicant_id" });
@@ -846,7 +860,7 @@ async function createOnfidoCheckEndpoint(req, res) {
     return res.status(200).json({
       id: check.id,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       { error: err, applicant_id: req.body.applicant_id },
       "Error creating Onfido check"
@@ -858,15 +872,16 @@ async function createOnfidoCheckEndpoint(req, res) {
 /**
  * Allows a user to request a refund for a failed IDV session.
  */
-async function refund(req, res) {
+async function refund(req: Request, res: Response) {
   const _id = req.params._id;
   const to = req.body.to;
 
   try {
-    const { session, error: getSessionError, objectId } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError, objectId } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (!to || to.length !== 42) {
       return res.status(400).json({
@@ -907,11 +922,11 @@ async function refund(req, res) {
 
     // Return response
     return res.status(response.status).json(response.data);
-  } catch (err) {
+  } catch (err: any) {
     // Delete mutex. We have this here in case an unknown error occurs above.
     try {
       await SessionRefundMutex.deleteOne({ _id: new Object(_id) }).exec();
-    } catch (err) {
+    } catch (err: any) {
       console.log(
         "POST /sessions/:_id/idv-session/refund/v2: Error encountered while deleting mutex",
         err.message
@@ -934,7 +949,7 @@ async function refund(req, res) {
   }
 }
 
-async function refundV2(req, res) {
+async function refundV2(req: Request, res: Response) {
   if (req.body.to) {
     return refund(req, res);
   }
@@ -942,10 +957,11 @@ async function refundV2(req, res) {
   const _id = req.params._id;
 
   try {
-    const { session, error: getSessionError } = await getSessionById(_id);
+    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
     if (getSessionError) {
       return res.status(400).json({ error: getSessionError });
     }
+    const session = potentialSession!
 
     if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
       return res
@@ -980,11 +996,11 @@ async function refundV2(req, res) {
 
     // Return response
     return res.status(response.status).json(response.data);
-  } catch (err) {
+  } catch (err: any) {
     // Delete mutex. We have this here in case an unknown error occurs above.
     try {
       await SessionRefundMutex.deleteOne({ _id: _id }).exec();
-    } catch (err) {
+    } catch (err: any) {
       console.log(
         "POST /sessions/:_id/idv-session/refund: Error encountered while deleting mutex",
         err.message
@@ -1016,7 +1032,7 @@ async function refundV2(req, res) {
 /**
  * Get session(s) associated with sigDigest or id.
  */
-async function getSessions(req, res) {
+async function getSessions(req: Request, res: Response) {
   try {
     const sigDigest = req.query.sigDigest;
     const id = req.query.id;
@@ -1030,8 +1046,8 @@ async function getSessions(req, res) {
     if (id) {
       let objectId = null;
       try {
-        objectId = new ObjectId(id);
-      } catch (err) {
+        objectId = new ObjectId(id as string);
+      } catch (err: any) {
         return res.status(400).json({ error: "Invalid id" });
       }
       sessions = await Session.find({ _id: objectId }).exec();
@@ -1044,7 +1060,7 @@ async function getSessions(req, res) {
     }
 
     return res.status(200).json(sessions);
-  } catch (err) {
+  } catch (err: any) {
     console.log("GET /sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
