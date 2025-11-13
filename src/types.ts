@@ -549,6 +549,7 @@ export namespace DirectVerification {
 export type SandboxVsLiveKYCRouteHandlerConfig = {
   environment: "sandbox" | "live";
   onfidoAPIKey: string
+  onfidoWebhookToken: string
   SessionModel: Model<ISession | ISandboxSession>
   IDVSessionsModel: Model<IIdvSessions | ISandboxIdvSessions>
   NullifierAndCredsModel: Model<INullifierAndCreds | ISandboxNullifierAndCreds>

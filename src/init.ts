@@ -503,6 +503,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     return {
       environment: "sandbox",
       onfidoAPIKey: process.env.ONFIDO_SANDBOX_API_TOKEN!,
+      onfidoWebhookToken: process.env.ONFIDO_SANDBOX_WEBHOOK_TOKEN!,
       SessionModel: SandboxSession,
       IDVSessionsModel: SandboxIDVSessions,
       NullifierAndCredsModel: SandboxNullifierAndCreds,
@@ -516,6 +517,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
   return {
     environment: "live",
     onfidoAPIKey: process.env.ONFIDO_API_TOKEN!,
+    onfidoWebhookToken: process.env.ONFIDO_WEBHOOK_TOKEN!,
     SessionModel: Session,
     IDVSessionsModel: IDVSessions,
     NullifierAndCredsModel: NullifierAndCreds,
