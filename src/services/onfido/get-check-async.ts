@@ -1,6 +1,7 @@
 import axios from "axios";
-import { IDVSessions, Session } from "../../init.js";
+import { Model } from "mongoose";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { ISandboxSession, ISession } from "../../types.js";
 
 const checkAsyncLogger = logger.child({
   msgPrefix: "[Onfido Check Async] ",
@@ -79,10 +80,10 @@ function shouldCallCheckAPI(
  * 2. If status is not complete and check is older than 2 minutes -> call API
  * 3. Otherwise return cached data
  */
-export async function getOnfidoCheckAsync(onfidoAPIKey: string, check_id: string): Promise<any> {
+export async function getOnfidoCheckAsync(SessionModel: Model<ISession | ISandboxSession>, onfidoAPIKey: string, check_id: string): Promise<any> {
   try {
     // First, try to get check data from Session collection
-    const session = await Session.findOne({
+    const session = await SessionModel.findOne({
       check_id: check_id,
     }).exec();
 

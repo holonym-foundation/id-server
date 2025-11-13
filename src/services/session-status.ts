@@ -1,13 +1,13 @@
 import axios from "axios";
 import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
-import { HydratedDocument } from "mongoose";
+import { HydratedDocument, Model } from "mongoose";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
-import { IIdvSessions, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
+import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
@@ -170,6 +170,7 @@ function getOnfidoVerificationFailureReasons(reports: Array<Record<string, any>>
 }
 
 async function getOnfidoSessionStatus(
+  SessionModel: Model<ISession | ISandboxSession>,
   onfidoAPIKey: string,
   sessions: HydratedDocument<IIdvSessions> | null
 ) {
@@ -182,7 +183,7 @@ async function getOnfidoSessionStatus(
 
   const sessionsWithTimestamps = [];
   for (const sessionMetadata of sessions.onfido.checks) {
-    const check = await getOnfidoCheckAsync(onfidoAPIKey, sessionMetadata.check_id as string);
+    const check = await getOnfidoCheckAsync(SessionModel, onfidoAPIKey, sessionMetadata.check_id as string);
     if (!check) continue;
     sessionsWithTimestamps.push({
       check,
@@ -251,14 +252,14 @@ function createGetSessionStatus(config: SandboxVsLiveKYCRouteHandlerConfig) {
         } else if (provider === "onfido") {
           return res
             .status(200)
-            .json({ onfido: await getOnfidoSessionStatus(config.onfidoAPIKey, sessions) });
+            .json({ onfido: await getOnfidoSessionStatus(config.SessionModel, config.onfidoAPIKey, sessions) });
         }
       }
 
       const sessionStatuses = {
         veriff: await getVeriffSessionStatus(sessions),
         idenfy: await getIdenfySessionStatus(sessions),
-        onfido: await getOnfidoSessionStatus(config.onfidoAPIKey, sessions),
+        onfido: await getOnfidoSessionStatus(config.SessionModel, config.onfidoAPIKey, sessions),
       };
 
       // console.log("sessionStatuses", sessionStatuses);
@@ -394,7 +395,7 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           });
         }
 
-        const check = await getOnfidoCheckAsync(config.onfidoAPIKey, ambiguousSession.check_id);
+        const check = await getOnfidoCheckAsync(config.SessionModel, config.onfidoAPIKey, ambiguousSession.check_id);
         if (!check) {
           return res.status(404).json({ error: "IDV Session not found" });
         }

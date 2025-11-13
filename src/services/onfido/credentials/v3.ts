@@ -109,7 +109,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(config.NullifierAndCredsModel, issuanceNullifier);
       const checkIdFromNullifier = nullifierAndCreds?.idvSessionIds?.onfido?.check_id
       if (checkIdFromNullifier) {
-        const check = await getOnfidoCheckAsync(config.onfidoAPIKey, checkIdFromNullifier);
+        const check = await getOnfidoCheckAsync(config.SessionModel, config.onfidoAPIKey, checkIdFromNullifier);
         
         if (!check) {
           endpointLoggerV3.failedToGetCheck(checkIdFromNullifier);
@@ -183,7 +183,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
-      const check = await getOnfidoCheckAsync(config.onfidoAPIKey, check_id);
+      const check = await getOnfidoCheckAsync(config.SessionModel, config.onfidoAPIKey, check_id);
       const validationResultCheck = validateCheck(check);
       if (!validationResultCheck.success && !validationResultCheck.hasReports) {
         endpointLoggerV3.checkValidationFailed(validationResultCheck as ValidationResult)
