@@ -109,6 +109,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(config.NullifierAndCredsModel, issuanceNullifier);
       const checkIdFromNullifier = nullifierAndCreds?.idvSessionIds?.onfido?.check_id
       if (checkIdFromNullifier) {
+        if (config.environment === 'sandbox') endpointLoggerV3.debug({ checkIdFromNullifier }, "Looking up check from nullifier branch");
+
         const check = await getOnfidoCheckAsync(config.SessionModel, config.onfidoAPIKey, checkIdFromNullifier);
         
         if (!check) {
@@ -170,6 +172,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         return res.status(200).json(response);
       }
 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ check_id: session.check_id }, "Looking up check from session branch");
+
       const check_id = session.check_id;
       if (!check_id) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in session" });
@@ -183,8 +187,11 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ check_id }, "Getting check from Onfido");
+
       const check = await getOnfidoCheckAsync(config.SessionModel, config.onfidoAPIKey, check_id);
       const validationResultCheck = validateCheck(check);
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ validationResultCheck }, "Validation result check");
       if (!validationResultCheck.success && !validationResultCheck.hasReports) {
         endpointLoggerV3.checkValidationFailed(validationResultCheck as ValidationResult)
         await failSession(session, validationResultCheck.error as string)
@@ -194,7 +201,10 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ check_id }, "Getting reports from Onfido");
+
       const reports = await getOnfidoReports(config.onfidoAPIKey, check.report_ids) as Array<OnfidoReport>;
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ reports }, "Reports");
       if (!validationResultCheck.success && (!reports || reports.length == 0)) {
         endpointLoggerV3.noReportsFound(check_id, check.report_ids)
 
@@ -202,6 +212,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         return res.status(400).json({ error: "No reports found" });
       }
       const reportsValidation = validateReports(reports, session);
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ reportsValidation }, "Reports validation result");
       if (validationResultCheck.error || reportsValidation.error) {
         const userErrorMessage = onfidoValidationToUserErrorMessage(
           reportsValidation,
@@ -219,7 +230,10 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         };
       }
 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ check_id }, "Getting document report from Onfido");
+
       const documentReport = reports.find((report) => report.name == "document") as OnfidoDocumentReport; 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ documentReport }, "Document report");
       if (!documentReport) {
         endpointLoggerV3.noDocumentReport(reports)
         return res.status(400).json({
@@ -243,13 +257,17 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
           await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
           return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
         }
+      } else {
+        if (config.environment === 'sandbox') endpointLoggerV3.debug({ uuidOld, uuidNew }, "Skipping user registration check in sandbox environment");
       }
 
       // Store UUID for Sybil resistance
       const dbResponse = await saveUserToDb(uuidNew, check_id);
       if (dbResponse.error) return res.status(400).json(dbResponse);
 
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ uuidNew, check_id }, "Extracting creds");
       const creds = extractCreds(documentReport);
+      if (config.environment === 'sandbox') endpointLoggerV3.debug({ creds }, "Creds extracted");
       const response = issuev2KYC(config.issuerPrivateKey, issuanceNullifier, creds);
       response.metadata = creds;
 
