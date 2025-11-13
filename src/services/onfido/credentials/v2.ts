@@ -27,6 +27,9 @@ import {
   updateSessionStatus,
 } from "./utils.js"
 import { OnfidoDocumentReport, OnfidoReport } from "../../../types.js";
+import { getRouteHandlerConfig } from "../../../init.js";
+
+const prodConfig = getRouteHandlerConfig("live")
 
 const endpointLogger = logger.child({
   msgPrefix: "[GET /onfido/credentials] ",
@@ -49,7 +52,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
 
     if (process.env.ENVIRONMENT == "dev") {
       const creds = newDummyUserCreds;
-      const response = issuev2KYC(issuanceNullifier, creds);
+      const response = issuev2KYC(prodConfig.issuerPrivateKey, issuanceNullifier, creds);
       response.metadata = newDummyUserCreds;
       return res.status(200).json(response);
     }
@@ -90,7 +93,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
       };
     }
 
-    const check = await getOnfidoCheck(check_id);
+    const check = await getOnfidoCheck(prodConfig.onfidoAPIKey, check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       endpointLogger.error(
@@ -101,6 +104,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
         }
       );
       await updateSessionStatus(
+        prodConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         validationResultCheck.error
@@ -112,7 +116,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
       };
     }
 
-    const reports = await getOnfidoReports(check.report_ids);
+    const reports = await getOnfidoReports(prodConfig.onfidoAPIKey, check.report_ids);
     if (!validationResultCheck.success && (!reports || reports.length == 0)) {
       endpointLogger.error(
         {
@@ -124,6 +128,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
       );
 
       await updateSessionStatus(
+        prodConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         "No reports found"
@@ -152,6 +157,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
       );
 
       await updateSessionStatus(
+        prodConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         userErrorMessage
@@ -198,6 +204,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
         "User has already registered"
       );
       await updateSessionStatus(
+        prodConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         `User has already registered. User ID: ${user._id}`
@@ -213,14 +220,14 @@ export async function getCredentialsV2(req: Request, res: Response) {
 
     const creds = extractCreds(documentReport);
 
-    const response = issuev2KYC(issuanceNullifier, creds);
+    const response = issuev2KYC(prodConfig.issuerPrivateKey, issuanceNullifier, creds);
     response.metadata = creds;
 
-    await deleteOnfidoApplicant(check.applicant_id);
+    await deleteOnfidoApplicant(prodConfig.onfidoAPIKey, check.applicant_id);
 
     endpointLogger.info({ uuidV2: uuidNew, check_id }, "Issuing credentials");
 
-    await updateSessionStatus(check_id, sessionStatusEnum.ISSUED);
+    await updateSessionStatus(prodConfig.SessionModel, check_id, sessionStatusEnum.ISSUED);
 
     return res.status(200).json(response);
   } catch (err: any) {

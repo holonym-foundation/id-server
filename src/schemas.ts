@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { OrderSchema } from "./schemas/orders.js";
+import { OrderSchema, SandboxOrderSchema } from "./schemas/orders.js";
 import {
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
@@ -11,17 +11,22 @@ import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 import {
   IUserVerifications,
   IIdvSessions,
+  ISandboxIdvSessions,
   ISession,
+  ISandboxSession,
   IAmlChecksSession,
   IBiometricsSession,
   ISessionRefundMutex,
   IUserCredentials,
   IUserCredentialsV2,
+  ISandboxUserCredentialsV2,
   IUserProofMetadata,
   INullifierAndCreds,
+  ISandboxNullifierAndCreds,
   ICleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
   IEncryptedNullifiers,
+  ISandboxEncryptedNullifiers,
   IDailyVerificationCount,
   IDailyVerificationDeletions,
   IVerificationCollisionMetadata,
@@ -105,6 +110,26 @@ const idvSessionsSchema = new Schema<IIdvSessions>({
     },
     required: false,
   },
+  onfido: {
+    type: {
+      checks: [
+        {
+          check_id: String,
+          status: String, // 'in_progress', 'awaiting_applicant', 'complete', 'withdrawn', 'paused', 'reopened'
+          result: String, // 'clear', 'consider'
+          report_ids: [String],
+          webhookReceivedAt: Date, // When webhook last updated this check
+          lastPolledAt: Date, // When we last polled Onfido API as fallback
+          createdAt: Date,
+        },
+      ],
+    },
+    required: false,
+  },
+});
+
+const sandboxIdvSessionsSchema = new Schema<ISandboxIdvSessions>({
+  sigDigest: String,
   onfido: {
     type: {
       checks: [
@@ -253,6 +278,75 @@ const sessionSchema = new Schema<ISession>({
 });
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
+
+const sandboxSessionSchema = new Schema<ISandboxSession>({
+  sigDigest: String,
+  idvProvider: String,
+  status: String,
+  deletedFromIDVProvider: {
+    type: Boolean,
+    required: false,
+  },
+  txHash: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  refundTxHash: {
+    type: String,
+    required: false,
+  },
+  applicant_id: {
+    type: String,
+    required: false,
+  },
+  check_id: {
+    type: String,
+    required: false,
+  },
+  check_status: {
+    type: String,
+    required: false,
+  },
+  check_result: {
+    type: String,
+    required: false,
+  },
+  check_report_ids: {
+    type: [String],
+    required: false,
+  },
+  check_last_updated_at: {
+    type: Date,
+    required: false,
+  },
+  onfido_sdk_token: {
+    type: String,
+    required: false,
+  },
+  verificationFailureReason: {
+    type: String,
+    required: false,
+  },
+  ipCountry: {
+    type: String,
+    required: false,
+  },
+  campaignId: {
+    type: String,
+    required: false,
+  },
+  workflowId: {
+    type: String,
+    required: false,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// sandboxSessionSchema.index({ sigDigest: 1 })
+// sandboxSessionSchema.index({ check_id: 1 })
 
 const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
   sigDigest: String,
@@ -426,6 +520,47 @@ const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
 });
 userCredentialsV2Schema.index({ holoUserId: 1 })
 
+const sandboxUserCredentialsV2Schema = new Schema<ISandboxUserCredentialsV2>({
+  holoUserId: String,
+  encryptedPhoneCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedGovIdCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedCleanHandsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedBiometricsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedBiometricsAllowSybilsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// sandboxUserCredentialsV2Schema.index({ holoUserId: 1 })
+
 const userProofMetadataSchema = new Schema<IUserProofMetadata>({
   sigDigest: String,
   encryptedProofMetadata: {
@@ -465,6 +600,26 @@ const NullifierAndCredsSchema = new Schema<INullifierAndCreds>({
       facetec: {
         type: {
           externalDatabaseRefID: String,
+        },
+        required: false,
+      },
+    },
+    required: false,
+  },
+  uuidV2: {
+    type: String,
+    required: false,
+  },
+});
+
+const SandboxNullifierAndCredsSchema = new Schema<ISandboxNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  idvSessionIds: {
+    type: {
+      onfido: {
+        type: {
+          check_id: String,
         },
         required: false,
       },
@@ -528,6 +683,61 @@ const BiometricsNullifierAndCredsSchema = new Schema<IBiometricsNullifierAndCred
 // To allow the user to persist a nullifier so that they can request their
 // signed credentials in more than one browser session.
 const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
+  holoUserId: String,
+  govId: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      // The date the nullifier was created. When the user's credentials
+      // expire and the user needs to reverify, they will need to replace
+      // their old encryptedNullifier with a new one and update the createdAt value.
+      createdAt: Date,
+    },
+    required: false,
+  },
+  phone: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
+  cleanHands: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
+  biometrics: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },      
+});
+
+const sandboxEncryptedNullifiersSchema = new Schema<ISandboxEncryptedNullifiers>({
   holoUserId: String,
   govId: {
     type: {
@@ -698,13 +908,18 @@ const SilkPeanutCampaignsMetadataSchema = new Schema<ISilkPeanutCampaignsMetadat
 export {
   userVerificationsSchema,
   idvSessionsSchema,
+  sandboxIdvSessionsSchema,
   sessionSchema,
+  sandboxSessionSchema,
   sessionRefundMutexSchema,
   userCredentialsSchema,
   userCredentialsV2Schema,
+  sandboxUserCredentialsV2Schema,
   userProofMetadataSchema,
   EncryptedNullifiersSchema,
+  sandboxEncryptedNullifiersSchema,
   NullifierAndCredsSchema,
+  SandboxNullifierAndCredsSchema,
   CleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
   DailyVerificationCountSchema,
@@ -715,6 +930,7 @@ export {
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
+  SandboxOrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
   SessionRetryWhitelistSchema,

@@ -1,6 +1,7 @@
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import { poseidon } from "circomlibjs-old";
+import { Model } from "mongoose";
 import {
   Session,
   UserVerifications,
@@ -16,7 +17,7 @@ import {
   countryCodeToPrime,
 } from "../../../utils/constants.js";
 import { desiredOnfidoReports } from "../../../constants/onfido.js";
-import { OnfidoCheck, OnfidoReport, OnfidoDocumentReport, ISession } from "../../../types.js";
+import { OnfidoCheck, OnfidoReport, OnfidoDocumentReport, ISession, ISandboxSession } from "../../../types.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[GET /onfido/credentials] ",
@@ -480,11 +481,11 @@ export async function getSession(check_id: string) {
   return metaSession;
 }
 
-export async function updateSessionStatus(check_id: string, status: string, failureReason?: string) {
+export async function updateSessionStatus(SessionModel: Model<ISession | ISandboxSession>, check_id: string, status: string, failureReason?: string) {
   try {
     // TODO: Once pay-first frontend is pushed, remove the try-catch. We want
     // this endpoint to fail if we can't update the session.
-    const metaSession = await Session.findOne({ check_id }).exec();
+    const metaSession = await SessionModel.findOne({ check_id }).exec();
     if (!metaSession) throw new Error("Session not found");
     metaSession.status = status;
     if (failureReason) metaSession.verificationFailureReason = failureReason;

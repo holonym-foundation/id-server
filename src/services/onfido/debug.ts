@@ -18,8 +18,10 @@ export async function debugOnfidoSession(req: Request, res: Response) {
       });
     }
 
+    const onfidoAPIKey = process.env.ONFIDO_API_TOKEN!;
+
     // also debug getOnfidoCheckAsync
-    const check = await getOnfidoCheckAsync(check_id as string);
+    const check = await getOnfidoCheckAsync(onfidoAPIKey, check_id as string);
     console.log("check", check);
 
     let session = null;

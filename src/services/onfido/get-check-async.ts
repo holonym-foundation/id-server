@@ -79,7 +79,7 @@ function shouldCallCheckAPI(
  * 2. If status is not complete and check is older than 2 minutes -> call API
  * 3. Otherwise return cached data
  */
-export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
+export async function getOnfidoCheckAsync(onfidoAPIKey: string, check_id: string): Promise<any> {
   try {
     // First, try to get check data from Session collection
     const session = await Session.findOne({
@@ -88,7 +88,7 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
 
     if (!session) {
       checkAsyncLogger.warn({ check_id }, "No session found for check_id, falling back to API");
-      return await callOnfidoCheckAPI(check_id);
+      return await callOnfidoCheckAPI(onfidoAPIKey, check_id);
     }
 
     // Extract creation time from ObjectId (first 4 bytes contain timestamp)
@@ -110,7 +110,7 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
     }
 
     // Call Onfido API to get result and report_ids
-    const apiResult = await callOnfidoCheckAPI(check_id);
+    const apiResult = await callOnfidoCheckAPI(onfidoAPIKey, check_id);
     
     if (apiResult) {
       // Update our database with the fresh data
@@ -124,20 +124,20 @@ export async function getOnfidoCheckAsync(check_id: string): Promise<any> {
       { error: err, check_id },
       "Error in smart check, falling back to API"
     );
-    return await callOnfidoCheckAPI(check_id);
+    return await callOnfidoCheckAPI(onfidoAPIKey, check_id);
   }
 }
 
 /**
  * Call Onfido API directly
  */
-async function callOnfidoCheckAPI(check_id: string): Promise<any> {
+async function callOnfidoCheckAPI(onfidoAPIKey: string, check_id: string): Promise<any> {
   try {
     // @ts-ignore
     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     });
     return resp.data;

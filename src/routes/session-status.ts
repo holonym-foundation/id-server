@@ -1,9 +1,19 @@
 import express from "express";
-import { getSessionStatus, getSessionStatusV2 } from "../services/session-status.js";
+import {
+  getSessionStatusProd,
+  getSessionStatusSandbox,
+  getSessionStatusV2Prod,
+  getSessionStatusV2Sandbox
+} from "../services/session-status.js";
 
-const router = express.Router();
+const prodRouter = express.Router();
 
-router.get("/", getSessionStatus);
-router.get("/v2", getSessionStatusV2);
+prodRouter.get("/", getSessionStatusProd);
+prodRouter.get("/v2", getSessionStatusV2Prod);
 
-export default router;
+const sandboxRouter = express.Router();
+sandboxRouter.get("/", getSessionStatusSandbox);
+sandboxRouter.get("/v2", getSessionStatusV2Sandbox);
+
+export default prodRouter;
+export { sandboxRouter };

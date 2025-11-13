@@ -30,7 +30,7 @@ import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { campaignIdToWorkflowIdMap } from "../../utils/constants.js";
 import { onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js"
 import { v4 as uuidV4 } from "uuid";
-import { ISession } from "../../types.js";
+import { ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 import pino from "pino";
 
 function campaignIdToWorkflowId(campaignId: string) {
@@ -38,6 +38,7 @@ function campaignIdToWorkflowId(campaignId: string) {
 }
 
 async function handleIdvSessionCreation(
+  config: SandboxVsLiveKYCRouteHandlerConfig,
   session: HydratedDocument<ISession>,
   logger: pino.Logger<pino.LoggerOptions>
 ) {
@@ -85,7 +86,7 @@ async function handleIdvSessionCreation(
       throw new Error('The network is busy. Please try again in 10 minutes')
     }
 
-    const applicant = await createOnfidoApplicant();
+    const applicant = await createOnfidoApplicant(config.onfidoAPIKey);
     if (!applicant) {
       throw new Error("Error creating Onfido applicant");
     }
@@ -100,7 +101,7 @@ async function handleIdvSessionCreation(
     if (session.campaignId && session.workflowId) {
 
       // https://documentation.onfido.com/api/latest/#create-workflow-run
-      const workflowRun = await createOnfidoWorkflowRun(applicant.id, session.workflowId);
+      const workflowRun = await createOnfidoWorkflowRun(config.onfidoAPIKey, applicant.id, session.workflowId);
       if (!workflowRun) {
         throw new Error("Error creating Onfido workflow run");
       }
@@ -115,7 +116,7 @@ async function handleIdvSessionCreation(
       };
     } else {
 
-      const sdkTokenData = await createOnfidoSdkToken(applicant.id);
+      const sdkTokenData = await createOnfidoSdkToken(config.onfidoAPIKey, applicant.id);
       if (!sdkTokenData) {
         throw new Error("Error creating Onfido SDK token");
       }

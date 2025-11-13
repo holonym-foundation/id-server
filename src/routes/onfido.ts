@@ -1,26 +1,39 @@
 import express from "express";
-import { createApplicant } from "../services/onfido/applicant.js";
-import { v1CreateCheck, v2CreateCheck } from "../services/onfido/check.js";
+import { createApplicantProd, createApplicantSandbox } from "../services/onfido/applicant.js";
+import {
+  v1CreateCheckProd,
+  v1CreateCheckSandbox,
+  v2CreateCheckProd,
+  v2CreateCheckSandbox
+} from "../services/onfido/check.js";
 import { getCredentials } from "../services/onfido/credentials/v1.js";
 import { getCredentialsV2 } from "../services/onfido/credentials/v2.js";
-import { getCredentialsV3 } from "../services/onfido/credentials/v3.js";
+import { getCredentialsV3Prod, getCredentialsV3Sandbox } from "../services/onfido/credentials/v3.js";
 import { handleOnfidoWebhook } from "../services/onfido/webhooks.js";
 import { debugOnfidoSession } from "../services/onfido/debug.js";
 
-const router = express.Router();
+const prodRouter = express.Router();
 
 // TODO: Remove the following 3 endpoints once pay-first frontend is live
-router.post("/applicant", createApplicant);
-router.post("/check", v1CreateCheck);
-router.post("/v2/check", v2CreateCheck);
+prodRouter.post("/applicant", createApplicantProd);
+prodRouter.post("/check", v1CreateCheckProd);
+prodRouter.post("/v2/check", v2CreateCheckProd);
 
-router.get("/credentials", getCredentials);
-router.get("/credentials/v2/:nullifier", getCredentialsV2);
-router.get("/credentials/v3/:_id/:nullifier", getCredentialsV3);
+prodRouter.get("/credentials", getCredentials);
+prodRouter.get("/credentials/v2/:nullifier", getCredentialsV2);
+prodRouter.get("/credentials/v3/:_id/:nullifier", getCredentialsV3Prod);
 
-router.post("/webhooks", handleOnfidoWebhook);
+prodRouter.post("/webhooks", handleOnfidoWebhook);
 
 // for debugging onfido session by check_id
-// router.get("/debug", debugOnfidoSession);
+// prodRouter.get("/debug", debugOnfidoSession);
 
-export default router;
+const sandboxRouter = express.Router();
+
+sandboxRouter.post("/applicant", createApplicantSandbox);
+sandboxRouter.post("/check", v1CreateCheckSandbox);
+sandboxRouter.post("/v2/check", v2CreateCheckSandbox);
+sandboxRouter.get("/credentials/v3/:_id/:nullifier", getCredentialsV3Sandbox);
+
+export default prodRouter;
+export { sandboxRouter };

@@ -1,19 +1,32 @@
 import express from "express";
 import {
-  getNullifiers,
-  putGovIdNullifier,
-  putPhoneNullifier,
-  putCleanHandsNullifier,
-  putBiometricsNullifier,
+  getNullifiersProd,
+  getNullifiersSandbox,
+  putGovIdNullifierProd,
+  putGovIdNullifierSandbox,
+  putPhoneNullifierProd,
+  putPhoneNullifierSandbox,
+  putCleanHandsNullifierProd,
+  putCleanHandsNullifierSandbox,
+  putBiometricsNullifierProd,
+  putBiometricsNullifierSandbox,
 } from "../services/nullifiers.js";
 
-const router = express.Router();
+const prodRouter = express.Router();
 
 // Routes for accessing & modifying database containing user's encrypted nullifiers
-router.get("/", getNullifiers);
-router.put("/gov-id", putGovIdNullifier);
-router.put("/phone", putPhoneNullifier);
-router.put("/clean-hands", putCleanHandsNullifier)
-router.put("/biometrics", putBiometricsNullifier)
+prodRouter.get("/", getNullifiersProd);
+prodRouter.put("/gov-id", putGovIdNullifierProd);
+prodRouter.put("/phone", putPhoneNullifierProd);
+prodRouter.put("/clean-hands", putCleanHandsNullifierProd);
+prodRouter.put("/biometrics", putBiometricsNullifierProd);
 
-export default router;
+const sandboxRouter = express.Router();
+sandboxRouter.get("/", getNullifiersSandbox);
+sandboxRouter.put("/gov-id", putGovIdNullifierSandbox);
+sandboxRouter.put("/phone", putPhoneNullifierSandbox);
+sandboxRouter.put("/clean-hands", putCleanHandsNullifierSandbox);
+sandboxRouter.put("/biometrics", putBiometricsNullifierSandbox);
+
+export default prodRouter;
+export { sandboxRouter };

@@ -2,12 +2,12 @@ import axios from "axios";
 import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { HydratedDocument } from "mongoose";
-import { Session, IDVSessions } from "../init.js";
+import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
-import { IIdvSessions } from "../types.js";
+import { IIdvSessions, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
@@ -109,40 +109,41 @@ async function getIdenfySessionStatus(
   };
 }
 
-async function getOnfidoCheck(check_id: string) {
-  try {
-    // ignoring: "Property 'get' does not exist on type 'typeof import(...)"
-    // @ts-ignore
-    const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
-      },
-    });
-    return resp.data;
-  } catch (err: any) {
-    let errToLog = err;
-    // Onfido deletes checks after 30 days. So, if we get a 410, delete the check
-    // from IDVSessions.
-    if (err.response?.status === 410) {
-      errToLog = err.message; // reduces unnecessary verbosity
-      await IDVSessions.findOneAndUpdate(
-        { "onfido.checks.check_id": check_id },
-        {
-          $pull: {
-            "onfido.checks": {
-              check_id,
-            },
-          },
-        }
-      ).exec();
-    }
-    endpointLogger.error(
-      { error: errToLog, check_id },
-      "An error occurred while getting onfido check"
-    );
-  }
-}
+// @deprecated - Use getOnfidoCheckAsync instead
+// async function getOnfidoCheck(check_id: string) {
+//   try {
+//     // ignoring: "Property 'get' does not exist on type 'typeof import(...)"
+//     // @ts-ignore
+//     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+//       },
+//     });
+//     return resp.data;
+//   } catch (err: any) {
+//     let errToLog = err;
+//     // Onfido deletes checks after 30 days. So, if we get a 410, delete the check
+//     // from IDVSessions.
+//     if (err.response?.status === 410) {
+//       errToLog = err.message; // reduces unnecessary verbosity
+//       await IDVSessions.findOneAndUpdate(
+//         { "onfido.checks.check_id": check_id },
+//         {
+//           $pull: {
+//             "onfido.checks": {
+//               check_id,
+//             },
+//           },
+//         }
+//       ).exec();
+//     }
+//     endpointLogger.error(
+//       { error: errToLog, check_id },
+//       "An error occurred while getting onfido check"
+//     );
+//   }
+// }
 
 function getOnfidoVerificationFailureReasons(reports: Array<Record<string, any>>) {
   const failureReasons = [];
@@ -169,6 +170,7 @@ function getOnfidoVerificationFailureReasons(reports: Array<Record<string, any>>
 }
 
 async function getOnfidoSessionStatus(
+  onfidoAPIKey: string,
   sessions: HydratedDocument<IIdvSessions> | null
 ) {
   if (!sessions?.onfido?.checks || sessions.onfido.checks.length === 0) {
@@ -180,7 +182,7 @@ async function getOnfidoSessionStatus(
 
   const sessionsWithTimestamps = [];
   for (const sessionMetadata of sessions.onfido.checks) {
-    const check = await getOnfidoCheckAsync(sessionMetadata.check_id as string);
+    const check = await getOnfidoCheckAsync(onfidoAPIKey, sessionMetadata.check_id as string);
     if (!check) continue;
     sessionsWithTimestamps.push({
       check,
@@ -206,7 +208,7 @@ async function getOnfidoSessionStatus(
   let failureReason = undefined;
 
   if (latestCheck?.status === "complete" && latestCheck?.result === "consider") {
-    const reports = (await getOnfidoReports(latestCheck?.report_ids)) ?? [];
+    const reports = (await getOnfidoReports(onfidoAPIKey, latestCheck?.report_ids)) ?? [];
     failureReason = getOnfidoVerificationFailureReasons(reports);
   }
 
@@ -223,198 +225,229 @@ async function getOnfidoSessionStatus(
 /**
  * ENDPOINT
  */
-async function getSessionStatus(req: Request, res: Response) {
-  try {
-    const sigDigest = req.query.sigDigest;
-    const provider = req.query.provider; // not required
+function createGetSessionStatus(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.query.sigDigest;
+      const provider = req.query.provider; // not required
 
-    if (!sigDigest) {
-      return res.status(400).json({ error: "Missing sigDigest" });
-    }
-
-    const sessions = await IDVSessions.findOne({ sigDigest }).exec();
-
-    // If provider is specified, only return the status for that provider. This
-    // helps avoid unnecessary API calls.
-    if (provider) {
-      if (provider === "veriff") {
-        return res
-          .status(200)
-          .json({ veriff: await getVeriffSessionStatus(sessions) });
-      } else if (provider === "idenfy") {
-        return res
-          .status(200)
-          .json({ idenfy: await getIdenfySessionStatus(sessions) });
-      } else if (provider === "onfido") {
-        return res
-          .status(200)
-          .json({ onfido: await getOnfidoSessionStatus(sessions) });
+      if (!sigDigest) {
+        return res.status(400).json({ error: "Missing sigDigest" });
       }
+
+      const sessions = await config.IDVSessionsModel.findOne({ sigDigest }).exec();
+
+      // If provider is specified, only return the status for that provider. This
+      // helps avoid unnecessary API calls.
+      if (provider) {
+        if (provider === "veriff") {
+          return res
+            .status(200)
+            .json({ veriff: await getVeriffSessionStatus(sessions) });
+        } else if (provider === "idenfy") {
+          return res
+            .status(200)
+            .json({ idenfy: await getIdenfySessionStatus(sessions) });
+        } else if (provider === "onfido") {
+          return res
+            .status(200)
+            .json({ onfido: await getOnfidoSessionStatus(config.onfidoAPIKey, sessions) });
+        }
+      }
+
+      const sessionStatuses = {
+        veriff: await getVeriffSessionStatus(sessions),
+        idenfy: await getIdenfySessionStatus(sessions),
+        onfido: await getOnfidoSessionStatus(config.onfidoAPIKey, sessions),
+      };
+
+      // console.log("sessionStatuses", sessionStatuses);
+
+      return res.status(200).json(sessionStatuses);
+    } catch (err) {
+      endpointLogger.error(
+        { error: err },
+        "An unknown error occurred while retrieving session status"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
-
-    const sessionStatuses = {
-      veriff: await getVeriffSessionStatus(sessions),
-      idenfy: await getIdenfySessionStatus(sessions),
-      onfido: await getOnfidoSessionStatus(sessions),
-    };
-
-    // console.log("sessionStatuses", sessionStatuses);
-
-    return res.status(200).json(sessionStatuses);
-  } catch (err) {
-    endpointLogger.error(
-      { error: err },
-      "An unknown error occurred while retrieving session status"
-    );
-    return res.status(500).json({ error: "An unknown error occurred" });
   }
+}
+
+async function getSessionStatusProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createGetSessionStatus(config)(req, res);
+}
+
+async function getSessionStatusSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createGetSessionStatus(config)(req, res);
 }
 
 /**
  * ENDPOINT
  */
-async function getSessionStatusV2(req: Request, res: Response) {
-  try {
-    const sid = req.query.sid;
-
-    if (!sid) {
-      return res.status(400).json({ error: "Missing sid" });
-    }
-
-    let objectId = null;
+function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async function getSessionStatusV2(req: Request, res: Response) {
     try {
-      objectId = new ObjectId(sid as string);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid sid" });
-    }
+      const sid = req.query.sid;
 
-    const session = await Session.findOne({ _id: objectId }).exec();
+      if (!sid) {
+        return res.status(400).json({ error: "Missing sid" });
+      }
 
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+      let objectId = null;
+      try {
+        objectId = new ObjectId(sid as string);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid sid" });
+      }
 
-    // not required
-    // this is to provide direct status query
-    // when more than 1 idv sessions are done in 1 session
-    const provider = req.query.provider;
-    if(provider) session.idvProvider = provider as string;
+      const ambiguousSession = await config.SessionModel.findOne({ _id: objectId }).exec();
 
-    if (session.idvProvider === "veriff") {
-      if (!session.sessionId) {
+      if (!ambiguousSession) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      // not required
+      // this is to provide direct status query
+      // when more than 1 idv sessions are done in 1 session
+      const provider = req.query.provider;
+      if (provider) ambiguousSession.idvProvider = provider as string;
+
+      if (ambiguousSession.idvProvider === "veriff") {
+        const session = ambiguousSession as HydratedDocument<ISession>; // veriff is only in prod
+        if (!session.sessionId) {
+          return res.status(200).json({
+            veriff: {
+              sid: session._id,
+              status: null,
+              sessionId: null,
+            },
+          });
+        }
+
+        const decision = await getVeriffSessionDecision(session.sessionId);
+        if (!decision) {
+          return res.status(404).json({ error: "IDV Session not found" });
+        }
+
         return res.status(200).json({
           veriff: {
             sid: session._id,
-            status: null,
-            sessionId: null,
+            status: decision?.verification?.status,
+            sessionId: session.sessionId,
+            // failureReason should be populated with a reason for verification failure
+            // iff the verification failed. If verification is in progress, it should be null.
+            failureReason: decision?.verification?.reason,
           },
         });
-      }
+      } else if (ambiguousSession.idvProvider === "idenfy") {
+        const session = ambiguousSession as HydratedDocument<ISession>; // idenfy is only in prod
+        if (!session.scanRef) {
+          return res.status(200).json({
+            idenfy: {
+              sid: session._id,
+              status: null,
+              scanRef: null,
+            },
+          });
+        }
 
-      const decision = await getVeriffSessionDecision(session.sessionId);
-      if (!decision) {
-        return res.status(404).json({ error: "IDV Session not found" });
-      }
+        const idenfySession = await getIdenfySession(session.scanRef);
+        if (!idenfySession) {
+          return res.status(404).json({ error: "IDV Session not found" });
+        }
 
-      return res.status(200).json({
-        veriff: {
-          sid: session._id,
-          status: decision?.verification?.status,
-          sessionId: session.sessionId,
-          // failureReason should be populated with a reason for verification failure
-          // iff the verification failed. If verification is in progress, it should be null.
-          failureReason: decision?.verification?.reason,
-        },
-      });
-    } else if (session.idvProvider === "idenfy") {
-      if (!session.scanRef) {
+        let failureReason = undefined;
+        if (
+          (idenfySession?.fraudTags ?? []).length > 0 ||
+          (idenfySession?.mismatchTags ?? []).length > 0 ||
+          (idenfySession?.manualDocument &&
+            idenfySession.manualDocument !== "DOC_VALIDATED") ||
+          (idenfySession?.manualFace && idenfySession.manualFace !== "DOC_VALIDATED")
+        ) {
+          failureReason = {
+            fraudTags: idenfySession?.fraudTags,
+            mismatchTags: idenfySession?.mismatchTags,
+            manualDocument: idenfySession?.manualDocument,
+            manualFace: idenfySession?.manualFace,
+          };
+        }
+
         return res.status(200).json({
           idenfy: {
             sid: session._id,
-            status: null,
-            scanRef: null,
+            status: idenfySession?.status,
+            scanRef: session.scanRef,
+            // failureReason should be populated with a reason for verification failure
+            // iff the verification failed. If verification is in progress, it should be null.
+            failureReason,
           },
         });
-      }
+      } else if (ambiguousSession.idvProvider === "onfido") {
+        if (!ambiguousSession.check_id) {
+          return res.status(200).json({
+            onfido: {
+              check_id: ambiguousSession.check_id,
+            },
+          });
+        }
 
-      const idenfySession = await getIdenfySession(session.scanRef);
-      if (!idenfySession) {
-        return res.status(404).json({ error: "IDV Session not found" });
-      }
+        const check = await getOnfidoCheckAsync(config.onfidoAPIKey, ambiguousSession.check_id);
+        if (!check) {
+          return res.status(404).json({ error: "IDV Session not found" });
+        }
 
-      let failureReason = undefined;
-      if (
-        (idenfySession?.fraudTags ?? []).length > 0 ||
-        (idenfySession?.mismatchTags ?? []).length > 0 ||
-        (idenfySession?.manualDocument &&
-          idenfySession.manualDocument !== "DOC_VALIDATED") ||
-        (idenfySession?.manualFace && idenfySession.manualFace !== "DOC_VALIDATED")
-      ) {
-        failureReason = {
-          fraudTags: idenfySession?.fraudTags,
-          mismatchTags: idenfySession?.mismatchTags,
-          manualDocument: idenfySession?.manualDocument,
-          manualFace: idenfySession?.manualFace,
-        };
-      }
+        let failureReason = undefined;
 
-      return res.status(200).json({
-        idenfy: {
-          sid: session._id,
-          status: idenfySession?.status,
-          scanRef: session.scanRef,
-          // failureReason should be populated with a reason for verification failure
-          // iff the verification failed. If verification is in progress, it should be null.
-          failureReason,
-        },
-      });
-    } else if (session.idvProvider === "onfido") {
-      if (!session.check_id) {
+        if (check?.status === "complete" && check?.result === "consider") {
+          const reports = (await getOnfidoReports(config.onfidoAPIKey, check?.report_ids)) ?? [];
+          failureReason = getOnfidoVerificationFailureReasons(reports);
+        }
+
         return res.status(200).json({
           onfido: {
-            check_id: session.check_id,
+            sid: ambiguousSession._id,
+            status: check?.status,
+            result: check?.result,
+            check_id: ambiguousSession.check_id,
+            failureReason,
           },
         });
+      } else if (ambiguousSession.idvProvider === "facetec") {
+        return res.status(200).json({
+          facetec: { // to-do: not actually needed, but check again
+            sid: ambiguousSession._id,
+            status: null,
+          },
+        });
+      } else {
+        return res.status(500).json({ error: "Unknown idvProvider" });
       }
-
-      const check = await getOnfidoCheckAsync(session.check_id);
-      if (!check) {
-        return res.status(404).json({ error: "IDV Session not found" });
-      }
-
-      let failureReason = undefined;
-
-      if (check?.status === "complete" && check?.result === "consider") {
-        const reports = (await getOnfidoReports(check?.report_ids)) ?? [];
-        failureReason = getOnfidoVerificationFailureReasons(reports);
-      }
-
-      return res.status(200).json({
-        onfido: {
-          sid: session._id,
-          status: check?.status,
-          result: check?.result,
-          check_id: session.check_id,
-          failureReason,
-        },
-      });
-    } else if (session.idvProvider === "facetec") {
-      return res.status(200).json({
-        facetec: { // to-do: not actually needed, but check again
-          sid: session._id,
-          status: null,
-        },
-      });
-    } else {
-      return res.status(500).json({ error: "Unknown idvProvider" });
+    } catch (err) {
+      endpointLoggerV2.error(
+        { error: err },
+        "An unknown error occurred while retrieving session status"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
-  } catch (err) {
-    endpointLoggerV2.error(
-      { error: err },
-      "An unknown error occurred while retrieving session status"
-    );
-    return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
 
-export { getSessionStatus, getSessionStatusV2 };
+async function getSessionStatusV2Prod(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createGetSessionStatusV2(config)(req, res);
+}
+
+async function getSessionStatusV2Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createGetSessionStatusV2(config)(req, res);
+}
+
+export {
+  getSessionStatusProd,
+  getSessionStatusSandbox,
+  getSessionStatusV2Prod,
+  getSessionStatusV2Sandbox,
+};

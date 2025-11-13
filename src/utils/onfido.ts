@@ -2,7 +2,7 @@ import axios from "axios";
 import logger from "./logger.js"
 import { desiredOnfidoReports } from "../constants/onfido.js";
 
-export async function createOnfidoApplicant() {
+export async function createOnfidoApplicant(onfidoAPIKey: string) {
   try {
     const reqBody = {
       // From Onfido docs:
@@ -18,7 +18,7 @@ export async function createOnfidoApplicant() {
     const config = {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
     // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
@@ -34,7 +34,7 @@ export async function createOnfidoApplicant() {
   }
 }
 
-export async function createOnfidoSdkToken(applicant_id: string, referrer?: string) {
+export async function createOnfidoSdkToken(onfidoAPIKey: string, applicant_id: string, referrer?: string) {
   try {
     if (!referrer) {
       referrer =
@@ -47,7 +47,7 @@ export async function createOnfidoSdkToken(applicant_id: string, referrer?: stri
     const config = {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
     // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
@@ -69,7 +69,7 @@ export async function createOnfidoSdkToken(applicant_id: string, referrer?: stri
   }
 }
 
-export async function createOnfidoCheck(applicant_id: string) {
+export async function createOnfidoCheck(onfidoAPIKey: string, applicant_id: string) {
   try {
     const reqBody = {
       applicant_id,
@@ -79,7 +79,7 @@ export async function createOnfidoCheck(applicant_id: string) {
     const config = {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
     // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
@@ -100,7 +100,7 @@ export async function createOnfidoCheck(applicant_id: string) {
   }
 }
 
-export async function createOnfidoWorkflowRun(applicant_id: string, workflow_id: string) {
+export async function createOnfidoWorkflowRun(onfidoAPIKey: string, applicant_id: string, workflow_id: string) {
   try {
     // Create a workflow run for the applicant
     const reqBody = {
@@ -110,7 +110,7 @@ export async function createOnfidoWorkflowRun(applicant_id: string, workflow_id:
     const config = {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
     // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
@@ -126,14 +126,14 @@ export async function createOnfidoWorkflowRun(applicant_id: string, workflow_id:
   }
 }
 
-export async function getOnfidoCheck(check_id: string) {
+export async function getOnfidoCheck(onfidoAPIKey: string, check_id: string) {
   try {
     // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
     // @ts-ignore
     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+        Authorization: `Token token=${onfidoAPIKey}`,
       },
     });
     return resp.data;
@@ -146,7 +146,7 @@ export async function getOnfidoCheck(check_id: string) {
   }
 }
 
-export async function getOnfidoReports(report_ids: Array<string>) {
+export async function getOnfidoReports(onfidoAPIKey: string, report_ids: Array<string>) {
   try {
     const reports = [];
     for (const report_id of report_ids) {
@@ -157,7 +157,7 @@ export async function getOnfidoReports(report_ids: Array<string>) {
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+            Authorization: `Token token=${onfidoAPIKey}`,
           },
         }
       );
@@ -173,7 +173,7 @@ export async function getOnfidoReports(report_ids: Array<string>) {
   }
 }
 
-export async function deleteOnfidoApplicant(applicant_id: string) {
+export async function deleteOnfidoApplicant(onfidoAPIKey: string, applicant_id: string) {
   try {
     // ignoring "Property 'delete' does not exist on type 'typeof import(...)'"
     // @ts-ignore
@@ -182,7 +182,7 @@ export async function deleteOnfidoApplicant(applicant_id: string) {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Token token=${process.env.ONFIDO_API_TOKEN}`,
+          Authorization: `Token token=${onfidoAPIKey}`,
         },
       }
     );

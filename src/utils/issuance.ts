@@ -11,10 +11,10 @@ type Creds = {
   } & any
 }
 
-export function issuev2KYC(issuanceNullifier: string, creds: Creds) {
+export function issuev2KYC(holonymIssuerPrivkey: string, issuanceNullifier: string, creds: Creds) {
   return JSON.parse(
     holonymIssueV2(
-      process.env.HOLONYM_ISSUER_PRIVKEY as string,
+      holonymIssuerPrivkey,
       issuanceNullifier,
       creds.rawCreds.countryCode.toString(),
       creds.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value

@@ -5,20 +5,20 @@ import express from "express";
 import cors from "cors";
 import veriff from "./routes/veriff-kyc.js";
 import idenfy from "./routes/idenfy.js";
-import onfido from "./routes/onfido.js";
-import credentials from "./routes/credentials.js";
+import onfido, { sandboxRouter as sandboxOnfido } from "./routes/onfido.js";
+import credentials, { sandboxRouter as sandboxCredentials } from "./routes/credentials.js";
 import proofMetadata from "./routes/proof-metadata.js";
 import admin from "./routes/admin.js";
-import sessionStatus from "./routes/session-status.js";
+import sessionStatus, { sandboxRouter as sandboxSessionStatus } from "./routes/session-status.js";
 import ipInfo from "./routes/ip-info.js";
 import prices from "./routes/prices.js";
-import sessions from "./routes/sessions.js";
+import sessions, { sandboxRouter as sandboxSessions } from "./routes/sessions.js";
 import amlSessions from "./routes/aml-sessions.js";
 import biometricsSessions from "./routes/biometrics-sessions.js";
 import silk from "./routes/silk.js";
 import facetec from "./routes/facetec.js";
-import nullifiers from "./routes/nullifiers.js";
-import orders from "./routes/orders.js";
+import nullifiers, { sandboxRouter as sandboxNullifiers } from "./routes/nullifiers.js";
+import orders, { sandboxRouter as sandboxOrders } from "./routes/orders.js";
 import whitelists from "./routes/whitelists.js";
 import constants from "./routes/constants.js";
 import directVerification from "./routes/direct-verification.js"
@@ -71,7 +71,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---------- Routes ----------
+// ---------- Prod routes ----------
 app.use("/credentials", credentials);
 app.use("/proof-metadata", proofMetadata);
 app.use("/veriff", veriff);
@@ -92,6 +92,14 @@ app.use("/orders", orders);
 app.use("/whitelists", whitelists);
 app.use("/constants", constants);
 app.use("/direct-verification", directVerification)
+
+// ---------- Sandbox routes ----------
+app.use("/sandbox/sessions", sandboxSessions);
+app.use("/sandbox/session-status", sandboxSessionStatus);
+app.use("/sandbox/onfido", sandboxOnfido);
+app.use("/sandbox/credentials", sandboxCredentials);
+app.use("/sandbox/nullifiers", sandboxNullifiers);
+app.use("/sandbox/orders", sandboxOrders);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

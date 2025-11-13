@@ -6,7 +6,8 @@ import { subDays } from "date-fns";
 import {
   Session,
   NullifierAndCreds,
-  CleanHandsNullifierAndCreds
+  CleanHandsNullifierAndCreds,
+  getRouteHandlerConfig
 } from "../../init.js";
 import { sessionStatusEnum, facetecServerBaseURL } from "../../constants/misc.js";
 import { ISession, INullifierAndCreds, ICleanHandsNullifierAndCreds } from "../../types.js";
@@ -21,6 +22,8 @@ import { deleteIdenfySession } from "../../utils/idenfy.js";
 //     ...pinoOptions.base,
 //   },
 // });
+
+const prodConfig = getRouteHandlerConfig("live");
 
 function dateToObjectId(date: Date): ObjectId {
   // https://stackoverflow.com/a/8753670
@@ -44,7 +47,7 @@ async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
       break;
     case "onfido":
       if (session.applicant_id) {
-        const result = await deleteOnfidoApplicant(session.applicant_id);
+        const result = await deleteOnfidoApplicant(prodConfig.onfidoAPIKey, session.applicant_id);
         if (result?.status == 204) {
           setDeletedFromIDVProvider(session);
         }

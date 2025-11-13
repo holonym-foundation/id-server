@@ -10,13 +10,18 @@ import logger from "./utils/logger.js";
 import {
   userVerificationsSchema,
   idvSessionsSchema,
+  sandboxIdvSessionsSchema,
   sessionSchema,
+  sandboxSessionSchema,
   sessionRefundMutexSchema,
   userCredentialsSchema,
   userCredentialsV2Schema,
+  sandboxUserCredentialsV2Schema,
   userProofMetadataSchema,
   EncryptedNullifiersSchema,
+  sandboxEncryptedNullifiersSchema,
   NullifierAndCredsSchema,
+  SandboxNullifierAndCredsSchema,
   CleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
   DailyVerificationCountSchema,
@@ -27,6 +32,7 @@ import {
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
+  SandboxOrderSchema,
   HumanIDPaymentGateWhitelistSchema,
   CleanHandsSessionWhitelistSchema,
   SessionRetryWhitelistSchema,
@@ -39,13 +45,18 @@ import {
   IDailyVerificationDeletions,
   IUserVerifications,
   IIdvSessions,
+  ISandboxIdvSessions,
   ISession,
+  ISandboxSession,
   ISessionRefundMutex,
   IUserCredentials,
   IUserCredentialsV2,
+  ISandboxUserCredentialsV2,
   IUserProofMetadata,
   IEncryptedNullifiers,
+  ISandboxEncryptedNullifiers,
   INullifierAndCreds,
+  ISandboxNullifierAndCreds,
   ICleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
   IVerificationCollisionMetadata,
@@ -54,11 +65,13 @@ import {
   IGalxeCampaignZeroUser,
   ISilkPeanutCampaignsMetadata,
   IOrder,
+  ISandboxOrder,
   IHumanIDPaymentGateWhitelist,
   ICleanHandsSessionWhitelist,
   ISessionRetryWhitelist,
   ISanctionsResult,
-  DirectVerification
+  DirectVerification,
+  SandboxVsLiveKYCRouteHandlerConfig
 } from "./types.js";
 dotenv.config();
 
@@ -219,7 +232,11 @@ async function initializeMongoDb() {
   );
   const IDVSessions = mongoose.model("IDVSessions", idvSessionsSchema);
 
+  const SandboxIDVSessions = mongoose.model("SandboxIDVSessions", sandboxIdvSessionsSchema);
+
   const Session = mongoose.model("Session", sessionSchema);
+
+  const SandboxSession = mongoose.model("SandboxSession", sandboxSessionSchema);
 
   const SessionRefundMutex = mongoose.model(
     "SessionRefundMutex",
@@ -233,6 +250,11 @@ async function initializeMongoDb() {
     userCredentialsV2Schema
   );
 
+  const SandboxUserCredentialsV2 = mongoose.model(
+    "SandboxUserCredentialsV2",
+    sandboxUserCredentialsV2Schema
+  );
+
   const UserProofMetadata = mongoose.model(
     "UserProofMetadata",
     userProofMetadataSchema
@@ -243,9 +265,19 @@ async function initializeMongoDb() {
     EncryptedNullifiersSchema
   );
 
+  const SandboxEncryptedNullifiers = mongoose.model(
+    "SandboxEncryptedNullifiers",
+    sandboxEncryptedNullifiersSchema
+  );
+
   const NullifierAndCreds = mongoose.model(
     "NullifierAndCreds",
     NullifierAndCredsSchema
+  );
+
+  const SandboxNullifierAndCreds = mongoose.model(
+    "SandboxNullifierAndCreds",
+    SandboxNullifierAndCredsSchema
   );
 
   const CleanHandsNullifierAndCreds = mongoose.model(
@@ -294,6 +326,8 @@ async function initializeMongoDb() {
   await initializeDailyVerificationDeletions(DailyVerificationDeletions);
 
   const Order = mongoose.model("Order", OrderSchema);
+
+  const SandboxOrder = mongoose.model("SandboxOrder", SandboxOrderSchema);
 
   const humanIDPaymenGateWhitelistName = "HumanIDPaymentGateWhitelist"
   const HumanIDPaymentGateWhitelist = mongoose.model(
@@ -344,13 +378,18 @@ async function initializeMongoDb() {
   return {
     UserVerifications,
     IDVSessions,
+    SandboxIDVSessions,
     Session,
+    SandboxSession,
     SessionRefundMutex,
     UserCredentials,
     UserCredentialsV2,
+    SandboxUserCredentialsV2,
     UserProofMetadata,
     EncryptedNullifiers,
+    SandboxEncryptedNullifiers,
     NullifierAndCreds,
+    SandboxNullifierAndCreds,
     CleanHandsNullifierAndCreds,
     BiometricsNullifierAndCreds,
     DailyVerificationCount,
@@ -362,6 +401,7 @@ async function initializeMongoDb() {
     GalxeCampaignZeroUser,
     SilkPeanutCampaignsMetadata,
     Order,
+    SandboxOrder,
     HumanIDPaymentGateWhitelist,
     CleanHandsSessionWhitelist,
     SessionRetryWhitelist,
@@ -377,13 +417,18 @@ validateEnv();
 
 let UserVerifications: Model<IUserVerifications>,
   IDVSessions: Model<IIdvSessions>,
+  SandboxIDVSessions: Model<ISandboxIdvSessions>,
   Session: Model<ISession>,
+  SandboxSession: Model<ISandboxSession>,
   SessionRefundMutex: Model<ISessionRefundMutex>,
   UserCredentials: Model<IUserCredentials>,
   UserCredentialsV2: Model<IUserCredentialsV2>,
+  SandboxUserCredentialsV2: Model<ISandboxUserCredentialsV2>,
   UserProofMetadata: Model<IUserProofMetadata>,
   EncryptedNullifiers: Model<IEncryptedNullifiers>,
+  SandboxEncryptedNullifiers: Model<ISandboxEncryptedNullifiers>,
   NullifierAndCreds: Model<INullifierAndCreds>,
+  SandboxNullifierAndCreds: Model<ISandboxNullifierAndCreds>,
   CleanHandsNullifierAndCreds: Model<ICleanHandsNullifierAndCreds>,
   BiometricsNullifierAndCreds: Model<IBiometricsNullifierAndCreds>,
   DailyVerificationCount: Model<IDailyVerificationCount>,
@@ -395,6 +440,7 @@ let UserVerifications: Model<IUserVerifications>,
   GalxeCampaignZeroUser: Model<IGalxeCampaignZeroUser>,
   SilkPeanutCampaignsMetadata: Model<ISilkPeanutCampaignsMetadata>,
   Order: Model<IOrder>,
+  SandboxOrder: Model<ISandboxOrder>,
   HumanIDPaymentGateWhitelist: Model<IHumanIDPaymentGateWhitelist>,
   CleanHandsSessionWhitelist: Model<ICleanHandsSessionWhitelist>,
   SessionRetryWhitelist: Model<ISessionRetryWhitelist>,
@@ -408,13 +454,18 @@ initializeMongoDb().then((result) => {
     logger.info("Initialized MongoDB connection");
     UserVerifications = result.UserVerifications;
     IDVSessions = result.IDVSessions;
+    SandboxIDVSessions = result.SandboxIDVSessions;
     Session = result.Session;
+    SandboxSession = result.SandboxSession;
     SessionRefundMutex = result.SessionRefundMutex;
     UserCredentials = result.UserCredentials;
     UserCredentialsV2 = result.UserCredentialsV2;
+    SandboxUserCredentialsV2 = result.SandboxUserCredentialsV2;
     UserProofMetadata = result.UserProofMetadata;
     EncryptedNullifiers = result.EncryptedNullifiers;
+    SandboxEncryptedNullifiers = result.SandboxEncryptedNullifiers;
     NullifierAndCreds = result.NullifierAndCreds;
+    SandboxNullifierAndCreds = result.SandboxNullifierAndCreds;
     CleanHandsNullifierAndCreds = result.CleanHandsNullifierAndCreds;
     BiometricsNullifierAndCreds = result.BiometricsNullifierAndCreds;
     DailyVerificationCount = result.DailyVerificationCount;
@@ -426,6 +477,7 @@ initializeMongoDb().then((result) => {
     GalxeCampaignZeroUser = result.GalxeCampaignZeroUser;
     SilkPeanutCampaignsMetadata = result.SilkPeanutCampaignsMetadata;
     Order = result.Order;
+    SandboxOrder = result.SandboxOrder;
     HumanIDPaymentGateWhitelist = result.HumanIDPaymentGateWhitelist;
     CleanHandsSessionWhitelist = result.CleanHandsSessionWhitelist;
     SessionRetryWhitelist = result.SessionRetryWhitelist;
@@ -446,17 +498,50 @@ initialize().then((provider) => {
   zokProvider = provider;
 });
 
+function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKYCRouteHandlerConfig {
+  if (environment === "sandbox") {
+    return {
+      environment: "sandbox",
+      onfidoAPIKey: process.env.ONFIDO_SANDBOX_API_TOKEN!,
+      SessionModel: SandboxSession,
+      IDVSessionsModel: SandboxIDVSessions,
+      NullifierAndCredsModel: SandboxNullifierAndCreds,
+      UserCredentialsV2Model: SandboxUserCredentialsV2,
+      EncryptedNullifiersModel: SandboxEncryptedNullifiers,
+      OrderModel: SandboxOrder,
+      issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
+    }
+  }
+
+  return {
+    environment: "live",
+    onfidoAPIKey: process.env.ONFIDO_API_TOKEN!,
+    SessionModel: Session,
+    IDVSessionsModel: IDVSessions,
+    NullifierAndCredsModel: NullifierAndCreds,
+    UserCredentialsV2Model: UserCredentialsV2,
+    EncryptedNullifiersModel: EncryptedNullifiers,
+    OrderModel: Order,
+    issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
+  }
+}
+
 export {
   mongoose,
   UserVerifications,
   IDVSessions,
+  SandboxIDVSessions,
   Session,
+  SandboxSession,
   SessionRefundMutex,
   UserCredentials,
   UserCredentialsV2,
+  SandboxUserCredentialsV2,
   UserProofMetadata,
   EncryptedNullifiers,
+  SandboxEncryptedNullifiers,
   NullifierAndCreds,
+  SandboxNullifierAndCreds,
   CleanHandsNullifierAndCreds,
   BiometricsNullifierAndCreds,
   DailyVerificationCount,
@@ -468,6 +553,7 @@ export {
   GalxeCampaignZeroUser,
   SilkPeanutCampaignsMetadata,
   Order,
+  SandboxOrder,
   HumanIDPaymentGateWhitelist,
   CleanHandsSessionWhitelist,
   SessionRetryWhitelist,
@@ -477,4 +563,5 @@ export {
   DVOrder,
   DVSession,
   zokProvider,
+  getRouteHandlerConfig,
 };

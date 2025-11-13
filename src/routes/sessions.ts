@@ -1,33 +1,45 @@
 import express from "express";
 import {
   postSession,
-  postSessionV2,
+  postSessionV2Prod,
+  postSessionV2Sandbox,
   createPayPalOrder,
   createIdvSession,
   createIdvSessionV2,
   createIdvSessionV3,
   setIdvProvider,
-  refreshOnfidoToken,
-  createOnfidoCheckEndpoint,
+  refreshOnfidoTokenProd,
+  refreshOnfidoTokenSandbox,
+  createOnfidoCheckEndpointProd,
+  createOnfidoCheckEndpointSandbox,
   refund,
   refundV2,
-  getSessions,
+  getSessionsProd,
+  getSessionsSandbox,
 } from "../services/sessions/endpoints.js";
 
-const router = express.Router();
+const prodRouter = express.Router();
 
-router.post("/", postSession);
-router.post("/v2", postSessionV2);
-router.post("/:_id/paypal-order", createPayPalOrder);
-// router.post("/:_id/idv-session", createIdvSession);
-router.post("/:_id/idv-session/v2", createIdvSessionV2);
-router.post("/:_id/idv-session/v3", createIdvSessionV3);
-router.get("/:_id/set-idv-provider/:idvProvider", setIdvProvider);
+prodRouter.post("/", postSession);
+prodRouter.post("/v2", postSessionV2Prod);
+prodRouter.post("/:_id/paypal-order", createPayPalOrder);
+// prodRouter.post("/:_id/idv-session", createIdvSession);
+prodRouter.post("/:_id/idv-session/v2", createIdvSessionV2);
+prodRouter.post("/:_id/idv-session/v3", createIdvSessionV3);
+prodRouter.get("/:_id/set-idv-provider/:idvProvider", setIdvProvider);
 // These refund endpoints are old, for when we charged for sessions rather than for SBTs.
-// router.post("/:_id/idv-session/refund", refund);
-// router.post("/:_id/idv-session/refund/v2", refundV2);
-router.post("/:_id/idv-session/onfido/token", refreshOnfidoToken);
-router.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpoint);
-router.get("/", getSessions);
+// prodRouter.post("/:_id/idv-session/refund", refund);
+// prodRouter.post("/:_id/idv-session/refund/v2", refundV2);
+prodRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenProd);
+prodRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointProd);
+prodRouter.get("/", getSessionsProd);
 
-export default router;
+const sandboxRouter = express.Router();
+
+sandboxRouter.post("/v2", postSessionV2Sandbox);
+sandboxRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenSandbox);
+sandboxRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointSandbox);
+sandboxRouter.get("/", getSessionsSandbox);
+
+export default prodRouter;
+export { sandboxRouter };

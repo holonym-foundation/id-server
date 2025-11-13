@@ -12,10 +12,13 @@ import {
 import { sessionStatusEnum } from "../../constants/misc.js";
 import { ISession } from "../../types.js";
 import logger from "../../utils/logger.js";
+import { getRouteHandlerConfig } from "../../init.js";
 
 const postEndpointLogger = logger.child({
   msgPrefix: "[POST /admin/set-session-idv-provider] ",
 });
+
+const prodConfig = getRouteHandlerConfig("live")
 
 /**
  * This endpoint sets the IDV provider used to verify a user. For example,
@@ -178,7 +181,7 @@ async function setSessionIdvProvider(req: Request, res: Response) {
       // });
       return res.status(200).json({ message: "iDenfy session created" });
     } else if (newIdvProvider === "onfido") {
-      const applicant = await createOnfidoApplicant();
+      const applicant = await createOnfidoApplicant(prodConfig.onfidoAPIKey);
       if (!applicant) {
         return res.status(500).json({ error: "Error creating Onfido applicant" });
       }
@@ -194,7 +197,7 @@ async function setSessionIdvProvider(req: Request, res: Response) {
       // referrer passed to createOnfidoSdkToken. For now, we assume the admin is
       // always working with a Holonym user, but in the future, an admin might be
       // working with a Holonym-within-Silk user.
-      const sdkTokenData = await createOnfidoSdkToken(applicant.id);
+      const sdkTokenData = await createOnfidoSdkToken(prodConfig.onfidoAPIKey, applicant.id);
       if (!sdkTokenData) {
         return res.status(500).json({ error: "Error creating Onfido SDK token" });
       }

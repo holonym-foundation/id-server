@@ -1,10 +1,15 @@
 import express from "express";
 import { 
-  createOrder, 
-  getOrderTransactionStatus, 
-  setOrderFulfilled, 
-  refundOrder,
-  getOrder
+  createOrderProd,
+  createOrderSandbox, 
+  getOrderTransactionStatusProd,
+  getOrderTransactionStatusSandbox, 
+  setOrderFulfilledProd,
+  setOrderFulfilledSandbox, 
+  refundOrderProd,
+  // refundOrderSandbox,
+  getOrderProd,
+  getOrderSandbox
 } from "../services/orders/endpoints.js";
 import {
   createOrder as createStellarOrder,
@@ -19,7 +24,7 @@ import {
   // refundOrder as refundSuiOrder
 } from "../services/orders/sui/endpoints.js"
 
-const router = express.Router();
+const prodRouter = express.Router();
 
 // ---- Order ----
 // Endpoints
@@ -29,26 +34,40 @@ const router = express.Router();
 // GET /:externalOrderId/refund.  Refunds an unfulfilled order.
 
 // --- Chain-agnostic ---
-router.get("/:externalOrderId/transaction/status", getOrderTransactionStatus);
+prodRouter.get("/:externalOrderId/transaction/status", getOrderTransactionStatusProd);
 
 // --- EVM ---
-router.post("/", createOrder);
-router.get("/:externalOrderId/fulfilled", setOrderFulfilled); // gated by ORDERS_API_KEY
-router.get("/", getOrder);
-router.post("/admin/refund", refundOrder);
+prodRouter.post("/", createOrderProd);
+prodRouter.get("/:externalOrderId/fulfilled", setOrderFulfilledProd); // gated by ORDERS_API_KEY
+prodRouter.get("/", getOrderProd);
+prodRouter.post("/admin/refund", refundOrderProd);
 
 // --- Stellar ---
-router.post("/stellar", createStellarOrder);
+prodRouter.post("/stellar", createStellarOrder);
 // TODO: Deprecate this stellar order status endpoint. The frontend just needs the chain-agnostic order status endpoint
-router.get("/stellar/:externalOrderId/transaction/status", getStellarOrderTransactionStatus);
-router.get("/stellar/:externalOrderId/fulfilled", setStellarOrderFulfilled); // gated by ORDERS_API_KEY
-router.post("/stellar/admin/refund", refundStellarOrder);
+prodRouter.get("/stellar/:externalOrderId/transaction/status", getStellarOrderTransactionStatus);
+prodRouter.get("/stellar/:externalOrderId/fulfilled", setStellarOrderFulfilled); // gated by ORDERS_API_KEY
+prodRouter.post("/stellar/admin/refund", refundStellarOrder);
 
 // --- Sui ---
-router.post("/sui", createSuiOrder);
+prodRouter.post("/sui", createSuiOrder);
 // TODO: Deprecate this sui order status endpoint. The frontend just needs the chain-agnostic order status endpoint
-router.get("/sui/:externalOrderId/transaction/status", getSuiOrderTransactionStatus);
-// router.get("/sui/:externalOrderId/fulfilled", setSuiOrderFulfilled); // gated by ORDERS_API_KEY
-// router.post("/sui/admin/refund", refundStellarOrder);
+prodRouter.get("/sui/:externalOrderId/transaction/status", getSuiOrderTransactionStatus);
+// prodRouter.get("/sui/:externalOrderId/fulfilled", setSuiOrderFulfilled); // gated by ORDERS_API_KEY
+// prodRouter.post("/sui/admin/refund", refundStellarOrder);
 
-export default router;
+// --------------------- Sandbox routes ---------------------
+
+const sandboxRouter = express.Router();
+
+// --- Chain-agnostic ---
+sandboxRouter.get("/:externalOrderId/transaction/status", getOrderTransactionStatusSandbox);
+
+// --- EVM ---
+sandboxRouter.post("/", createOrderSandbox);
+sandboxRouter.get("/:externalOrderId/fulfilled", setOrderFulfilledSandbox); // gated by ORDERS_API_KEY
+sandboxRouter.get("/", getOrderSandbox);
+// sandboxRouter.post("/admin/refund", refundOrderSandbox);
+
+export default prodRouter;
+export { sandboxRouter };

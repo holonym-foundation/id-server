@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
 export type OnfidoCheck = {
   id: string;
@@ -110,6 +110,22 @@ export type IIdvSessions = {
   };
 };
 
+export type ISandboxIdvSessions = {
+  _id?: Types.ObjectId;
+  sigDigest?: string;
+  onfido?: {
+    checks?: Array<{
+      check_id?: string;
+      status?: string; // 'in_progress', 'awaiting_applicant', 'complete', 'withdrawn', 'paused', 'reopened'
+      result?: string; // 'clear', 'consider'
+      report_ids?: string[];
+      webhookReceivedAt?: Date; // When webhook last updated this check
+      lastPolledAt?: Date; // When we last polled Onfido API as fallback
+      createdAt?: Date;
+    }>;
+  };
+};
+
 export type ISession = {
   _id?: Types.ObjectId;
   sigDigest?: string;
@@ -140,6 +156,28 @@ export type ISession = {
   onfido_sdk_token?: string;
   num_facetec_liveness_checks?: number;
   externalDatabaseRefID?: string;
+  verificationFailureReason?: string;
+  ipCountry?: string;
+  campaignId?: string;
+  workflowId?: string;
+};
+
+export type ISandboxSession = {
+  _id?: Types.ObjectId;
+  sigDigest?: string;
+  idvProvider?: string;
+  status?: string;
+  deletedFromIDVProvider?: boolean;
+  txHash?: string;
+  chainId?: number;
+  refundTxHash?: string;
+  applicant_id?: string;
+  check_id?: string;
+  check_status?: string;
+  check_result?: string;
+  check_report_ids?: string[];
+  check_last_updated_at?: Date;
+  onfido_sdk_token?: string;
   verificationFailureReason?: string;
   ipCountry?: string;
   campaignId?: string;
@@ -220,6 +258,8 @@ export type IUserCredentialsV2 = {
   };
 };
 
+export type ISandboxUserCredentialsV2 = IUserCredentialsV2
+
 export type IUserProofMetadata = {
   _id?: Types.ObjectId;
   sigDigest?: string;
@@ -241,6 +281,18 @@ export type INullifierAndCreds = {
     };
     facetec?: {
       externalDatabaseRefID?: string;
+    };
+  };
+  uuidV2?: string;
+};
+
+export type ISandboxNullifierAndCreds = {
+  _id?: Types.ObjectId;
+  holoUserId?: string;
+  issuanceNullifier?: string;
+  idvSessionIds?: {
+    onfido?: {
+      check_id?: string;
     };
   };
   uuidV2?: string;
@@ -273,6 +325,39 @@ export type IBiometricsNullifierAndCreds = {
 };
 
 export type IEncryptedNullifiers = {
+  _id?: Types.ObjectId;
+  holoUserId?: string;
+  govId?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  phone?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  cleanHands?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  biometrics?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+};
+
+export type ISandboxEncryptedNullifiers = {
   _id?: Types.ObjectId;
   holoUserId?: string;
   govId?: {
@@ -389,6 +474,8 @@ export type IOrder = {
   };
 };
 
+export type ISandboxOrder = IOrder
+
 export type ISanctionsResult = {
   _id?: Types.ObjectId;
   message: string;
@@ -457,4 +544,16 @@ export namespace DirectVerification {
     userId: string;
     status: 'IN_PROGRESS' | 'ENROLLED' | 'PASSED_AGE_VERIFICATION' | 'VERIFICATION_FAILED'
   };
+}
+
+export type SandboxVsLiveKYCRouteHandlerConfig = {
+  environment: "sandbox" | "live";
+  onfidoAPIKey: string
+  SessionModel: Model<ISession | ISandboxSession>
+  IDVSessionsModel: Model<IIdvSessions | ISandboxIdvSessions>
+  NullifierAndCredsModel: Model<INullifierAndCreds | ISandboxNullifierAndCreds>
+  UserCredentialsV2Model: Model<IUserCredentialsV2 | ISandboxUserCredentialsV2>
+  EncryptedNullifiersModel: Model<IEncryptedNullifiers | ISandboxEncryptedNullifiers>
+  OrderModel: Model<IOrder | ISandboxOrder>
+  issuerPrivateKey: string
 }

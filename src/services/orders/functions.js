@@ -7,6 +7,7 @@ import {
   ethereumProvider,
   optimismProvider,
   optimismGoerliProvider,
+  optimismSepoliaProvider,
   fantomProvider,
   avalancheProvider,
   auroraProvider,
@@ -28,8 +29,10 @@ function getProvider(chainId) {
     provider = avalancheProvider;
   } else if (chainId == 1313161554) {
     provider = auroraProvider;
-  } else if (process.env.NODE_ENV == "development" && chainId == 420) {
+  } else if (chainId == 420) {
     provider = optimismGoerliProvider;
+  } else if (chainId == 11155420) {
+    provider = optimismSepoliaProvider;
   } else {
     throw new Error(`Invalid chainId (${chainId}). Could not get provider`)
   }
@@ -54,7 +57,16 @@ function getTransaction(chainId, txHash) {
  * - Ensure tx is on a supported chain.
  * - Ensure tx.data == keccak(externalOrderId)
  */
-async function validateTx(chainId, txHash, externalOrderId, desiredAmount) {
+async function validateTx(isSandbox, chainId, txHash, externalOrderId, desiredAmount) {
+  const supportedTestnets = [11155420];
+  if (isSandbox && !supportedTestnets.includes(chainId)) {
+    throw new Error(`Invalid chain ID '${chainId}'. Only testnets are supported in sandbox mode.`);
+  }
+  const supportedMainnets = [1, 10, 250, 8453, 43114, 1313161554];
+  if (!isSandbox && !supportedMainnets.includes(chainId)) {
+    throw new Error(`Invalid chain ID '${chainId}'. Only mainnets are supported in production mode.`);
+  }
+
   const tx = await getTxWithRetries(txHash, chainId)
 
   await validateTxIsToIDServer(tx)
@@ -123,7 +135,7 @@ async function validateTxAmount(tx, chainId, desiredAmount) {
   const expectedAmountInUSD = desiredAmount * 0.95;
 
   let expectedAmountInToken;
-  if ([1, 10, 1313161554, 8453].includes(chainId)) {
+  if ([1, 10, 1313161554, 8453, 11155420].includes(chainId)) {
     // expectedAmountInToken = await usdToETH(expectedAmountInUSD);
     // Oct 9, 2025. 0.0012 ETH is about $5. We are temporarily hardcoding this value to avoid
     // dependency on CMC due to rate limits with their API
@@ -240,13 +252,7 @@ async function sendRefundTx(order, tx) {
   // Ensure wallet has enough funds to refund
   const balance = await wallet.getBalance();
   if (balance.lt(refundAmount)) {
-    return {
-      status: 500,
-      data: {
-        error:
-          "Wallet does not have enough funds to refund. Please contact support.",
-      },
-    };
+    throw new Error("Wallet does not have enough funds to refund. Please contact support.");
   }
 
   const txReq = await wallet.populateTransaction({
@@ -273,30 +279,31 @@ async function sendRefundTx(order, tx) {
   return txResponse.wait();
 }
 
-async function getOrderByTxHash(req, res) {
-  const { txHash, chainId, platform } = req.query;
+function createGetOrderByTxHashRouteHandler(OrderModel) {
+  return async function getOrderByTxHash(req, res) {
+    const { txHash, chainId, platform } = req.query;
 
-  let chainPlatform = platform ?? 'evm'
+    let chainPlatform = platform ?? 'evm'
 
-  if (!['evm', 'sui', 'stellar'].includes(chainPlatform)) {
-    return res.status(400).json({ error: `Invalid platform '${platform}'` })
-  }
+    if (!['evm', 'sui', 'stellar'].includes(chainPlatform)) {
+      return res.status(400).json({ error: `Invalid platform '${platform}'` })
+    }
 
-  if (chainPlatform === 'evm' && (!txHash || !chainId)) {
-    return res
-      .status(400)
-      .json({ error: "txHash and chainId are required for EVM orders" });
-  }
+    if (chainPlatform === 'evm' && (!txHash || !chainId)) {
+      return res
+        .status(400)
+        .json({ error: "txHash and chainId are required for EVM orders" });
+    }
 
-  let order = null
+    let order = null
 
-  if (chainPlatform === 'evm') {
-    order = await Order.findOne({ txHash, chainId });
-  } else if (chainPlatform === 'sui') {
-    order = await Order.findOne({ 'sui.txHash': txHash });
-  } else if (chainPlatform === 'stellar') {
-    order = await Order.findOne({ 'stellar.txHash': txHash });
-  }
+    if (chainPlatform === 'evm') {
+      order = await OrderModel.findOne({ txHash, chainId });
+    } else if (chainPlatform === 'sui') {
+      order = await OrderModel.findOne({ 'sui.txHash': txHash });
+    } else if (chainPlatform === 'stellar') {
+      order = await OrderModel.findOne({ 'stellar.txHash': txHash });
+    }
 
   if (!order) {
     let msg = `No order has the associated txHash (${txHash})`
@@ -323,6 +330,12 @@ async function getOrderByTxHash(req, res) {
       sui: order.sui
     }
   })
+  }
+}
+
+async function getOrderByTxHash(req, res) {
+  const handler = createGetOrderByTxHashRouteHandler(Order);
+  return handler(req, res);
 }
 
 export {
@@ -334,4 +347,5 @@ export {
   handleRefund,
   sendRefundTx,
   getOrderByTxHash,
+  createGetOrderByTxHashRouteHandler,
 };

@@ -100,6 +100,9 @@ export const optimismProvider = new ethers.providers.JsonRpcProvider(
 export const optimismGoerliProvider = new ethers.providers.JsonRpcProvider(
   process.env.OPTIMISM_GOERLI_RPC_URL
 );
+export const optimismSepoliaProvider = new ethers.providers.JsonRpcProvider(
+  process.env.OPTIMISM_SEPOLIA_RPC_URL
+);
 export const baseProvider = new ethers.providers.JsonRpcProvider(
   process.env.BASE_RPC_URL
 );

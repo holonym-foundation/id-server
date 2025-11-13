@@ -2,7 +2,11 @@ import axios from "axios";
 import type { Request, Response } from "express";
 import { ObjectId } from "mongodb";
 import { ethers } from "ethers";
-import { Session, SessionRefundMutex } from "../../init.js";
+import {
+  Session,
+  SessionRefundMutex,
+  getRouteHandlerConfig,
+} from "../../init.js";
 import {
   getAccessToken as getPayPalAccessToken,
   capturePayPalOrder,
@@ -28,6 +32,7 @@ import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
 import { objectIdFiveDaysAgo } from "../../utils/utils.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
+import type { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js"
 
 const postSessionsV2Logger = logger.child({
   msgPrefix: "[POST /sessions/v2] ",
@@ -170,120 +175,133 @@ async function postSession(req: Request, res: Response) {
   }
 }
 
+function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      const idvProvider = req.body.idvProvider;
+      const address = req.body.address || null // Optional blockchain address for whitelist lookup
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+      if (!idvProvider || ["veriff", "onfido", "facetec"].indexOf(idvProvider) === -1) {
+        return res
+          .status(400)
+          .json({ error: "idvProvider must be one of 'veriff' or 'onfido' or 'facetec'" });
+      }
+
+      let domain = null;
+      if (req.body.domain === "app.holonym.id") {
+        domain = "app.holonym.id";
+      } else if (req.body.domain === "silksecure.net") {
+        domain = "silksecure.net";
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Get country from IP address
+      const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
+      // @ts-ignore
+      const resp = await axios.get(
+        `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
+      );
+      const ipCountry = resp?.data?.country;
+
+      if (!ipCountry && process.env.NODE_ENV != 'development') {
+        return res.status(500).json({ error: "Could not determine country from IP" });
+      }
+
+      // Rate limiting with whitelist support
+      const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress) as string
+      const rateLimitKey = 'kyc-sessions'
+
+      // Check whitelist tier based on blockchain address (defaults to 0 if address is null or not whitelisted)
+      const tier = await getRateLimitTier(address)
+
+      const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey)
+
+      if (limitExceeded) {
+        postSessionsV2Logger.warn(
+          {
+            ip,
+            // address, // do not log user addresses
+            rateLimitKey,
+            count,
+            tier,
+          },
+          'Rate limit exceeded'
+        )
+        return res.status(429).json({
+          error: `This device has reached the maximum number of allowed KYC sessions (${maxForTier}). Please try again in 30 days.`
+        })
+      }
+
+      const campaignId = req.body.campaignId;
+      const workflowId = campaignIdToWorkflowId(campaignId);
+
+      // console.log("postSessionV2:", campaignId, workflowId);
+
+      const session = new config.SessionModel({
+        sigDigest: sigDigest,
+        idvProvider: idvProvider,
+        status: sessionStatusEnum.IN_PROGRESS,
+        frontendDomain: domain,
+        silkDiffWallet,
+        ipCountry: ipCountry,
+        campaignId: campaignId,
+        workflowId: workflowId,
+      });
+
+      console.log("session", session);
+
+      // Only allow a user to create up to 6 sessions
+      const existingSessions = await config.SessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ]
+        }
+      }).exec();
+
+      if (existingSessions.length >= 10) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (10)"
+        });
+      }
+
+      // session is only saved if idvSessionCreation is successful
+      const _idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log("POST /sessions: Error encountered", err.message);
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  }
+}
+
 /**
  * Creates a session V2. Identical to v1, except it immediately sets session status to IN_PROGRESS.
  */
-async function postSessionV2(req: Request, res: Response) {
-  try {
-    const sigDigest = req.body.sigDigest;
-    const idvProvider = req.body.idvProvider;
-    const address = req.body.address || null // Optional blockchain address for whitelist lookup
-    if (!sigDigest) {
-      return res.status(400).json({ error: "sigDigest is required" });
-    }
-    if (!idvProvider || ["veriff", "onfido", "facetec"].indexOf(idvProvider) === -1) {
-      return res
-        .status(400)
-        .json({ error: "idvProvider must be one of 'veriff' or 'onfido' or 'facetec'" });
-    }
-
-    let domain = null;
-    if (req.body.domain === "app.holonym.id") {
-      domain = "app.holonym.id";
-    } else if (req.body.domain === "silksecure.net") {
-      domain = "silksecure.net";
-    }
-
-    let silkDiffWallet = null;
-    if (req.body.silkDiffWallet === "silk") {
-      silkDiffWallet = "silk";
-    } else if (req.body.silkDiffWallet === "diff-wallet") {
-      silkDiffWallet = "diff-wallet";
-    }
-
-    // Get country from IP address
-    const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
-    const resp = await axios.get(
-      `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
-    );
-    const ipCountry = resp?.data?.country;
-
-    if (!ipCountry && process.env.NODE_ENV != 'development') {
-      return res.status(500).json({ error: "Could not determine country from IP" });
-    }
-
-    // Rate limiting with whitelist support
-    const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress) as string
-    const rateLimitKey = 'kyc-sessions'
-
-    // Check whitelist tier based on blockchain address (defaults to 0 if address is null or not whitelisted)
-    const tier = await getRateLimitTier(address)
-
-    const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey)
-
-    if (limitExceeded) {
-      postSessionsV2Logger.warn(
-        {
-          ip,
-          // address, // do not log user addresses
-          rateLimitKey,
-          count,
-          tier,
-        },
-        'Rate limit exceeded'
-      )
-      return res.status(429).json({
-        error: `This device has reached the maximum number of allowed KYC sessions (${maxForTier}). Please try again in 30 days.`
-      })
-    }
-
-    const campaignId = req.body.campaignId;
-    const workflowId = campaignIdToWorkflowId(campaignId);
-
-    // console.log("postSessionV2:", campaignId, workflowId);
-
-    const session = new Session({
-      sigDigest: sigDigest,
-      idvProvider: idvProvider,
-      status: sessionStatusEnum.IN_PROGRESS,
-      frontendDomain: domain,
-      silkDiffWallet,
-      ipCountry: ipCountry,
-      campaignId: campaignId,
-      workflowId: workflowId,
-    });
-
-    console.log("session", session);
-
-    // Only allow a user to create up to 6 sessions
-    const existingSessions = await Session.find({
-      sigDigest: sigDigest,
-      status: {
-        "$in": [
-          sessionStatusEnum.IN_PROGRESS,
-          sessionStatusEnum.VERIFICATION_FAILED,
-          sessionStatusEnum.ISSUED
-        ]
-      }
-    }).exec();
-
-    if (existingSessions.length >= 10) {
-      return res.status(400).json({
-        error: "User has reached the maximum number of sessions (10)"
-      });
-    }
-
-    // session is only saved if idvSessionCreation is successful
-    const _idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
-
-    return res.status(201).json({ session });
-  } catch (err: any) {
-    console.log("POST /sessions: Error encountered", err.message);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+async function postSessionV2Prod(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionV2RouteHandler(config)(req, res);
 }
+
+async function postSessionV2Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionV2RouteHandler(config)(req, res);
+}
+
 
 async function createPayPalOrder(req: Request, res: Response) {
   try {
@@ -371,6 +389,8 @@ async function createPayPalOrder(req: Request, res: Response) {
  * with an id-server session.
  */
 async function createIdvSession(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+
   try {
     const _id = req.params._id;
     const chainId = Number(req.body.chainId);
@@ -434,7 +454,7 @@ async function createIdvSession(req: Request, res: Response) {
     session.chainId = chainId;
     session.txHash = txHash;
 
-    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
     if (err.response) {
@@ -461,6 +481,8 @@ async function createIdvSession(req: Request, res: Response) {
  * order with an id-server session.
  */
 async function createIdvSessionV2(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+
   try {
     if (req.body.chainId && req.body.txHash) {
       return createIdvSession(req, res);
@@ -542,7 +564,7 @@ async function createIdvSessionV2(req: Request, res: Response) {
     // of this function executes successfully.
     session.status = sessionStatusEnum.IN_PROGRESS;
 
-    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
     if (err.response) {
@@ -568,6 +590,8 @@ async function createIdvSessionV2(req: Request, res: Response) {
  * transaction data. Requires admin API key.
  */
 async function createIdvSessionV3(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -655,7 +679,7 @@ async function createIdvSessionV3(req: Request, res: Response) {
     session.chainId = chainId;
     session.txHash = txHash;
 
-    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
     console.log("err.message", err.message);
@@ -682,6 +706,8 @@ async function createIdvSessionV3(req: Request, res: Response) {
  * 
  */
 async function setIdvProvider(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+
   try {
     const _id = req.params._id;
     const idvProvider = req.params.idvProvider;
@@ -727,7 +753,7 @@ async function setIdvProvider(req: Request, res: Response) {
     // set session.status to IN_PROGRESS for the "new" session with the requested provider
     session.status = "IN_PROGRESS";
 
-    const idvSession = await handleIdvSessionCreation(session, createIdvSessionLogger);
+    const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
     if (err.response) {
@@ -748,125 +774,162 @@ async function setIdvProvider(req: Request, res: Response) {
   }
 }
 
-async function refreshOnfidoToken(req: Request, res: Response) {
-  const _id = req.params._id;
+function createRefreshOnfidoTokenRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    const _id = req.params._id;
 
-  // Optional req body parameter. Either 'holonym' or 'silk'
-  const referrer = req.body.referrer;
+    // Optional req body parameter. Either 'holonym' or 'silk'
+    const referrer = req.body.referrer;
 
-  try {
-    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
-    if (getSessionError) {
-      return res.status(400).json({ error: getSessionError });
-    }
-    const session = potentialSession!
+    try {
+      let objectId = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
 
-    if (!session.applicant_id) {
-      return res.status(400).json({ error: "Session is missing applicant_id" });
-    }
+      const session = await config.SessionModel.findOne({ _id: objectId }).exec();
+      if (!session) {
+        return res.status(400).json({ error: "Session not found" });
+      }
 
-    const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
-    if (rateLimitResult.limitExceeded) {
-      return res.status(429).json({
-        error: 'The network is busy. Please try again in 10 minutes'
-      })
-    }
+      if (!session.applicant_id) {
+        return res.status(400).json({ error: "Session is missing applicant_id" });
+      }
 
-    // creating workflow run returns sdk_token as well
-    // so return back sdk_token and workflow_id for initiating Onfido with workflow run
-    if (session.campaignId && session.workflowId) {
-      const workflowRun = await createOnfidoWorkflowRun(session.applicant_id, session.workflowId);
+      const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
+      if (rateLimitResult.limitExceeded) {
+        return res.status(429).json({
+          error: 'The network is busy. Please try again in 10 minutes'
+        })
+      }
 
-      console.log("refreshOnfidoToken: workflowRun", workflowRun);
+      // creating workflow run returns sdk_token as well
+      // so return back sdk_token and workflow_id for initiating Onfido with workflow run
+      if (session.campaignId && session.workflowId) {
+        const workflowRun = await createOnfidoWorkflowRun(config.onfidoAPIKey, session.applicant_id, session.workflowId);
 
-      session.onfido_sdk_token = workflowRun.sdk_token;
-      session.workflowId = workflowRun.workflow_id;
+        console.log("refreshOnfidoToken: workflowRun", workflowRun);
+
+        session.onfido_sdk_token = workflowRun.sdk_token;
+        session.workflowId = workflowRun.workflow_id;
+        await session.save();
+
+        return res.status(200).json({
+          sdk_token: workflowRun.sdk_token,
+          workflow_run_id: workflowRun.id,
+        });
+      }
+
+      let actualReferrer = "";
+      if (referrer && referrer === "silk") {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3000/*"
+            : "https://silksecure.net/*";
+      } else if (referrer && referrer === "human-id") {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3000/*"
+            : "https://id.human.tech/*";
+      } else {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3002/*"
+            : "https://app.holonym.id/*";
+      }
+      const sdkTokenData = await createOnfidoSdkToken(
+        config.onfidoAPIKey,
+        session.applicant_id,
+        actualReferrer
+      );
+
+      session.onfido_sdk_token = sdkTokenData.token;
       await session.save();
 
+      refreshOnfidoTokenLogger.info({ sessionId: _id }, `Refreshed Onfido token for ${_id}`);
+
       return res.status(200).json({
-        sdk_token: workflowRun.sdk_token,
-        workflow_run_id: workflowRun.id,
+        sdk_token: sdkTokenData.token,
       });
+    } catch (err: any) {
+      refreshOnfidoTokenLogger.error({ error: err }, "Error refreshing Onfido token");
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
-
-    let actualReferrer = "";
-    if (referrer && referrer === "silk") {
-      actualReferrer =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:3000/*"
-          : "https://silksecure.net/*";
-    } else if (referrer && referrer === "human-id") {
-      actualReferrer =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:3000/*"
-          : "https://id.human.tech/*";
-    } else {
-      actualReferrer =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:3002/*"
-          : "https://app.holonym.id/*";
-    }
-    const sdkTokenData = await createOnfidoSdkToken(
-      session.applicant_id,
-      actualReferrer
-    );
-
-    session.onfido_sdk_token = sdkTokenData.token;
-    await session.save();
-
-    refreshOnfidoTokenLogger.info({ sessionId: _id }, `Refreshed Onfido token for ${_id}`);
-
-    return res.status(200).json({
-      sdk_token: sdkTokenData.token,
-    });
-  } catch (err: any) {
-    refreshOnfidoTokenLogger.error({ error: err }, "Error refreshing Onfido token");
-    return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
 
-async function createOnfidoCheckEndpoint(req: Request, res: Response) {
-  // NOTE:
-  // From Onfido docs:
-  // "If you're requesting multiple checks for the same individual, you
-  // should reuse the id returned in the initial applicant response object
-  // in the applicant_id field when creating a check."
-  // Perhaps we should associate sigDigest with applicant_id to accomplish this.
-  try {
-    const _id = req.params._id;
+async function refreshOnfidoTokenProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createRefreshOnfidoTokenRouteHandler(config)(req, res);
+}
 
-    const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
-    if (getSessionError) {
-      return res.status(400).json({ error: getSessionError });
+async function refreshOnfidoTokenSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createRefreshOnfidoTokenRouteHandler(config)(req, res);
+}
+
+function createCreateOnfidoCheckEndpointRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    // NOTE:
+    // From Onfido docs:
+    // "If you're requesting multiple checks for the same individual, you
+    // should reuse the id returned in the initial applicant response object
+    // in the applicant_id field when creating a check."
+    // Perhaps we should associate sigDigest with applicant_id to accomplish this.
+    try {
+      const _id = req.params._id;
+
+      let objectId = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      const session = await config.SessionModel.findOne({ _id: objectId }).exec();
+      if (!session) {
+        return res.status(400).json({ error: "Session not found" });
+      }
+
+      if (!session.applicant_id) {
+        return res.status(400).json({ error: "Session is missing applicant_id" });
+      }
+
+      const check = await createOnfidoCheck(config.onfidoAPIKey, session.applicant_id);
+
+      session.check_id = check.id;
+      session.check_status = check.status;
+      session.check_report_ids = check.report_ids;
+      await session.save();
+
+      createOnfidoCheckLogger.info(
+        { check_id: check.id, applicant_id: session.applicant_id },
+        "Created Onfido check"
+      );
+
+      return res.status(200).json({
+        id: check.id,
+      });
+    } catch (err: any) {
+      console.error(
+        { error: err, applicant_id: req.body.applicant_id },
+        "Error creating Onfido check"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
-    const session = potentialSession!
-
-    if (!session.applicant_id) {
-      return res.status(400).json({ error: "Session is missing applicant_id" });
-    }
-
-    const check = await createOnfidoCheck(session.applicant_id);
-
-    session.check_id = check.id;
-    session.check_status = check.status;
-    session.check_report_ids = check.report_ids;
-    await session.save();
-
-    createOnfidoCheckLogger.info(
-      { check_id: check.id, applicant_id: session.applicant_id },
-      "Created Onfido check"
-    );
-
-    return res.status(200).json({
-      id: check.id,
-    });
-  } catch (err: any) {
-    console.error(
-      { error: err, applicant_id: req.body.applicant_id },
-      "Error creating Onfido check"
-    );
-    return res.status(500).json({ error: "An unknown error occurred" });
   }
+}
+
+async function createOnfidoCheckEndpointProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createCreateOnfidoCheckEndpointRouteHandler(config)(req, res);
+}
+
+async function createOnfidoCheckEndpointSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createCreateOnfidoCheckEndpointRouteHandler(config)(req, res);
 }
 
 /**
@@ -1029,54 +1092,71 @@ async function refundV2(req: Request, res: Response) {
   }
 }
 
-/**
- * Get session(s) associated with sigDigest or id.
- */
-async function getSessions(req: Request, res: Response) {
-  try {
-    const sigDigest = req.query.sigDigest;
-    const id = req.query.id;
-    const last5days = req.query.last5days === "true" || false;
+function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.query.sigDigest;
+      const id = req.query.id;
+      const last5days = req.query.last5days === "true" || false;
 
-    if (!sigDigest && !id) {
-      return res.status(400).json({ error: "sigDigest or id is required" });
-    }
-
-    let sessions;
-    if (id) {
-      let objectId = null;
-      try {
-        objectId = new ObjectId(id as string);
-      } catch (err: any) {
-        return res.status(400).json({ error: "Invalid id" });
+      if (!sigDigest && !id) {
+        return res.status(400).json({ error: "sigDigest or id is required" });
       }
-      sessions = await Session.find({ _id: objectId }).exec();
-    } else {
-      if (last5days) {
-        sessions = await Session.find({ sigDigest, _id: { $gt: objectIdFiveDaysAgo() } }).exec();
+
+      let sessions;
+      if (id) {
+        let objectId = null;
+        try {
+          objectId = new ObjectId(id as string);
+        } catch (err: any) {
+          return res.status(400).json({ error: "Invalid id" });
+        }
+        sessions = await config.SessionModel.find({ _id: objectId }).exec();
       } else {
-        sessions = await Session.find({ sigDigest }).exec();
+        if (last5days) {
+          sessions = await config.SessionModel.find({ sigDigest, _id: { $gt: objectIdFiveDaysAgo() } }).exec();
+        } else {
+          sessions = await config.SessionModel.find({ sigDigest }).exec();
+        }
       }
-    }
 
-    return res.status(200).json(sessions);
-  } catch (err: any) {
-    console.log("GET /sessions: Error encountered", err.message);
-    return res.status(500).json({ error: "An unknown error occurred" });
+      return res.status(200).json(sessions);
+    } catch (err: any) {
+      console.log("GET /sessions: Error encountered", err.message);
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
   }
+}
+
+async function getSessionsProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createGetSessionsRouteHandler(config)(req, res);
+}
+
+async function getSessionsSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createGetSessionsRouteHandler(config)(req, res);
 }
 
 export {
   postSession,
-  postSessionV2,
+  postSessionV2Prod,
+  postSessionV2Sandbox,
   createPayPalOrder,
   createIdvSession,
   createIdvSessionV2,
   createIdvSessionV3,
   setIdvProvider,
-  refreshOnfidoToken,
-  createOnfidoCheckEndpoint,
+  refreshOnfidoTokenProd,
+  refreshOnfidoTokenSandbox,
+  createOnfidoCheckEndpointProd,
+  createOnfidoCheckEndpointSandbox,
   refund,
   refundV2,
-  getSessions,
+  getSessionsProd,
+  getSessionsSandbox,
+  createPostSessionV2RouteHandler,
+  createRefreshOnfidoTokenRouteHandler,
+  createCreateOnfidoCheckEndpointRouteHandler,
+  createGetSessionsRouteHandler,
 };
