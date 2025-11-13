@@ -114,7 +114,8 @@ export function upgradeV3Logger(logger: pino.Logger): UpgradedLogger {
   upgradedLogger.unexpected = (err) => {
     logger.error(
       {
-        error: err.message ?? err.toString(),
+        // Hacky way to not log the whole error object if it's an axios error
+        error: err?.response?.data ?? err,
         tags: [
           "action:getCredentialsV3",
           "error:unexpectedError",
