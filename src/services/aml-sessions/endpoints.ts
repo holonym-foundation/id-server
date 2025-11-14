@@ -1,9 +1,11 @@
 import { ObjectId } from "mongodb";
+import { HydratedDocument } from "mongoose";
 import { poseidon } from "circomlibjs-old";
 import ethersPkg from "ethers";
+import { Request, Response } from "express";
 const { ethers } = ethersPkg;
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
-import { groth16 } from "snarkjs";
+// import { groth16 } from "snarkjs";
 import { 
   UserVerifications, 
   AMLChecksSession, 
@@ -42,12 +44,13 @@ import {
   sessionStatusEnum,
   cleanHandsSessionStatusEnum,
 } from "../../constants/misc.js";
-import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" assert { type: "json" };
+import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" with { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
 import { failSession, getSessionById } from "../../utils/sessions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
+import { ISanctionsResult } from "../../types.js";
 
 const liveConfig = getRouteHandlerConfig("live")
 
@@ -82,7 +85,7 @@ const issueCredsV4Logger = upgradeLogger(logger.child({
  * ENDPOINT.
  * Creates a session.
  */
-async function postSession(req, res) {
+async function postSession(req: Request, res: Response) {
   try {
     const sigDigest = req.body.sigDigest;
     if (!sigDigest) {
@@ -104,7 +107,7 @@ async function postSession(req, res) {
     await session.save();
 
     return res.status(201).json({ session });
-  } catch (err) {
+  } catch (err: any) {
     console.log("POST /veriff-aml-sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -115,7 +118,7 @@ async function postSession(req, res) {
  * Creates a session. Immediately sets session status to IN_PROGRESS to
  * bypass payment requirement.
  */
-async function postSessionv2(req, res) {
+async function postSessionv2(req: Request, res: Response) {
   try {
     const sigDigest = req.body.sigDigest;
     if (!sigDigest) {
@@ -155,7 +158,7 @@ async function postSessionv2(req, res) {
     await session.save();
 
     return res.status(201).json({ session });
-  } catch (err) {
+  } catch (err: any) {
     console.log("POST /aml-sessions/v2: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -164,14 +167,14 @@ async function postSessionv2(req, res) {
 /**
  * ENDPOINT.
  */
-async function createPayPalOrder(req, res) {
+async function createPayPalOrder(req: Request, res: Response) {
   try {
     const _id = req.params._id;
 
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -216,12 +219,14 @@ async function createPayPalOrder(req, res) {
       },
     };
 
+    // Ignoring "Property 'post' does not exist on type 'typeof import(...)'"
+    // @ts-ignore
     const resp = await axios.post(url, body, config);
 
     const order = resp.data;
 
     if ((session.payPal?.orders ?? []).length > 0) {
-      session.payPal.orders.push({ id: order.id, createdAt: new Date() });
+      session.payPal!.orders!.push({ id: order.id, createdAt: new Date() });
     } else {
       session.payPal = {
         orders: [{ id: order.id, createdAt: new Date() }],
@@ -231,7 +236,7 @@ async function createPayPalOrder(req, res) {
     await session.save();
 
     return res.status(201).json(order);
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       console.error("Error creating PayPal order", err.response.data);
     } else if (err.request) {
@@ -247,7 +252,7 @@ async function createPayPalOrder(req, res) {
  * ENDPOINT.
  * Pay for session and create a Veriff session.
  */
-async function payForSession(req, res) {
+async function payForSession(req: Request, res: Response) {
   try {
     const _id = req.params._id;
     const chainId = Number(req.body.chainId);
@@ -266,7 +271,7 @@ async function payForSession(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -315,7 +320,7 @@ async function payForSession(req, res) {
     return res.status(200).json({
       message: "success",
     });
-  } catch (err) {
+  } catch (err: any) {
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
@@ -323,7 +328,7 @@ async function payForSession(req, res) {
 /**
  * ENDPOINT.
  */
-async function payForSessionV2(req, res) {
+async function payForSessionV2(req: Request, res: Response) {
   try {
     if (req.body.chainId && req.body.txHash) {
       return payForSession(req, res);
@@ -339,7 +344,7 @@ async function payForSessionV2(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -413,7 +418,7 @@ async function payForSessionV2(req, res) {
     return res.status(200).json({
       message: "success",
     });
-  } catch (err) {
+  } catch (err: any) {
     if (err.response) {
       console.error('error paying for aml session', err.response.data);
     } else if (err.request) {
@@ -431,7 +436,7 @@ async function payForSessionV2(req, res) {
  * Use on-chain payment. Does not validate
  * transaction data. Requires admin API key.
  */
-async function payForSessionV3(req, res) {
+async function payForSessionV3(req: Request, res: Response) {
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -456,7 +461,7 @@ async function payForSessionV3(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -530,7 +535,7 @@ async function payForSessionV3(req, res) {
     return res.status(200).json({
       message: "success",
     });
-  } catch (err) {
+  } catch (err: any) {
     console.log("err.message", err.message);
     if (err.response) {
       console.error(
@@ -554,7 +559,7 @@ async function payForSessionV3(req, res) {
  * ENDPOINT.
  * Allows a user to request a refund for a failed session.
  */
-async function refund(req, res) {
+async function refund(req: Request, res: Response) {
   const _id = req.params._id;
   const to = req.body.to;
   try {
@@ -566,7 +571,7 @@ async function refund(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
     const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
@@ -599,11 +604,11 @@ async function refund(req, res) {
     await SessionRefundMutex.deleteOne({ _id: _id }).exec();
     // Return response
     return res.status(response.status).json(response.data);
-  } catch (err) {
+  } catch (err: any) {
     // Delete mutex. We have this here in case an unknown error occurs above.
     try {
       await SessionRefundMutex.deleteOne({ _id: _id }).exec();
-    } catch (err) {
+    } catch (err: any) {
       console.log(
         "POST refund AML checks session: Error encountered while deleting mutex",
         err.message
@@ -624,7 +629,7 @@ async function refund(req, res) {
 /**
  * ENDPOINT.
  */
-async function refundV2(req, res) {
+async function refundV2(req: Request, res: Response) {
   if (req.body.to) {
     return refund(req, res);
   }
@@ -633,7 +638,7 @@ async function refundV2(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
     const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
@@ -666,11 +671,11 @@ async function refundV2(req, res) {
     await SessionRefundMutex.deleteOne({ _id: _id }).exec();
     // Return response
     return res.status(response.status).json(response.data);
-  } catch (err) {
+  } catch (err: any) {
     // Delete mutex. We have this here in case an unknown error occurs above.
     try {
       await SessionRefundMutex.deleteOne({ _id: _id }).exec();
-    } catch (err) {
+    } catch (err: any) {
       console.log(
         "POST /aml-sessions/:_id/refund/v2: Error encountered while deleting mutex",
         err.message
@@ -697,7 +702,7 @@ async function refundV2(req, res) {
   }
 }
 
-function parsePublicSignals(publicSignals) {
+function parsePublicSignals(publicSignals: Array<string>) {
   return {
     expiry: new Date(Number(publicSignals[1]) * 1000),
     firstName: Buffer.from(BigInt(publicSignals[2]).toString(16), 'hex').toString(),
@@ -713,7 +718,7 @@ function parsePublicSignals(publicSignals) {
  */
 
 
-function validateScreeningResult(result) {
+function validateScreeningResult(result: { count: number, status: string }) {
   if (result.count > 0) {
     return {
       error: `Verification failed. count is '${result.count}'. Expected '0'.`,
@@ -730,7 +735,7 @@ function validateScreeningResult(result) {
 }
 
 // 18/07/2025: Truncate, character by character in utf8 compatible way
-function truncateToBytes(str, maxBytes) {
+function truncateToBytes(str: string, maxBytes: number) {
   if (str === null || str === undefined) return '';
   if (typeof str !== 'string') str = String(str);
   if (typeof maxBytes !== 'number' || maxBytes < 0) return '';
@@ -757,7 +762,13 @@ function truncateToBytes(str, maxBytes) {
   return result;
 }
 
-function extractCreds(person) {
+type Person = {
+  firstName: string | undefined
+  lastName: string | undefined
+  dateOfBirth: string | undefined
+}
+
+function extractCreds(person: Person) {
   const birthdate = person.dateOfBirth ? person.dateOfBirth : "";
   // const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
   const firstNameStr = person.firstName ? person.firstName : "";
@@ -817,7 +828,7 @@ function extractCreds(person) {
   };
 }
 
-async function saveUserToDb(uuid) {
+async function saveUserToDb(uuid: string) {
   const userVerificationsDoc = new UserVerifications({
     aml: {
       uuid: uuid,
@@ -826,7 +837,7 @@ async function saveUserToDb(uuid) {
   });
   try {
     await userVerificationsDoc.save();
-  } catch (err) {
+  } catch (err: any) {
     console.error(
       { error: err },
       "An error occurred while saving user verification to database"
@@ -842,10 +853,10 @@ async function saveUserToDb(uuid) {
 /**
  * Util function that wraps issuev2 from holonym-wasm-issuer
  */
-function issuev2CleanHands(issuanceNullifier, creds) {
+function issuev2CleanHands(issuanceNullifier: string, creds: { rawCreds: { birthdate: string }, derivedCreds: { nameHash: { value: string } } }) {
   return JSON.parse(
     issuev2(
-      process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY,
+      process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
       issuanceNullifier,
       getDateAsInt(creds.rawCreds.birthdate).toString(),
       creds.derivedCreds.nameHash.value,
@@ -853,152 +864,152 @@ function issuev2CleanHands(issuanceNullifier, creds) {
   );
 }
 
-async function issueCreds(req, res) {
+async function issueCreds(req: Request, res: Response) {
   // Block usage of this endpoint
   return res.status(404).send()
 
-  try {
-    const issuanceNullifier = req.params.nullifier;
-    const _id = req.params._id;
+  // try {
+  //   const issuanceNullifier = req.params.nullifier;
+  //   const _id = req.params._id;
 
-    if (process.env.ENVIRONMENT == "dev") {
-      const creds = cleanHandsDummyUserCreds;
+  //   if (process.env.ENVIRONMENT == "dev") {
+  //     const creds = cleanHandsDummyUserCreds;
 
-      const response = JSON.parse(
-        issuev2(
-          process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY,
-          issuanceNullifier,
-          getDateAsInt(creds.rawCreds.birthdate).toString(),
-          creds.derivedCreds.nameHash.value,
-        )
-      );
-      response.metadata = cleanHandsDummyUserCreds;
+  //     const response = JSON.parse(
+  //       issuev2(
+  //         process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY,
+  //         issuanceNullifier,
+  //         getDateAsInt(creds.rawCreds.birthdate).toString(),
+  //         creds.derivedCreds.nameHash.value,
+  //       )
+  //     );
+  //     response.metadata = cleanHandsDummyUserCreds;
   
-      return res.status(200).json(response);
-    }
+  //     return res.status(200).json(response);
+  //   }
   
-    // zkp should be of type Groth16FullProveResult (a proof generated with snarkjs.groth16)
-    // it should be stringified
-    let zkp = null;
-    try {
-      zkp = JSON.parse(req.query.zkp);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid zkp" });
-    }
+  //   // zkp should be of type Groth16FullProveResult (a proof generated with snarkjs.groth16)
+  //   // it should be stringified
+  //   let zkp = null;
+  //   try {
+  //     zkp = JSON.parse(req.query.zkp);
+  //   } catch (err: any) {
+  //     return res.status(400).json({ error: "Invalid zkp" });
+  //   }
     
-    if (!zkp?.proof || !zkp?.publicSignals) {
-      return res.status(400).json({ error: "No zkp found" });
-    }
+  //   if (!zkp?.proof || !zkp?.publicSignals) {
+  //     return res.status(400).json({ error: "No zkp found" });
+  //   }
 
-    let objectId = null;
-    try {
-      objectId = new ObjectId(_id);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid _id" });
-    }
+  //   let objectId = null;
+  //   try {
+  //     objectId = new ObjectId(_id);
+  //   } catch (err: any) {
+  //     return res.status(400).json({ error: "Invalid _id" });
+  //   }
   
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  //   const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
   
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+  //   if (!session) {
+  //     return res.status(404).json({ error: "Session not found" });
+  //   }
 
-    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
-      if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
-        return res.status(400).json({
-          error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
-        });
-      }
-      return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
-      });
-    }
+  //   if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+  //     if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+  //       return res.status(400).json({
+  //         error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+  //       });
+  //     }
+  //     return res.status(400).json({
+  //       error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+  //     });
+  //   }
   
-    const zkpVerified = await groth16.verify(V3NameDOBVKey, zkp.publicSignals, zkp.proof);
-    if (!zkpVerified) {
-      return res.status(400).json({ error: "ZKP verification failed" });
-    }
+  //   const zkpVerified = await groth16.verify(V3NameDOBVKey, zkp.publicSignals, zkp.proof);
+  //   if (!zkpVerified) {
+  //     return res.status(400).json({ error: "ZKP verification failed" });
+  //   }
   
-    const { 
-      expiry,
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    } = parsePublicSignals(zkp.publicSignals);
+  //   const { 
+  //     expiry,
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth, 
+  //   } = parsePublicSignals(zkp.publicSignals);
   
-    if (expiry < new Date()) {
-      return res.status(400).json({ error: "Credentials have expired" });
-    }
+  //   if (expiry < new Date()) {
+  //     return res.status(400).json({ error: "Credentials have expired" });
+  //   }
 
-    // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
-    // when we query "<base-url>/search/" (with trailing slash).
-    const sanctionsUrl = 'https://api.sanctions.io/search/' +
-      '?min_score=0.85' +
-      // TODO: Create a constant for the data sources
-      // `&data_source=${encodeURIComponent('CFSP')}` +
-      `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
-      `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
-      `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
-      '&entity_type=individual';
-    // TODO: Add country_residence to zkp
-    // sanctionsUrl.searchParams.append('country_residence', 'us')
-    const config = {
-      headers: {
-        'Accept': 'application/json; version=2.2',
-        'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
-      }
-    }
-    const resp = await fetch(sanctionsUrl, config)
-    const data = await resp.json()
+  //   // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
+  //   // when we query "<base-url>/search/" (with trailing slash).
+  //   const sanctionsUrl = 'https://api.sanctions.io/search/' +
+  //     '?min_score=0.85' +
+  //     // TODO: Create a constant for the data sources
+  //     // `&data_source=${encodeURIComponent('CFSP')}` +
+  //     `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
+  //     `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+  //     `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+  //     '&entity_type=individual';
+  //   // TODO: Add country_residence to zkp
+  //   // sanctionsUrl.searchParams.append('country_residence', 'us')
+  //   const config = {
+  //     headers: {
+  //       'Accept': 'application/json; version=2.2',
+  //       'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
+  //     }
+  //   }
+  //   const resp = await fetch(sanctionsUrl, config)
+  //   const data = await resp.json()
 
-    if (data.count > 0) {
-      return res.status(400).json({ error: 'Sanctions match found' });
-    }
+  //   if (data.count > 0) {
+  //     return res.status(400).json({ error: 'Sanctions match found' });
+  //   }
   
-    const validationResult = validateScreeningResult(data);
-    if (validationResult.error) {
-      console.error(validationResult.log.data, validationResult.log.msg);
+  //   const validationResult = validateScreeningResult(data);
+  //   if (validationResult.error) {
+  //     console.error(validationResult.log.data, validationResult.log.msg);
 
-      session.status = sessionStatusEnum.VERIFICATION_FAILED;
-      session.verificationFailureReason = validationResult.error;
-      await session.save()
+  //     session.status = sessionStatusEnum.VERIFICATION_FAILED;
+  //     session.verificationFailureReason = validationResult.error;
+  //     await session.save()
 
-      return res.status(400).json({ error: validationResult.error });
-    }
+  //     return res.status(400).json({ error: validationResult.error });
+  //   }
   
-    const uuid = govIdUUID(
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    );
+  //   const uuid = govIdUUID(
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth, 
+  //   );
 
-    const dbResponse = await saveUserToDb(uuid);
-    if (dbResponse.error) return res.status(400).json(dbResponse);
+  //   const dbResponse = await saveUserToDb(uuid);
+  //   if (dbResponse.error) return res.status(400).json(dbResponse);
 
-    const creds = extractCreds({
-      firstName, 
-      lastName, 
-      dateOfBirth,
-    });
+  //   const creds = extractCreds({
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth,
+  //   });
   
-    const response = JSON.parse(
-      issuev2(
-        process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY,
-        issuanceNullifier,
-        getDateAsInt(creds.rawCreds.birthdate).toString(),
-        creds.derivedCreds.nameHash.value,
-      )
-    );
-    response.metadata = creds;
+  //   const response = JSON.parse(
+  //     issuev2(
+  //       process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY,
+  //       issuanceNullifier,
+  //       getDateAsInt(creds.rawCreds.birthdate).toString(),
+  //       creds.derivedCreds.nameHash.value,
+  //     )
+  //   );
+  //   response.metadata = creds;
     
-    session.status = sessionStatusEnum.ISSUED;
-    await session.save()
+  //   session.status = sessionStatusEnum.ISSUED;
+  //   await session.save()
   
-    return res.status(200).json(response);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+  //   return res.status(200).json(response);
+  // } catch (err: any) {
+  //   console.error(err);
+  //   return res.status(500).json({ error: "An unknown error occurred" });
+  // }
 }
 
 /**
@@ -1008,538 +1019,538 @@ async function issueCreds(req, res) {
  * credentials up to 5 days after initial issuance, if they provide the
  * same nullifier.
  */
-async function issueCredsV2(req, res) {
+async function issueCredsV2(req: Request, res: Response) {
   // Block usage of this endpoint
   return res.status(404).send()
 
-  try {
-    // Caller must specify a session ID and a nullifier. We first lookup the user's creds
-    // using the nullifier. If no hit, then we lookup the credentials using the session ID.
-    const issuanceNullifier = req.params.nullifier;
-    const _id = req.params._id;
+  // try {
+  //   // Caller must specify a session ID and a nullifier. We first lookup the user's creds
+  //   // using the nullifier. If no hit, then we lookup the credentials using the session ID.
+  //   const issuanceNullifier = req.params.nullifier;
+  //   const _id = req.params._id;
 
-    try {
-      const _number = BigInt(issuanceNullifier)
-    } catch (err) {
-      return res.status(400).json({
-        error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
-      });
-    }
+  //   try {
+  //     const _number = BigInt(issuanceNullifier)
+  //   } catch (err: any) {
+  //     return res.status(400).json({
+  //       error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
+  //     });
+  //   }
 
-    // if (process.env.ENVIRONMENT == "dev") {
-    //   const creds = cleanHandsDummyUserCreds;
-    //   const response = issuev2CleanHands(issuanceNullifier, creds);
-    //   response.metadata = cleanHandsDummyUserCreds;
-    //   return res.status(200).json(response);
-    // }
+  //   // if (process.env.ENVIRONMENT == "dev") {
+  //   //   const creds = cleanHandsDummyUserCreds;
+  //   //   const response = issuev2CleanHands(issuanceNullifier, creds);
+  //   //   response.metadata = cleanHandsDummyUserCreds;
+  //   //   return res.status(200).json(response);
+  //   // }
 
-    let objectId = null;
-    try {
-      objectId = new ObjectId(_id);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid _id" });
-    }
+  //   let objectId = null;
+  //   try {
+  //     objectId = new ObjectId(_id);
+  //   } catch (err: any) {
+  //     return res.status(400).json({ error: "Invalid _id" });
+  //   }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  //   const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
   
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+  //   if (!session) {
+  //     return res.status(404).json({ error: "Session not found" });
+  //   }
 
-    if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
-      return res.status(400).json({
-        error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
-      });
-    }
+  //   if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+  //     return res.status(400).json({
+  //       error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+  //     });
+  //   }
 
-    // First, check if the user is looking up their credentials using their nullifier
-    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
-    const govIdCreds = nullifierAndCreds?.govIdCreds
-    if (govIdCreds?.firstName && govIdCreds?.lastName && govIdCreds?.dateOfBirth) {
-      // Note that we don't need to validate the ZKP or creds here. If the creds are in
-      // the database, validation has passed.
+  //   // First, check if the user is looking up their credentials using their nullifier
+  //   const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
+  //   const govIdCreds = nullifierAndCreds?.govIdCreds
+  //   if (govIdCreds?.firstName && govIdCreds?.lastName && govIdCreds?.dateOfBirth) {
+  //     // Note that we don't need to validate the ZKP or creds here. If the creds are in
+  //     // the database, validation has passed.
 
-      if (govIdCreds?.expiry < new Date()) {
-        return res.status(400).json({
-          error: "Gov ID credentials have expired. Cannot issue Clean Hands credentials."
-        });
-      }
+  //     if (govIdCreds?.expiry < new Date()) {
+  //       return res.status(400).json({
+  //         error: "Gov ID credentials have expired. Cannot issue Clean Hands credentials."
+  //       });
+  //     }
 
-      // Get UUID
-      const uuid = govIdUUID(
-        govIdCreds.firstName, 
-        govIdCreds.lastName, 
-        govIdCreds.dateOfBirth, 
-      );
+  //     // Get UUID
+  //     const uuid = govIdUUID(
+  //       govIdCreds.firstName, 
+  //       govIdCreds.lastName, 
+  //       govIdCreds.dateOfBirth, 
+  //     );
 
-      // Assert user hasn't registered yet.
-      // This step is not strictly necessary since we are only considering nullifiers
-      // from the last 5 days (in the nullifierAndCreds query above) and the user
-      // is only getting the credentials+nullifier that they were already issued.
-      // However, we keep it here to be extra safe.
-      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-      if (user) {
-        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-        issueCredsV2Logger.alreadyRegistered(uuid);
-        // Fail session and return
-        await failSession(session, toAlreadyRegisteredStr(user._id))
-        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
-      }
+  //     // Assert user hasn't registered yet.
+  //     // This step is not strictly necessary since we are only considering nullifiers
+  //     // from the last 5 days (in the nullifierAndCreds query above) and the user
+  //     // is only getting the credentials+nullifier that they were already issued.
+  //     // However, we keep it here to be extra safe.
+  //     const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+  //     if (user) {
+  //       // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+  //       issueCredsV2Logger.alreadyRegistered(uuid);
+  //       // Fail session and return
+  //       await failSession(session, toAlreadyRegisteredStr(user._id))
+  //       return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+  //     }
 
-      const creds = extractCreds({
-        firstName: govIdCreds.firstName, 
-        lastName: govIdCreds.lastName,
-        dateOfBirth: govIdCreds.dateOfBirth,
-      });
-      const response = issuev2CleanHands(issuanceNullifier, creds);
-      response.metadata = creds;
+  //     const creds = extractCreds({
+  //       firstName: govIdCreds.firstName, 
+  //       lastName: govIdCreds.lastName,
+  //       dateOfBirth: govIdCreds.dateOfBirth,
+  //     });
+  //     const response = issuev2CleanHands(issuanceNullifier, creds);
+  //     response.metadata = creds;
 
-      issueCredsV2Logger.info({ uuid }, "Issuing credentials");
+  //     issueCredsV2Logger.info({ uuid }, "Issuing credentials");
 
-      session.status = sessionStatusEnum.ISSUED;
-      await session.save();
+  //     session.status = sessionStatusEnum.ISSUED;
+  //     await session.save();
 
-      return res.status(200).json(response);
-    }
+  //     return res.status(200).json(response);
+  //   }
 
-    // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
-    // then the lookup via nullifier should have worked above.
-    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
-      return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
-      });
-    }
+  //   // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
+  //   // then the lookup via nullifier should have worked above.
+  //   if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+  //     return res.status(400).json({
+  //       error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+  //     });
+  //   }
 
-    // zkp should be of type Groth16FullProveResult (a proof generated with snarkjs.groth16)
-    // it should be stringified
-    let zkp = null;
-    try {
-      zkp = JSON.parse(req.query.zkp);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid zkp" });
-    }
+  //   // zkp should be of type Groth16FullProveResult (a proof generated with snarkjs.groth16)
+  //   // it should be stringified
+  //   let zkp = null;
+  //   try {
+  //     zkp = JSON.parse(req.query.zkp);
+  //   } catch (err: any) {
+  //     return res.status(400).json({ error: "Invalid zkp" });
+  //   }
     
-    if (!zkp?.proof || !zkp?.publicSignals) {
-      return res.status(400).json({ error: "No zkp found" });
-    }
+  //   if (!zkp?.proof || !zkp?.publicSignals) {
+  //     return res.status(400).json({ error: "No zkp found" });
+  //   }
   
-    const zkpVerified = await groth16.verify(V3NameDOBVKey, zkp.publicSignals, zkp.proof);
-    if (!zkpVerified) {
-      return res.status(400).json({ error: "ZKP verification failed" });
-    }
+  //   const zkpVerified = await groth16.verify(V3NameDOBVKey, zkp.publicSignals, zkp.proof);
+  //   if (!zkpVerified) {
+  //     return res.status(400).json({ error: "ZKP verification failed" });
+  //   }
   
-    const { 
-      expiry,
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    } = parsePublicSignals(zkp.publicSignals);
+  //   const { 
+  //     expiry,
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth, 
+  //   } = parsePublicSignals(zkp.publicSignals);
   
-    if (expiry < new Date()) {
-      return res.status(400).json({ error: "Credentials have expired" });
-    }
+  //   if (expiry < new Date()) {
+  //     return res.status(400).json({ error: "Credentials have expired" });
+  //   }
 
-    // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
-    // when we query "<base-url>/search/" (with trailing slash).
-    const sanctionsUrl = 'https://api.sanctions.io/search/' +
-      '?min_score=0.93' +
-      // TODO: Create a constant for the data sources
-      // `&data_source=${encodeURIComponent('CFSP')}` +
-      `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
-      `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
-      `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
-      '&entity_type=individual';
-    // TODO: Add country_residence to zkp
-    // sanctionsUrl.searchParams.append('country_residence', 'us')
-    const config = {
-      headers: {
-        'Accept': 'application/json; version=2.2',
-        'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
-      }
-    }
-    const resp = await fetch(sanctionsUrl, config)
-    const data = await resp.json()
+  //   // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
+  //   // when we query "<base-url>/search/" (with trailing slash).
+  //   const sanctionsUrl = 'https://api.sanctions.io/search/' +
+  //     '?min_score=0.93' +
+  //     // TODO: Create a constant for the data sources
+  //     // `&data_source=${encodeURIComponent('CFSP')}` +
+  //     `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
+  //     `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+  //     `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+  //     '&entity_type=individual';
+  //   // TODO: Add country_residence to zkp
+  //   // sanctionsUrl.searchParams.append('country_residence', 'us')
+  //   const config = {
+  //     headers: {
+  //       'Accept': 'application/json; version=2.2',
+  //       'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
+  //     }
+  //   }
+  //   const resp = await fetch(sanctionsUrl, config)
+  //   const data = await resp.json()
 
-    if (data.count > 0) {
-      const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
-      if (!whitelistItem) {
-        issueCredsV2Logger.sanctionsMatchFound(data.results);
-        const confidenceScores = data?.results?.map(result => {
-          return `(${result.data_source?.name}: ${result?.confidence_score})`
-        }).join(', ')
-        await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
-        return res.status(400).json({ error: 'Sanctions match found' });
-      } else {
-        issueCredsV2Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
-      }
-    }
+  //   if (data.count > 0) {
+  //     const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
+  //     if (!whitelistItem) {
+  //       issueCredsV2Logger.sanctionsMatchFound(data.results);
+  //       const confidenceScores = data?.results?.map(result => {
+  //         return `(${result.data_source?.name}: ${result?.confidence_score})`
+  //       }).join(', ')
+  //       await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
+  //       return res.status(400).json({ error: 'Sanctions match found' });
+  //     } else {
+  //       issueCredsV2Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+  //     }
+  //   }
   
-    // Commented out since the only validation we do is to check if count > 0, which we do above.
-    // TODO: In the future, once we add more validation, we should use this pattern.
-    // const validationResult = validateScreeningResult(data);
-    // if (validationResult.error) {
-    //   issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
-    //   await failSession(session, validationResult.error)
-    //   return res.status(400).json({ error: validationResult.error });
-    // }
+  //   // Commented out since the only validation we do is to check if count > 0, which we do above.
+  //   // TODO: In the future, once we add more validation, we should use this pattern.
+  //   // const validationResult = validateScreeningResult(data);
+  //   // if (validationResult.error) {
+  //   //   issueCredsV2Logger.error(validationResult.log.data, validationResult.log.msg);
+  //   //   await failSession(session, validationResult.error)
+  //   //   return res.status(400).json({ error: validationResult.error });
+  //   // }
   
-    const uuid = govIdUUID(
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    );
+  //   const uuid = govIdUUID(
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth, 
+  //   );
 
-    // Assert user hasn't registered yet
-    const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-    if (user) {
-      // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-      issueCredsV2Logger.alreadyRegistered(uuid);
-      // Fail session and return
-      await failSession(session, toAlreadyRegisteredStr(user._id))
-      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
-    }
+  //   // Assert user hasn't registered yet
+  //   const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+  //   if (user) {
+  //     // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+  //     issueCredsV2Logger.alreadyRegistered(uuid);
+  //     // Fail session and return
+  //     await failSession(session, toAlreadyRegisteredStr(user._id))
+  //     return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+  //   }
 
-    const dbResponse = await saveUserToDb(uuid);
-    if (dbResponse.error) return res.status(400).json(dbResponse);
+  //   const dbResponse = await saveUserToDb(uuid);
+  //   if (dbResponse.error) return res.status(400).json(dbResponse);
 
-    const creds = extractCreds({
-      firstName, 
-      lastName, 
-      dateOfBirth,
-    });
+  //   const creds = extractCreds({
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth,
+  //   });
   
-    const response = issuev2CleanHands(issuanceNullifier, creds);
-    response.metadata = creds;
+  //   const response = issuev2CleanHands(issuanceNullifier, creds);
+  //   response.metadata = creds;
     
-    issueCredsV2Logger.info({ uuid }, "Issuing credentials");
+  //   issueCredsV2Logger.info({ uuid }, "Issuing credentials");
 
-    const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
-      holoUserId: session.sigDigest,
-      issuanceNullifier,
-      uuid,
-      govIdCreds: {
-        firstName,
-        lastName,
-        dateOfBirth,
-        expiry
-      },
-    });
-    await newNullifierAndCreds.save();
+  //   const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
+  //     holoUserId: session.sigDigest,
+  //     issuanceNullifier,
+  //     uuid,
+  //     govIdCreds: {
+  //       firstName,
+  //       lastName,
+  //       dateOfBirth,
+  //       expiry
+  //     },
+  //   });
+  //   await newNullifierAndCreds.save();
 
-    session.status = sessionStatusEnum.ISSUED;
-    await session.save()
+  //   session.status = sessionStatusEnum.ISSUED;
+  //   await session.save()
   
-    return res.status(200).json(response);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+  //   return res.status(200).json(response);
+  // } catch (err: any) {
+  //   console.error(err);
+  //   return res.status(500).json({ error: "An unknown error occurred" });
+  // }
 }
 
 /**
  * Allows user to retrieve their credentials from Onfido directly.
  */
-async function issueCredsV3(req, res) {
+async function issueCredsV3(req: Request, res: Response) {
   // Block usage of this endpoint
   return res.status(404).send()
 
-  try {
-    // Caller must specify a session ID and a nullifier. We first lookup the user's creds
-    // using the nullifier. If no hit, then we lookup the credentials using the session ID.
-    const issuanceNullifier = req.params.nullifier;
-    const _id = req.params._id;
+  // try {
+  //   // Caller must specify a session ID and a nullifier. We first lookup the user's creds
+  //   // using the nullifier. If no hit, then we lookup the credentials using the session ID.
+  //   const issuanceNullifier = req.params.nullifier;
+  //   const _id = req.params._id;
 
-    try {
-      const _number = BigInt(issuanceNullifier);
-    } catch (err) {
-      return res.status(400).json({
-        error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
-      });
-    }
+  //   try {
+  //     const _number = BigInt(issuanceNullifier);
+  //   } catch (err: any) {
+  //     return res.status(400).json({
+  //       error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
+  //     });
+  //   }
 
-    // if (process.env.ENVIRONMENT == "dev") {
-    //   const creds = cleanHandsDummyUserCreds;
-    //   const response = issuev2CleanHands(issuanceNullifier, creds);
-    //   response.metadata = cleanHandsDummyUserCreds;
-    //   return res.status(200).json(response);
-    // }
+  //   // if (process.env.ENVIRONMENT == "dev") {
+  //   //   const creds = cleanHandsDummyUserCreds;
+  //   //   const response = issuev2CleanHands(issuanceNullifier, creds);
+  //   //   response.metadata = cleanHandsDummyUserCreds;
+  //   //   return res.status(200).json(response);
+  //   // }
 
-    let objectId = null;
-    try {
-      objectId = new ObjectId(_id);
-    } catch (err) {
-      return res.status(400).json({ error: "Invalid _id" });
-    }
+  //   let objectId = null;
+  //   try {
+  //     objectId = new ObjectId(_id);
+  //   } catch (err: any) {
+  //     return res.status(400).json({ error: "Invalid _id" });
+  //   }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+  //   const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
   
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+  //   if (!session) {
+  //     return res.status(404).json({ error: "Session not found" });
+  //   }
 
-    if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
-      return res.status(400).json({
-        error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
-      });
-    }
+  //   if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+  //     return res.status(400).json({
+  //       error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+  //     });
+  //   }
 
-    // First, check if the user is looking up their credentials using their nullifier
-    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
-    const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
+  //   // First, check if the user is looking up their credentials using their nullifier
+  //   const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
+  //   const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
 
-    // as idvSessionId is already set in DB, we can directly get the creds from Onfido
-    // without stringent validation
-    if (nullifierIdvSessionId) {
-      const idvSessionResult = await getSessionById(nullifierIdvSessionId);
-      if (idvSessionResult.error) {
-        return res.status(400).json({ error: idvSessionResult.error });
-      }
+  //   // as idvSessionId is already set in DB, we can directly get the creds from Onfido
+  //   // without stringent validation
+  //   if (nullifierIdvSessionId) {
+  //     const idvSessionResult = await getSessionById(nullifierIdvSessionId);
+  //     if (idvSessionResult.error) {
+  //       return res.status(400).json({ error: idvSessionResult.error });
+  //     }
 
-      const check_id = idvSessionResult.session.check_id;
-      if (!check_id) {
-        return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
-      }
+  //     const check_id = idvSessionResult.session.check_id;
+  //     if (!check_id) {
+  //       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+  //     }
 
-      const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
-      const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
-      const documentReport = reports.find((report) => report.name == "document");
+  //     const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
+  //     const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
+  //     const documentReport = reports.find((report) => report.name == "document");
 
-      // get creds from onfido report
-      const firstName = documentReport.properties.first_name || "";
-      const lastName = documentReport.properties.last_name || "";
-      const dateOfBirth = documentReport.properties.date_of_birth || "";
+  //     // get creds from onfido report
+  //     const firstName = documentReport.properties.first_name || "";
+  //     const lastName = documentReport.properties.last_name || "";
+  //     const dateOfBirth = documentReport.properties.date_of_birth || "";
 
-      // expiry - not needed?
-      const expiry = documentReport.properties.expiry || "";
+  //     // expiry - not needed?
+  //     const expiry = documentReport.properties.expiry || "";
 
-      const uuid = govIdUUID(
-        firstName, 
-        lastName, 
-        dateOfBirth, 
-      );
+  //     const uuid = govIdUUID(
+  //       firstName, 
+  //       lastName, 
+  //       dateOfBirth, 
+  //     );
 
-      // Assert user hasn't registered yet.
-      // This step is not strictly necessary since we are only considering nullifiers
-      // from the last 5 days (in the nullifierAndCreds query above) and the user
-      // is only getting the credentials+nullifier that they were already issued.
-      // However, we keep it here to be extra safe.
-      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-      if (user) {
-        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-        issueCredsV3Logger.alreadyRegistered(uuid);
-        // Fail session and return
-        await failSession(session, toAlreadyRegisteredStr(user._id))
-        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
-      }
+  //     // Assert user hasn't registered yet.
+  //     // This step is not strictly necessary since we are only considering nullifiers
+  //     // from the last 5 days (in the nullifierAndCreds query above) and the user
+  //     // is only getting the credentials+nullifier that they were already issued.
+  //     // However, we keep it here to be extra safe.
+  //     const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+  //     if (user) {
+  //       // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+  //       issueCredsV3Logger.alreadyRegistered(uuid);
+  //       // Fail session and return
+  //       await failSession(session, toAlreadyRegisteredStr(user._id))
+  //       return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+  //     }
 
-      const creds = extractCreds({
-        firstName, 
-        lastName, 
-        dateOfBirth,
-      });
+  //     const creds = extractCreds({
+  //       firstName, 
+  //       lastName, 
+  //       dateOfBirth,
+  //     });
     
-      const response = issuev2CleanHands(issuanceNullifier, creds);
-      response.metadata = creds;
+  //     const response = issuev2CleanHands(issuanceNullifier, creds);
+  //     response.metadata = creds;
 
-      issueCredsV3Logger.info({ uuid }, "Issuing credentials");
+  //     issueCredsV3Logger.info({ uuid }, "Issuing credentials");
 
-      session.status = sessionStatusEnum.ISSUED;
-      await session.save();
+  //     session.status = sessionStatusEnum.ISSUED;
+  //     await session.save();
 
-      return res.status(200).json(response);
-    }
+  //     return res.status(200).json(response);
+  //   }
 
-    // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
-    // then the lookup via nullifier should have worked above.
-    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
-      return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
-      });
-    }
+  //   // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
+  //   // then the lookup via nullifier should have worked above.
+  //   if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+  //     return res.status(400).json({
+  //       error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+  //     });
+  //   }
 
-    // here instead of zkp, we get from onfido directly
-    const idvSessionId = req.query.idvSessionId;
-    const idvSessionResult = await getSessionById(idvSessionId);
-    if (idvSessionResult.error) {
-      return res.status(400).json({ error: idvSessionResult.error });
-    }
-    const idvSession = idvSessionResult.session;
+  //   // here instead of zkp, we get from onfido directly
+  //   const idvSessionId = req.query.idvSessionId;
+  //   const idvSessionResult = await getSessionById(idvSessionId);
+  //   if (idvSessionResult.error) {
+  //     return res.status(400).json({ error: idvSessionResult.error });
+  //   }
+  //   const idvSession = idvSessionResult.session;
 
-    console.log("idvSession", idvSession);
-    const check_id = idvSession.check_id;
-    if (!check_id) {
-      return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
-    }
+  //   console.log("idvSession", idvSession);
+  //   const check_id = idvSession.check_id;
+  //   if (!check_id) {
+  //     return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+  //   }
 
-    const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
-    const validationResultCheck = validateCheck(check);
-    if (!validationResultCheck.success && !validationResultCheck.hasReports) {
-      issueCredsV3Logger.info(validationResultCheck, "Check validation failed")
-      await failSession(session, validationResultCheck.error)
-      return res.status(400).json({
-        error: validationResultCheck.error,
-        details: validationResultCheck.log.data
-      });
-    }
+  //   const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
+  //   const validationResultCheck = validateCheck(check);
+  //   if (!validationResultCheck.success && !validationResultCheck.hasReports) {
+  //     issueCredsV3Logger.info(validationResultCheck, "Check validation failed")
+  //     await failSession(session, validationResultCheck.error)
+  //     return res.status(400).json({
+  //       error: validationResultCheck.error,
+  //       details: validationResultCheck.log.data
+  //     });
+  //   }
 
-    const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
-    if (!validationResultCheck.success && (!reports || reports.length == 0)) {
-      issueCredsV3Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
+  //   const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
+  //   if (!validationResultCheck.success && (!reports || reports.length == 0)) {
+  //     issueCredsV3Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
 
-      await failSession(session, "No onfido reports found")
-      return res.status(400).json({ error: "No reports found" });
-    }
-    const reportsValidation = validateReports(reports, session);
-    if (validationResultCheck.error || reportsValidation.error) {
-      const userErrorMessage = onfidoValidationToUserErrorMessage(
-        reportsValidation,
-        validationResultCheck
-      )
-      issueCredsV3Logger.info(reportsValidation, "Verification failed: "+ check_id)
-      await failSession(session, userErrorMessage)
+  //     await failSession(session, "No onfido reports found")
+  //     return res.status(400).json({ error: "No reports found" });
+  //   }
+  //   const reportsValidation = validateReports(reports, session);
+  //   if (validationResultCheck.error || reportsValidation.error) {
+  //     const userErrorMessage = onfidoValidationToUserErrorMessage(
+  //       reportsValidation,
+  //       validationResultCheck
+  //     )
+  //     issueCredsV3Logger.info(reportsValidation, "Verification failed: "+ check_id)
+  //     await failSession(session, userErrorMessage)
 
-      throw {
-        status: 400,
-        error: userErrorMessage,
-        details: {
-          reasons: reportsValidation.reasons,
-        },
-      };
-    }
+  //     throw {
+  //       status: 400,
+  //       error: userErrorMessage,
+  //       details: {
+  //         reasons: reportsValidation.reasons,
+  //       },
+  //     };
+  //   }
 
-    const documentReport = reports.find((report) => report.name == "document");
+  //   const documentReport = reports.find((report) => report.name == "document");
 
-    // get creds from onfido report
-    const firstName = documentReport.properties.first_name || "";
-    const lastName = documentReport.properties.last_name || "";
-    const dateOfBirth = documentReport.properties.date_of_birth || "";
+  //   // get creds from onfido report
+  //   const firstName = documentReport.properties.first_name || "";
+  //   const lastName = documentReport.properties.last_name || "";
+  //   const dateOfBirth = documentReport.properties.date_of_birth || "";
     
-    // expiry - not needed?
-    const expiry = documentReport.properties.expiry || "";
+  //   // expiry - not needed?
+  //   const expiry = documentReport.properties.expiry || "";
 
-    // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
-    // when we query "<base-url>/search/" (with trailing slash).
-    const sanctionsUrl = 'https://api.sanctions.io/search/' +
-      '?min_score=0.93' +
-      // TODO: Create a constant for the data sources
-      // `&data_source=${encodeURIComponent('CFSP')}` +
-      `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
-      `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
-      `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
-      '&entity_type=individual';
-    // TODO: Add country_residence to zkp
-    // sanctionsUrl.searchParams.append('country_residence', 'us')
-    const config = {
-      headers: {
-        'Accept': 'application/json; version=2.2',
-        'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
-      }
-    }
-    const resp = await fetch(sanctionsUrl, config)
-    const data = await resp.json()
+  //   // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
+  //   // when we query "<base-url>/search/" (with trailing slash).
+  //   const sanctionsUrl = 'https://api.sanctions.io/search/' +
+  //     '?min_score=0.93' +
+  //     // TODO: Create a constant for the data sources
+  //     // `&data_source=${encodeURIComponent('CFSP')}` +
+  //     `&data_source=${encodeURIComponent('CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS')}` +
+  //     `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+  //     `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+  //     '&entity_type=individual';
+  //   // TODO: Add country_residence to zkp
+  //   // sanctionsUrl.searchParams.append('country_residence', 'us')
+  //   const config = {
+  //     headers: {
+  //       'Accept': 'application/json; version=2.2',
+  //       'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
+  //     }
+  //   }
+  //   const resp = await fetch(sanctionsUrl, config)
+  //   const data = await resp.json()
 
-    const resultsObjectsToStore = []
-    const filteredResults = data.results.filter(result => {
-      // Keep all non-PEP results
-      if (result?.data_source?.short_name !== 'PEP') {
-        return true
-      }
+  //   const resultsObjectsToStore = []
+  //   const filteredResults = data.results.filter(result => {
+  //     // Keep all non-PEP results
+  //     if (result?.data_source?.short_name !== 'PEP') {
+  //       return true
+  //     }
 
-      // Log and persist the PEP hit
-      const resultToLog = {
-        data_source: result.data_source,
-        nationality: result.nationality,
-        confidence_score: result.confidence_score,
-        si_identifier: result.si_identifier,
-      }
-      issueCredsV3Logger.info({ result: resultToLog }, "PEP result found");
-      const resultsObj = new SanctionsResult({
-        message: "PEP result found",
-        ...resultToLog
-      })
-      resultsObjectsToStore.push(resultsObj)
+  //     // Log and persist the PEP hit
+  //     const resultToLog = {
+  //       data_source: result.data_source,
+  //       nationality: result.nationality,
+  //       confidence_score: result.confidence_score,
+  //       si_identifier: result.si_identifier,
+  //     }
+  //     issueCredsV3Logger.info({ result: resultToLog }, "PEP result found");
+  //     const resultsObj = new SanctionsResult({
+  //       message: "PEP result found",
+  //       ...resultToLog
+  //     })
+  //     resultsObjectsToStore.push(resultsObj)
 
-      return true
-    })
+  //     return true
+  //   })
 
-    await Promise.all(resultsObjectsToStore.map(result => result.save()))
+  //   await Promise.all(resultsObjectsToStore.map(result => result.save()))
 
-    if (filteredResults.length > 0) {
-      const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
-      if (!whitelistItem) {
-        issueCredsV3Logger.sanctionsMatchFound(data.results);
-        const confidenceScores = data?.results?.map(result => {
-          return `(${result.data_source?.name}: ${result?.confidence_score})`
-        }).join(', ')
-        await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
-        return res.status(400).json({ error: 'Sanctions match found' });
-      } else {
-        issueCredsV3Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
-      }
-    }
+  //   if (filteredResults.length > 0) {
+  //     const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
+  //     if (!whitelistItem) {
+  //       issueCredsV3Logger.sanctionsMatchFound(data.results);
+  //       const confidenceScores = data?.results?.map(result => {
+  //         return `(${result.data_source?.name}: ${result?.confidence_score})`
+  //       }).join(', ')
+  //       await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
+  //       return res.status(400).json({ error: 'Sanctions match found' });
+  //     } else {
+  //       issueCredsV3Logger.info({ sessionId: session._id }, "Ignoring sanctions match for whitelisted session");
+  //     }
+  //   }
   
-    // Commented out since the only validation we do is to check if count > 0, which we do above.
-    // TODO: In the future, once we add more validation, we should use this pattern.
-    // const validationResult = validateScreeningResult(data);
-    // if (validationResult.error) {
-    //   issueCredsV3Logger.error(validationResult.log.data, validationResult.log.msg);
-    //   await failSession(session, validationResult.error)
-    //   return res.status(400).json({ error: validationResult.error });
-    // }
+  //   // Commented out since the only validation we do is to check if count > 0, which we do above.
+  //   // TODO: In the future, once we add more validation, we should use this pattern.
+  //   // const validationResult = validateScreeningResult(data);
+  //   // if (validationResult.error) {
+  //   //   issueCredsV3Logger.error(validationResult.log.data, validationResult.log.msg);
+  //   //   await failSession(session, validationResult.error)
+  //   //   return res.status(400).json({ error: validationResult.error });
+  //   // }
   
-    const uuid = govIdUUID(
-      firstName, 
-      lastName, 
-      dateOfBirth, 
-    );
+  //   const uuid = govIdUUID(
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth, 
+  //   );
 
-    // Assert user hasn't registered yet
-    const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-    if (user) {
-      // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-      issueCredsV3Logger.alreadyRegistered(uuid);
-      // Fail session and return
-      await failSession(session, toAlreadyRegisteredStr(user._id))
-      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
-    }
+  //   // Assert user hasn't registered yet
+  //   const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+  //   if (user) {
+  //     // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+  //     issueCredsV3Logger.alreadyRegistered(uuid);
+  //     // Fail session and return
+  //     await failSession(session, toAlreadyRegisteredStr(user._id))
+  //     return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+  //   }
 
-    const dbResponse = await saveUserToDb(uuid);
-    if (dbResponse.error) return res.status(400).json(dbResponse);
+  //   const dbResponse = await saveUserToDb(uuid);
+  //   if (dbResponse.error) return res.status(400).json(dbResponse);
 
-    const creds = extractCreds({
-      firstName, 
-      lastName, 
-      dateOfBirth,
-    });
+  //   const creds = extractCreds({
+  //     firstName, 
+  //     lastName, 
+  //     dateOfBirth,
+  //   });
   
-    const response = issuev2CleanHands(issuanceNullifier, creds);
-    response.metadata = creds;
+  //   const response = issuev2CleanHands(issuanceNullifier, creds);
+  //   response.metadata = creds;
     
-    issueCredsV3Logger.info({ uuid }, "Issuing credentials");
+  //   issueCredsV3Logger.info({ uuid }, "Issuing credentials");
 
-    const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
-      holoUserId: session.sigDigest,
-      issuanceNullifier,
-      uuid,
-      idvSessionId,
-    });
-    await newNullifierAndCreds.save();
+  //   const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
+  //     holoUserId: session.sigDigest,
+  //     issuanceNullifier,
+  //     uuid,
+  //     idvSessionId,
+  //   });
+  //   await newNullifierAndCreds.save();
 
-    session.status = sessionStatusEnum.ISSUED;
-    await session.save()
+  //   session.status = sessionStatusEnum.ISSUED;
+  //   await session.save()
   
-    return res.status(200).json(response);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+  //   return res.status(200).json(response);
+  // } catch (err: any) {
+  //   console.error(err);
+  //   return res.status(500).json({ error: "An unknown error occurred" });
+  // }
 }
 
 /**
  * Same as v3, except it marks the session as NEEDS_USER_DECLARATION if certain
  * PEP hits are found.
  */
-async function issueCredsV4(req, res) {
+async function issueCredsV4(req: Request, res: Response) {
   try {
     // Caller must specify a session ID and a nullifier. We first lookup the user's creds
     // using the nullifier. If no hit, then we lookup the credentials using the session ID.
@@ -1548,7 +1559,7 @@ async function issueCredsV4(req, res) {
 
     try {
       const _number = BigInt(issuanceNullifier);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({
         error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
       });
@@ -1564,7 +1575,7 @@ async function issueCredsV4(req, res) {
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -1599,14 +1610,14 @@ async function issueCredsV4(req, res) {
         return res.status(400).json({ error: idvSessionResult.error });
       }
 
-      const check_id = idvSessionResult.session.check_id;
+      const check_id = idvSessionResult!.session!.check_id;
       if (!check_id) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
       }
 
       const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
       const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
-      const documentReport = reports.find((report) => report.name == "document");
+      const documentReport = reports?.find((report) => report.name == "document");
 
       // get creds from onfido report
       const firstName = documentReport.properties.first_name || "";
@@ -1632,8 +1643,8 @@ async function issueCredsV4(req, res) {
         // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
         issueCredsV4Logger.alreadyRegistered(uuid);
         // Fail session and return
-        await failSession(session, toAlreadyRegisteredStr(user._id))
-        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+        await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
       }
 
       const creds = extractCreds({
@@ -1663,13 +1674,13 @@ async function issueCredsV4(req, res) {
 
     // here instead of zkp, we get from onfido directly
     const idvSessionId = req.query.idvSessionId;
-    const idvSessionResult = await getSessionById(idvSessionId);
+    const idvSessionResult = await getSessionById(idvSessionId as string);
     if (idvSessionResult.error) {
       return res.status(400).json({ error: idvSessionResult.error });
     }
     const idvSession = idvSessionResult.session;
 
-    const check_id = idvSession.check_id;
+    const check_id = idvSession?.check_id;
     if (!check_id) {
       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
     }
@@ -1678,10 +1689,10 @@ async function issueCredsV4(req, res) {
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       issueCredsV4Logger.info(validationResultCheck, "Check validation failed")
-      await failSession(session, validationResultCheck.error)
+      await failSession(session, validationResultCheck.error as string)
       return res.status(400).json({
         error: validationResultCheck.error,
-        details: validationResultCheck.log.data
+        details: validationResultCheck?.log?.data
       });
     }
 
@@ -1692,7 +1703,7 @@ async function issueCredsV4(req, res) {
       await failSession(session, "No onfido reports found")
       return res.status(400).json({ error: "No reports found" });
     }
-    const reportsValidation = validateReports(reports, session);
+    const reportsValidation = validateReports(reports ?? [], session);
     if (validationResultCheck.error || reportsValidation.error) {
       const userErrorMessage = onfidoValidationToUserErrorMessage(
         reportsValidation,
@@ -1710,7 +1721,7 @@ async function issueCredsV4(req, res) {
       };
     }
 
-    const documentReport = reports.find((report) => report.name == "document");
+    const documentReport = reports?.find((report) => report.name == "document");
 
     // get creds from onfido report
     const firstName = documentReport.properties.first_name || "";
@@ -1731,7 +1742,7 @@ async function issueCredsV4(req, res) {
     // If the user has confirmed recently, then skip the sanctions check.
     const fiveDaysAgo = new Date(Date.now() - (5 * 24 * 60 * 60 * 1000))
     const skipSanctionsCheck = session.userDeclaration?.confirmed && 
-      (session.userDeclaration?.statementGeneratedAt > fiveDaysAgo)
+      ((session.userDeclaration?.statementGeneratedAt ?? 0) > fiveDaysAgo)
 
     if (!skipSanctionsCheck) {
       // sanctions.io returns 301 if we query "<base-url>/search" but returns the actual result
@@ -1754,6 +1765,8 @@ async function issueCredsV4(req, res) {
       const resp = await fetch(sanctionsUrl, config)
       const data = await resp.json()
 
+      console.log('sanctions io response', JSON.stringify(data, null, 2))
+
       // if (process.env.NODE_ENV == 'development') {
       //   data.results.push({
       //     data_hash: 'abc123',
@@ -1768,8 +1781,10 @@ async function issueCredsV4(req, res) {
       //   })
       // }
 
-      const resultsObjectsToStore = []
-      const resultsToBlock = data.results.filter(result => {
+      const resultsObjectsToStore: Array<HydratedDocument<ISanctionsResult> & {
+        message: string
+      }> = []
+      const resultsToBlock = data.results.filter((result: any) => {
         // Keep all non-PEP results
         if (result?.data_source?.short_name !== 'PEP') {
           return true
@@ -1807,7 +1822,7 @@ async function issueCredsV4(req, res) {
 
       // Get all PEP results that do not trigger an automatic block.
       // For all countries that we don't block, allow the user to declare that they are not the PEP with a similar name.
-      const resultsThatRequireDeclaration = data.results.filter(result => {
+      const resultsThatRequireDeclaration = data.results.filter((result: any) => {
         // Ignore all non-PEP results
         if (result?.data_source?.short_name !== 'PEP') {
           return false
@@ -1840,7 +1855,7 @@ async function issueCredsV4(req, res) {
         const whitelistItem = await CleanHandsSessionWhitelist.findOne({ sessionId: session._id }).exec();
         if (!whitelistItem) {
           issueCredsV4Logger.sanctionsMatchFound(data.results);
-          const confidenceScores = data?.results?.map(result => {
+          const confidenceScores = data?.results?.map((result: any) => {
             return `(${result.data_source?.name}: ${result?.confidence_score})`
           }).join(', ')
           await failSession(session, `Sanctions match found. Confidence scores: ${confidenceScores}`)
@@ -1890,8 +1905,8 @@ async function issueCredsV4(req, res) {
       // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
       issueCredsV4Logger.alreadyRegistered(uuid);
       // Fail session and return
-      await failSession(session, toAlreadyRegisteredStr(user._id))
-      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id) });
+      await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
     }
 
     const dbResponse = await saveUserToDb(uuid);
@@ -1920,7 +1935,7 @@ async function issueCredsV4(req, res) {
     await session.save()
   
     return res.status(200).json(response);
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -1930,14 +1945,14 @@ async function issueCredsV4(req, res) {
  * Endpoint to allow the user to confirm the statement stored under "userDeclaration"
  * in the Clean Hands session. For v4 issuance.
  */
-async function confirmStatement(req, res) {
+async function confirmStatement(req: Request, res: Response) {
   try {
     const _id = req.params._id;
 
     let objectId = null;
     try {
       objectId = new ObjectId(_id);
-    } catch (err) {
+    } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
@@ -1964,7 +1979,7 @@ async function confirmStatement(req, res) {
     await session.save()
 
     return res.status(200).json({ message: 'Success' })
-  } catch (err) {
+  } catch (err: any) {
     console.log("POST /aml-sessions/statement/confirm: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -1973,7 +1988,7 @@ async function confirmStatement(req, res) {
 /**
  * Get session(s) associated with sigDigest or id.
  */
-async function getSessions(req, res) {
+async function getSessions(req: Request, res: Response) {
   try {
     const sigDigest = req.query.sigDigest;
     const id = req.query.id;
@@ -1986,8 +2001,8 @@ async function getSessions(req, res) {
     if (id) {
       let objectId = null;
       try {
-        objectId = new ObjectId(id);
-      } catch (err) {
+        objectId = new ObjectId(id as string);
+      } catch (err: any) {
         return res.status(400).json({ error: "Invalid id" });
       }
       sessions = await AMLChecksSession.find({ _id: objectId }).exec();
@@ -1996,7 +2011,7 @@ async function getSessions(req, res) {
     }
 
     return res.status(200).json(sessions);
-  } catch (err) {
+  } catch (err: any) {
     console.log("GET /aml-sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
