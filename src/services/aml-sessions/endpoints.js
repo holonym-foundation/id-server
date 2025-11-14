@@ -10,7 +10,8 @@ import {
   SessionRefundMutex,
   CleanHandsNullifierAndCreds,
   CleanHandsSessionWhitelist,
-  SanctionsResult
+  SanctionsResult,
+  getRouteHandlerConfig
 } from "../../init.js";
 import { 
   getAccessToken as getPayPalAccessToken,
@@ -47,6 +48,8 @@ import { upgradeLogger } from "./error-logger.js";
 import { failSession, getSessionById } from "../../utils/sessions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
+
+const liveConfig = getRouteHandlerConfig("live")
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",
@@ -1297,8 +1300,8 @@ async function issueCredsV3(req, res) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
       }
 
-      const check = await getOnfidoCheck(check_id);  
-      const reports = await getOnfidoReports(check.report_ids);
+      const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
+      const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
       const documentReport = reports.find((report) => report.name == "document");
 
       // get creds from onfido report
@@ -1368,7 +1371,7 @@ async function issueCredsV3(req, res) {
       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
     }
 
-    const check = await getOnfidoCheck(check_id);
+    const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       issueCredsV3Logger.info(validationResultCheck, "Check validation failed")
@@ -1379,7 +1382,7 @@ async function issueCredsV3(req, res) {
       });
     }
 
-    const reports = await getOnfidoReports(check.report_ids);
+    const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
     if (!validationResultCheck.success && (!reports || reports.length == 0)) {
       issueCredsV3Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
 
@@ -1601,8 +1604,8 @@ async function issueCredsV4(req, res) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
       }
 
-      const check = await getOnfidoCheck(check_id);  
-      const reports = await getOnfidoReports(check.report_ids);
+      const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
+      const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
       const documentReport = reports.find((report) => report.name == "document");
 
       // get creds from onfido report
@@ -1671,7 +1674,7 @@ async function issueCredsV4(req, res) {
       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
     }
 
-    const check = await getOnfidoCheck(check_id);
+    const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       issueCredsV4Logger.info(validationResultCheck, "Check validation failed")
@@ -1682,7 +1685,7 @@ async function issueCredsV4(req, res) {
       });
     }
 
-    const reports = await getOnfidoReports(check.report_ids);
+    const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
     if (!validationResultCheck.success && (!reports || reports.length == 0)) {
       issueCredsV4Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
 
