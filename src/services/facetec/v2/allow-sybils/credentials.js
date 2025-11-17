@@ -11,21 +11,10 @@ import {
   BiometricsNullifierAndCreds,
 } from "../../../../init.js";
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
-// import {
-//   getDateAsInt,
-//   sha256,
-//   govIdUUID,
-//   validateUUIDv4,
-//   objectIdElevenMonthsAgo,
-//   objectIdFiveDaysAgo,
-// } from "../../../../utils/utils.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { biometricsAllowSybilsSessionStatusEnum } from "../../../../constants/misc.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
 import { upgradeV3Logger } from "../../error-logger.js";
-import {
-  updateSessionStatus,
-} from "../../functions-creds.js";
 
 const endpointLogger = upgradeV3Logger(
   logger.child({
@@ -176,11 +165,9 @@ async function getCredentials(req, res) {
             },
             "Duplicate check: found duplicates"
           );
-          await updateSessionStatus(
-            session,
-            biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED,
-            `Face scan failed as highly matching duplicates are found.`
-          );
+          session.status = biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED;
+          session.verificationFailureReason = `Face scan failed as highly matching duplicates are found.`;
+          await session.save();
 
           return res.status(400).json({
             error: true,
@@ -249,7 +236,8 @@ async function getCredentials(req, res) {
       `Issue biometrics-allow-sybils credentials`
     );
 
-    await updateSessionStatus(session, biometricsAllowSybilsSessionStatusEnum.ISSUED, null);
+    session.status = biometricsAllowSybilsSessionStatusEnum.ISSUED;
+    await session.save();
 
     return res.status(200).json(issueV2Response);
   } catch (err) {
@@ -257,7 +245,7 @@ async function getCredentials(req, res) {
     endpointLogger.unexpected(err);
 
     // If this is our custom error, use its properties
-    if (err.status && err.error) {
+    if (err && err.status && err.error) {
       return res.status(err.status).json(err);
     }
 
