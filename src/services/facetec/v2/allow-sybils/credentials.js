@@ -11,14 +11,14 @@ import {
   BiometricsNullifierAndCreds,
 } from "../../../../init.js";
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
-import {
-  getDateAsInt,
-  sha256,
-  govIdUUID,
-  validateUUIDv4,
-  objectIdElevenMonthsAgo,
-  objectIdFiveDaysAgo,
-} from "../../../../utils/utils.js";
+// import {
+//   getDateAsInt,
+//   sha256,
+//   govIdUUID,
+//   validateUUIDv4,
+//   objectIdElevenMonthsAgo,
+//   objectIdFiveDaysAgo,
+// } from "../../../../utils/utils.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { biometricsAllowSybilsSessionStatusEnum } from "../../../../constants/misc.js";
 import { upgradeV3Logger } from "../../error-logger.js";
