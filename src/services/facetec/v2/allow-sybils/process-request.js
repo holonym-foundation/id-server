@@ -4,9 +4,12 @@ import { BiometricsAllowSybilsSession } from "../../../../init.js";
 import {
   biometricsAllowSybilsSessionStatusEnum,
 } from "../../../../constants/misc.js";
+import {
+  updateSessionStatus,
+} from "../../functions-creds.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
-// import { upgradeV3Logger } from "./error-logger.js";
+import { v4 as uuidV4 } from "uuid";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /facetec/v2/allow-sybils/process-request] ",
@@ -21,7 +24,7 @@ const endpointLogger = logger.child({
 export async function processRequest(req, res) {
   try {
     const sid = req.body.sid;
-    const faceTecParams = req.body.faceTecParams
+    const faceTecParams = req.body.faceTecParams;
 
     if (!sid) {
       return res
@@ -63,9 +66,22 @@ export async function processRequest(req, res) {
       });
     }
 
+    // generate one if not present - for older sessions
+    if (!session.externalDatabaseRefID) {
+      session.externalDatabaseRefID = uuidV4();
+      await session.save();
+    }
+
     // TODO: IP-based rate limiting
 
-    // const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
+    const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
+
+    // Validate required environment variables
+    if (!groupName) {
+      return res.status(500).json({ 
+        error: `Missing environment variable: FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS` 
+      });
+    }
 
     req.app.locals.sseManager.sendToClient(sid, {
       status: "in_progress",
@@ -79,7 +95,8 @@ export async function processRequest(req, res) {
         ...faceTecParams,
         // We specifically do not pass an externalDatabaseRefID here because
         // we want FaceTec to only do a liveness check, not an enrollment
-        // externalDatabaseRefID: session.externalDatabaseRefID,
+        // 18/11/2025: we now enroll and do duplicate check in a different groupName
+        externalDatabaseRefID: session.externalDatabaseRefID,
       },
       {
         headers: {
@@ -89,8 +106,16 @@ export async function processRequest(req, res) {
           "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
         },
       }
-    )
+    );
 
+    // Technically, a request to /process-request is not necessarily a liveness
+    // check. However, it seems that our biometrics flow makes only two calls
+    // to process-request, so it is close enough for rate limiting purposes. 
+    await BiometricsAllowSybilsSession.updateOne(
+      { _id: objectId },
+      { $inc: { num_facetec_liveness_checks: 1 } }
+    );
+    
     const data = resp.data;
     // console.log('/process-request response:', data);
 
@@ -99,17 +124,78 @@ export async function processRequest(req, res) {
     // "livenessProven", we assume that a liveness check was performed; and in this case,
     // we want to enroll the user.
     if (data?.result?.livenessProven) {
-      await BiometricsAllowSybilsSession.updateOne(
-        { _id: objectId },
-        { $inc: { num_facetec_liveness_checks: 1 } }
-      );
-      session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
-      await session.save();
+      // set session status to passed liveness check only after successful enrollment
 
       req.app.locals.sseManager.sendToClient(sid, {
-        status: "completed",
-        message: "biometrics verification successful, proceed to mint SBT",
+        status: "in_progress",
+        message: "liveness check: sending to server",
       });
+
+      // 3d-db/enroll
+      try {
+        const resp = await axios.post(
+          `${getFaceTecBaseURL(req)}/3d-db/enroll`,
+          {
+            externalDatabaseRefID: session.externalDatabaseRefID,
+            groupName: groupName,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "X-Device-Key": req.headers["x-device-key"],
+              "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
+              "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
+            },
+          }
+        );
+        console.log("3d-db/enroll response:", resp.data);
+
+        if (!resp.data.success || !resp.data.wasProcessed) {
+          endpointLogger.info(
+            {
+              externalDatabaseRefID: session.externalDatabaseRefID,
+              responseData: resp.data,
+            },
+            `/3d-db/enroll failed`
+          );
+          
+          // one of the reason might be that verification enrollment does not exit
+          // just return and exit the flow, do not proceed with issuance
+          return res
+            .status(400)
+            .json({ error: "duplicate check: /3d-db enrollment failed" });
+        } else {
+          session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+          await session.save();
+
+          req.app.locals.sseManager.sendToClient(sid, {
+            status: "completed",
+            message: "biometrics verification successful, proceed to next step",
+          });
+        }
+      } catch (err) {
+        endpointLogger.error(err, "Error during /3d-db/enroll");
+        if (err.request) {
+          return res.status(502).json({
+            error: true,
+            errorMessage: "Did not receive a response from the server during /3d-db/enroll",
+            triggerRetry: true,
+          });
+        } else if (err.response) {
+          return res.status(err.response.status).json({
+            error: true,
+            errorMessage: "The server returned an error during /3d-db/enroll",
+            data: err.response.data,
+            triggerRetry: true,
+          }); 
+        } else {
+          return res.status(500).json({
+            error: true,
+            errorMessage: "An unknown error occurred during /3d-db/enroll",
+            triggerRetry: true,
+          });
+        }
+      }
     }
 
     return res.status(200).json(data);
