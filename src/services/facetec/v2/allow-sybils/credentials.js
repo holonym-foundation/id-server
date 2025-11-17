@@ -116,7 +116,7 @@ async function getCredentials(req, res) {
     
     if (!groupName) {
       return res.status(500).json({ 
-        error: `Missing environment variable: FACETEC_GROUP_NAME_FOR_BIOMETRICS` 
+        error: `Missing environment variable: FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS` 
       });
     }
 
@@ -127,7 +127,7 @@ async function getCredentials(req, res) {
       ].includes(session.status)
     ) {
       return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${biometricsAllowSybilsSessionStatusEnum.IN_PROGRESS}'`,
+        error: `Session status is '${session.status}'. Expected '${biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK}'`,
       });
     }
 
@@ -135,6 +135,98 @@ async function getCredentials(req, res) {
     // delete old facetec 3d-db entry to allow re-verification ???
 
     // --- ISSUANCE ---
+    // search for duplicates first /3d-db/search
+    try {
+      const faceDbSearchResponse = await axios.post(
+        `${getFaceTecBaseURL(req)}/3d-db/search`,
+        {
+          externalDatabaseRefID: session.externalDatabaseRefID,
+          minMatchLevel: 15,
+          groupName: groupName,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "X-Device-Key": req.headers["x-device-key"],
+            "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
+            "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
+          },
+        }
+      );
+
+      if (faceDbSearchResponse.data?.success && faceDbSearchResponse.data?.results) {
+        if (faceDbSearchResponse.data.results.length === 0) {
+          // search returns 0 result
+          // so continue with enrollment flow
+        } else if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
+          // search returns 1 result which is the same, so it is not a duplicate
+          // so continue with enrollment flow
+        } else { 
+          // TODO: Get the externalDatabaseRefID of each result. For each result find it in the UserVerifications collection. For each
+          // document in the collection, check if it was inserted within the last 11 months. If there were any inserted within the last
+          // 11 months, then DO NOT issue credentials (the user is a sybil); otherwise, issue credentials
+
+          // duplicates found, return error
+          endpointLogger.error(
+            {
+              resultsLength: faceDbSearchResponse.data.results.length,
+              results: faceDbSearchResponse.data.results,
+              externalDatabaseRefID: session.externalDatabaseRefID,
+            },
+            "Duplicate check: found duplicates"
+          );
+          await updateSessionStatus(
+            session,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            `Face scan failed as highly matching duplicates are found.`
+          );
+
+          return res.status(400).json({
+            error: true,
+            errorMessage: "duplicate check: found duplicates",
+            triggerRetry: false,
+          });
+        }
+      } else if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
+        endpointLogger.info({ externalDatabaseRefID: session.externalDatabaseRefID }, "Fresh/empty groupName detected, continuing with enrollment flow");
+        // Continue with the flow instead of returning an error
+      } else {
+        endpointLogger.error(
+          {
+            responseData: faceDbSearchResponse.data,
+          },
+          "Duplicate check: /3d-db/search encountered an error"
+        );
+        return res.status(400).json({
+          error: true,
+          errorMessage: "duplicate check: /3d-db/search encountered an error",
+          triggerRetry: true,
+        });
+      }
+    } catch (err) {
+      endpointLogger.error(err, "Error during /3d-db/search");
+
+      if (err.request) {
+        return res.status(502).json({
+          error: true,
+          errorMessage: "Did not receive a response from the server during duplicate check",
+          triggerRetry: true,
+        });
+      } else if (err.response) {
+        return res.status(err.response.status).json({
+          error: true,
+          errorMessage: "Server returned an error during duplicate check",
+          data: err.response.data,
+          triggerRetry: true,
+        });
+      } else {
+        return res.status(500).json({
+          error: true,
+          errorMessage: "An unknown error occurred during duplicate check",
+          triggerRetry: true,
+        });
+      }
+    }
 
     // The "credentials" that we issue here, don't really matter, so we just sign a uuid.
     const refBuffers = uuidV4()
