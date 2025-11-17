@@ -65,14 +65,7 @@ export async function processRequest(req, res) {
 
     // TODO: IP-based rate limiting
 
-    const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
-
-    // Validate required environment variables
-    if (!groupName) {
-      return res.status(500).json({ 
-        error: `Missing environment variable: FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS` 
-      });
-    }
+    // const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
 
     req.app.locals.sseManager.sendToClient(sid, {
       status: "in_progress",
@@ -114,72 +107,9 @@ export async function processRequest(req, res) {
       await session.save();
 
       req.app.locals.sseManager.sendToClient(sid, {
-        status: "in_progress",
-        message: "liveness check: sending to server",
+        status: "completed",
+        message: "biometrics verification successful, proceed to mint SBT",
       });
-
-      // 3d-db/enroll
-      try {
-        const resp = await axios.post(
-          `${getFaceTecBaseURL(req)}/3d-db/enroll`,
-          {
-            externalDatabaseRefID: session.externalDatabaseRefID,
-            groupName: groupName,
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Device-Key": req.headers["x-device-key"],
-              "X-User-Agent": req.headers["x-user-agent"] || "human-id-server",
-              "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
-            },
-          }
-        );
-        console.log("3d-db/enroll response:", resp.data);
-
-        if (!resp.data.success || !resp.data.wasProcessed) {
-          endpointLogger.info(
-            {
-              externalDatabaseRefID: session.externalDatabaseRefID,
-              responseData: resp.data,
-            },
-            `/3d-db/enroll failed`
-          );
-          
-          // one of the reason might be that verification enrollment does not exit
-          // just return and exit the flow, do not proceed with issuance
-          return res
-            .status(400)
-            .json({ error: "duplicate check: /3d-db enrollment failed" });
-        } else {
-          req.app.locals.sseManager.sendToClient(sid, {
-            status: "completed",
-            message: "biometrics verification successful, proceed to next step",
-          });
-        }
-      } catch (err) {
-        endpointLogger.error(err, "Error during /3d-db/enroll");
-        if (err.request) {
-          return res.status(502).json({
-            error: true,
-            errorMessage: "Did not receive a response from the server during /3d-db/enroll",
-            triggerRetry: true,
-          });
-        } else if (err.response) {
-          return res.status(err.response.status).json({
-            error: true,
-            errorMessage: "The server returned an error during /3d-db/enroll",
-            data: err.response.data,
-            triggerRetry: true,
-          }); 
-        } else {
-          return res.status(500).json({
-            error: true,
-            errorMessage: "An unknown error occurred during /3d-db/enroll",
-            triggerRetry: true,
-          });
-        }
-      }
     }
 
     return res.status(200).json(data);
