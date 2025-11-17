@@ -4,9 +4,12 @@ import { BiometricsAllowSybilsSession } from "../../../../init.js";
 import {
   biometricsAllowSybilsSessionStatusEnum,
 } from "../../../../constants/misc.js";
+import {
+  updateSessionStatus,
+} from "../../functions-creds.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
-// import { upgradeV3Logger } from "./error-logger.js";
+import { v4 as uuidV4 } from "uuid";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /facetec/v2/allow-sybils/process-request] ",
@@ -63,6 +66,12 @@ export async function processRequest(req, res) {
       });
     }
 
+    // generate one if not present - for older sessions
+    if (!session.externalDatabaseRefID) {
+      session.externalDatabaseRefID = uuidV4();
+      await session.save();
+    }
+
     // TODO: IP-based rate limiting
 
     const groupName = process.env.FACETEC_GROUP_NAME_FOR_SYBILS_ALLOWED_BIOMETRICS;
@@ -86,7 +95,8 @@ export async function processRequest(req, res) {
         ...faceTecParams,
         // We specifically do not pass an externalDatabaseRefID here because
         // we want FaceTec to only do a liveness check, not an enrollment
-        // externalDatabaseRefID: session.externalDatabaseRefID,
+        // 18/11/2025: we now enroll and do duplicate check in a different groupName
+        externalDatabaseRefID: session.externalDatabaseRefID,
       },
       {
         headers: {
@@ -98,6 +108,14 @@ export async function processRequest(req, res) {
       }
     )
 
+    // Technically, a request to /process-request is not necessarily a liveness
+    // check. However, it seems that our biometrics flow makes only two calls
+    // to process-request, so it is close enough for rate limiting purposes. 
+    await BiometricsAllowSybilsSession.updateOne(
+      { _id: objectId },
+      { $inc: { num_facetec_liveness_checks: 1 } }
+    );
+    
     const data = resp.data;
     // console.log('/process-request response:', data);
 
@@ -106,12 +124,7 @@ export async function processRequest(req, res) {
     // "livenessProven", we assume that a liveness check was performed; and in this case,
     // we want to enroll the user.
     if (data?.result?.livenessProven) {
-      await BiometricsAllowSybilsSession.updateOne(
-        { _id: objectId },
-        { $inc: { num_facetec_liveness_checks: 1 } }
-      );
-      session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
-      await session.save();
+      // set session status to passed liveness check only after successful enrollment
 
       req.app.locals.sseManager.sendToClient(sid, {
         status: "in_progress",
@@ -152,6 +165,9 @@ export async function processRequest(req, res) {
             .status(400)
             .json({ error: "duplicate check: /3d-db enrollment failed" });
         } else {
+          session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+          await session.save();
+
           req.app.locals.sseManager.sendToClient(sid, {
             status: "completed",
             message: "biometrics verification successful, proceed to next step",

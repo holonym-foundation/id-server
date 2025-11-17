@@ -63,6 +63,7 @@ async function postSessionV2(req, res) {
       silkDiffWallet,
       ipCountry: ipCountry,
       num_facetec_liveness_checks: 0,
+      externalDatabaseRefID: uuidV4(),
     });
 
     // Only allow a user to create up to 3 sessions
