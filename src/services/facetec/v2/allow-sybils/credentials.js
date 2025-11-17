@@ -21,6 +21,7 @@ import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 // } from "../../../../utils/utils.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { biometricsAllowSybilsSessionStatusEnum } from "../../../../constants/misc.js";
+import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
 import { upgradeV3Logger } from "../../error-logger.js";
 import {
   updateSessionStatus,
@@ -177,7 +178,7 @@ async function getCredentials(req, res) {
           );
           await updateSessionStatus(
             session,
-            sessionStatusEnum.VERIFICATION_FAILED,
+            biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED,
             `Face scan failed as highly matching duplicates are found.`
           );
 
@@ -227,7 +228,7 @@ async function getCredentials(req, res) {
         });
       }
     }
-
+    
     // The "credentials" that we issue here, don't really matter, so we just sign a uuid.
     const refBuffers = uuidV4()
       .split("-")

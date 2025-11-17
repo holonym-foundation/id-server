@@ -24,7 +24,7 @@ const endpointLogger = logger.child({
 export async function processRequest(req, res) {
   try {
     const sid = req.body.sid;
-    const faceTecParams = req.body.faceTecParams
+    const faceTecParams = req.body.faceTecParams;
 
     if (!sid) {
       return res
@@ -106,7 +106,7 @@ export async function processRequest(req, res) {
           "X-Api-Key": process.env.FACETEC_SERVER_API_KEY,
         },
       }
-    )
+    );
 
     // Technically, a request to /process-request is not necessarily a liveness
     // check. However, it seems that our biometrics flow makes only two calls
