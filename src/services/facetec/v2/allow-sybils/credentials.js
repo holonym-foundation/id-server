@@ -85,6 +85,9 @@ async function getCredentials(req, res) {
       return res.status(400).json({ error: "Session not found" });
     }
 
+    // log session, to debug for race condition
+    logger.info({ session }, "Session found");
+
     if (session.status === biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED) {
       endpointLogger.verificationPreviouslyFailed(session);
       return res.status(400).json({
