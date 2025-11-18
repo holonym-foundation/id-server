@@ -208,6 +208,8 @@ export type IAmlChecksSession = {
   };
 };
 
+export type ISandboxAmlChecksSession = IAmlChecksSession;
+
 export type IBiometricsSession = {
   _id?: Types.ObjectId;
   sigDigest?: string;
@@ -311,6 +313,8 @@ export type ICleanHandsNullifierAndCreds = {
   idvSessionId?: string;
   uuid?: string;
 };
+
+export type ISandboxCleanHandsNullifierAndCreds = ICleanHandsNullifierAndCreds;
 
 export type IBiometricsNullifierAndCreds = {
   _id?: Types.ObjectId;
@@ -556,5 +560,9 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   UserCredentialsV2Model: Model<IUserCredentialsV2 | ISandboxUserCredentialsV2>
   EncryptedNullifiersModel: Model<IEncryptedNullifiers | ISandboxEncryptedNullifiers>
   OrderModel: Model<IOrder | ISandboxOrder>
+  AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
+  CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
+  SanctionsResultModel: Model<ISanctionsResult>
   issuerPrivateKey: string
+  cleanHandsIssuerPrivateKey: string
 }

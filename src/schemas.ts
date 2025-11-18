@@ -15,6 +15,7 @@ import {
   ISession,
   ISandboxSession,
   IAmlChecksSession,
+  ISandboxAmlChecksSession,
   IBiometricsSession,
   ISessionRefundMutex,
   IUserCredentials,
@@ -24,6 +25,7 @@ import {
   INullifierAndCreds,
   ISandboxNullifierAndCreds,
   ICleanHandsNullifierAndCreds,
+  ISandboxCleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
   IEncryptedNullifiers,
   ISandboxEncryptedNullifiers,
@@ -421,6 +423,65 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
 });
 amlChecksSessionSchema.index({ sigDigest: 1 })
 
+const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
+  sigDigest: String,
+  // Right now a session for AML checks only uses Veriff, so there
+  // is no reason to store idvProvider.
+  // idvProvider: String,
+  // status here is distinct from the status of the session with, e.g., Veriff.
+  // The possible values of status are the same as for the sessions above
+  status: String,
+  // silkDiffWallet indicates whether the user is on silksecure.net/holonym/silk or
+  // silksecure.net/holonym/diff-wallet
+  silkDiffWallet: {
+    type: String,
+    required: false,
+  },
+  deletedFromIDVProvider: {
+    type: Boolean,
+    required: false,
+  },
+  txHash: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  // Transaction hash of the refund transaction
+  refundTxHash: {
+    type: String,
+    required: false,
+  },
+  veriffSessionId: {
+    type: String,
+    required: false,
+  },
+  verificationFailureReason: {
+    type: String,
+    required: false,
+  },
+  // A statement that the user must confirm, saying that they are not any
+  // of the PEPs mentioned in the results from the sanctions io query.
+  // Should be something like "I certify that I am not any of the following
+  // Politically Exposed Persons with a similar name: <list of PEPs>".
+  userDeclaration: {
+    type: {
+      // We store the statement because the sanctions io results for the
+      // same user might change over time. We want to know exactly what the
+      // user confirmed.
+      statement: String,
+      // Whether the user has confirmed the statement
+      confirmed: Boolean,
+      statementGeneratedAt: Date
+    },
+    required: false,
+  }
+});
+// Indexes are probably not needed for sandbox mode.
+// sandboxAmlChecksSessionSchema.index({ sigDigest: 1 })
+
 const biometricsSessionSchema = new Schema<IBiometricsSession>({
   sigDigest: String,
   // The possible values of status are the same as for the sessions above
@@ -656,6 +717,31 @@ const CleanHandsNullifierAndCredsSchema = new Schema<ICleanHandsNullifierAndCred
     required: false,
   },
 });
+
+const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  govIdCreds: {
+    type: {
+      firstName: String,
+      lastName: String,
+      dateOfBirth: String,
+      expiry: Date,
+    },
+    required: false,
+  },
+  idvSessionId: {
+    type: String,
+    required: false,
+  },
+  uuid: {
+    type: String,
+    required: false,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// sandboxCleanHandsNullifierAndCredsSchema.index({ issuanceNullifier: 1, _id: 1 })
+// sandboxCleanHandsNullifierAndCredsSchema.index({ issuanceNullifier: 1 }, { unique: true })
 
 // A collection to associate an issuance nullifier to the
 // user's Biometrics creds so that the user can lookup their
@@ -921,11 +1007,13 @@ export {
   NullifierAndCredsSchema,
   SandboxNullifierAndCredsSchema,
   CleanHandsNullifierAndCredsSchema,
+  sandboxCleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
   amlChecksSessionSchema,
+  sandboxAmlChecksSessionSchema,
   biometricsSessionSchema,
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,

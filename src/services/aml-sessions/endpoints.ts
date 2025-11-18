@@ -8,13 +8,11 @@ import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 // import { groth16 } from "snarkjs";
 import { 
   UserVerifications, 
-  AMLChecksSession, 
   SessionRefundMutex,
-  CleanHandsNullifierAndCreds,
   CleanHandsSessionWhitelist,
-  SanctionsResult,
   getRouteHandlerConfig
 } from "../../init.js";
+import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 import { 
   getAccessToken as getPayPalAccessToken,
   capturePayPalOrder,
@@ -47,12 +45,11 @@ import {
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" with { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
-import { failSession, getSessionById } from "../../utils/sessions.js";
+import { failSession } from "../../utils/sessions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
 import { ISanctionsResult } from "../../types.js";
 
-const liveConfig = getRouteHandlerConfig("live")
 
 const issueCredsV2Logger = upgradeLogger(logger.child({
   msgPrefix: "[GET /aml-sessions/credentials/v2] ",
@@ -85,32 +82,44 @@ const issueCredsV4Logger = upgradeLogger(logger.child({
  * ENDPOINT.
  * Creates a session.
  */
-async function postSession(req: Request, res: Response) {
-  try {
-    const sigDigest = req.body.sigDigest;
-    if (!sigDigest) {
-      return res.status(400).json({ error: "sigDigest is required" });
+function createPostSessionRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      const session = new config.AMLChecksSessionModel({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.NEEDS_PAYMENT,
+        silkDiffWallet,
+      });
+      await session.save();
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log("POST /veriff-aml-sessions: Error encountered", err.message);
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
+  };
+}
 
-    let silkDiffWallet = null;
-    if (req.body.silkDiffWallet === "silk") {
-      silkDiffWallet = "silk";
-    } else if (req.body.silkDiffWallet === "diff-wallet") {
-      silkDiffWallet = "diff-wallet";
-    }
+async function postSessionLive(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionRouteHandler(config)(req, res);
+}
 
-    const session = new AMLChecksSession({
-      sigDigest: sigDigest,
-      status: sessionStatusEnum.NEEDS_PAYMENT,
-      silkDiffWallet,
-    });
-    await session.save();
-
-    return res.status(201).json({ session });
-  } catch (err: any) {
-    console.log("POST /veriff-aml-sessions: Error encountered", err.message);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+async function postSessionSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionRouteHandler(config)(req, res);
 }
 
 /**
@@ -118,56 +127,69 @@ async function postSession(req: Request, res: Response) {
  * Creates a session. Immediately sets session status to IN_PROGRESS to
  * bypass payment requirement.
  */
-async function postSessionv2(req: Request, res: Response) {
-  try {
-    const sigDigest = req.body.sigDigest;
-    if (!sigDigest) {
-      return res.status(400).json({ error: "sigDigest is required" });
-    }
-
-    let silkDiffWallet = null;
-    if (req.body.silkDiffWallet === "silk") {
-      silkDiffWallet = "silk";
-    } else if (req.body.silkDiffWallet === "diff-wallet") {
-      silkDiffWallet = "diff-wallet";
-    }
-
-    // Only allow a user to create up to 15 sessions
-    const existingSessions = await AMLChecksSession.find({
-      sigDigest: sigDigest,
-      status: {
-        "$in": [
-          sessionStatusEnum.IN_PROGRESS,
-          sessionStatusEnum.VERIFICATION_FAILED,
-          sessionStatusEnum.ISSUED
-        ]
+function createPostSessionv2RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
       }
-    }).exec();
 
-    if (existingSessions.length >= 15) {
-      return res.status(400).json({
-        error: "User has reached the maximum number of sessions (15)"
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Only allow a user to create up to 15 sessions
+      const existingSessions = await config.AMLChecksSessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ]
+        }
+      }).exec();
+
+      if (existingSessions.length >= 15) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (15)"
+        });
+      }
+
+      const session = new config.AMLChecksSessionModel({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.IN_PROGRESS,
+        silkDiffWallet,
       });
+      await session.save();
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log("POST /aml-sessions/v2: Error encountered", err.message);
+      return res.status(500).json({ error: "An unknown error occurred" });
     }
+  };
+}
 
-    const session = new AMLChecksSession({
-      sigDigest: sigDigest,
-      status: sessionStatusEnum.IN_PROGRESS,
-      silkDiffWallet,
-    });
-    await session.save();
+async function postSessionv2Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionv2RouteHandler(config)(req, res);
+}
 
-    return res.status(201).json({ session });
-  } catch (err: any) {
-    console.log("POST /aml-sessions/v2: Error encountered", err.message);
-    return res.status(500).json({ error: "An unknown error occurred" });
-  }
+async function postSessionv2Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionv2RouteHandler(config)(req, res);
 }
 
 /**
  * ENDPOINT.
  */
 async function createPayPalOrder(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   try {
     const _id = req.params._id;
 
@@ -178,7 +200,7 @@ async function createPayPalOrder(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -212,7 +234,7 @@ async function createPayPalOrder(req: Request, res: Response) {
       //   },
       // },
     };
-    const config = {
+    const axiosConfig = {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
@@ -221,7 +243,7 @@ async function createPayPalOrder(req: Request, res: Response) {
 
     // Ignoring "Property 'post' does not exist on type 'typeof import(...)'"
     // @ts-ignore
-    const resp = await axios.post(url, body, config);
+    const resp = await axios.post(url, body, axiosConfig);
 
     const order = resp.data;
 
@@ -253,6 +275,7 @@ async function createPayPalOrder(req: Request, res: Response) {
  * Pay for session and create a Veriff session.
  */
 async function payForSession(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   try {
     const _id = req.params._id;
     const chainId = Number(req.body.chainId);
@@ -275,7 +298,7 @@ async function payForSession(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -293,7 +316,7 @@ async function payForSession(req: Request, res: Response) {
         .json({ error: "Session is already associated with a transaction" });
     }
 
-    const otherSession = await AMLChecksSession.findOne({ txHash: txHash }).exec();
+    const otherSession = await config.AMLChecksSessionModel.findOne({ txHash: txHash }).exec();
     if (otherSession) {
       return res
         .status(400)
@@ -329,6 +352,7 @@ async function payForSession(req: Request, res: Response) {
  * ENDPOINT.
  */
 async function payForSessionV2(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   try {
     if (req.body.chainId && req.body.txHash) {
       return payForSession(req, res);
@@ -348,7 +372,7 @@ async function payForSessionV2(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -369,7 +393,7 @@ async function payForSessionV2(req: Request, res: Response) {
       });
     }
 
-    const sessions = await AMLChecksSession.find({
+    const sessions = await config.AMLChecksSessionModel.find({
       _id: { $ne: objectId },
       "payPal.orders": {
         $elemMatch: {
@@ -437,6 +461,7 @@ async function payForSessionV2(req: Request, res: Response) {
  * transaction data. Requires admin API key.
  */
 async function payForSessionV3(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   try {
     const apiKey = req.headers["x-api-key"];
 
@@ -465,7 +490,7 @@ async function payForSessionV3(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -483,7 +508,7 @@ async function payForSessionV3(req: Request, res: Response) {
         .json({ error: "Session is already associated with a transaction" });
     }
 
-    const otherSession = await AMLChecksSession.findOne({ txHash: txHash }).exec();
+    const otherSession = await config.AMLChecksSessionModel.findOne({ txHash: txHash }).exec();
     if (otherSession) {
       return res
         .status(400)
@@ -560,6 +585,7 @@ async function payForSessionV3(req: Request, res: Response) {
  * Allows a user to request a refund for a failed session.
  */
 async function refund(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   const _id = req.params._id;
   const to = req.body.to;
   try {
@@ -574,7 +600,7 @@ async function refund(req: Request, res: Response) {
     } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -630,6 +656,7 @@ async function refund(req: Request, res: Response) {
  * ENDPOINT.
  */
 async function refundV2(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
   if (req.body.to) {
     return refund(req, res);
   }
@@ -641,7 +668,7 @@ async function refundV2(req: Request, res: Response) {
     } catch (err: any) {
       return res.status(400).json({ error: "Invalid _id" });
     }
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
     }
@@ -853,10 +880,14 @@ async function saveUserToDb(uuid: string) {
 /**
  * Util function that wraps issuev2 from holonym-wasm-issuer
  */
-function issuev2CleanHands(issuanceNullifier: string, creds: { rawCreds: { birthdate: string }, derivedCreds: { nameHash: { value: string } } }) {
+function issuev2CleanHands(
+  cleanHandsIssuerPrivateKey: string,
+  issuanceNullifier: string,
+  creds: { rawCreds: { birthdate: string }, derivedCreds: { nameHash: { value: string } } }
+) {
   return JSON.parse(
     issuev2(
-      process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
+      cleanHandsIssuerPrivateKey,
       issuanceNullifier,
       getDateAsInt(creds.rawCreds.birthdate).toString(),
       creds.derivedCreds.nameHash.value,
@@ -1550,20 +1581,21 @@ async function issueCredsV3(req: Request, res: Response) {
  * Same as v3, except it marks the session as NEEDS_USER_DECLARATION if certain
  * PEP hits are found.
  */
-async function issueCredsV4(req: Request, res: Response) {
-  try {
-    // Caller must specify a session ID and a nullifier. We first lookup the user's creds
-    // using the nullifier. If no hit, then we lookup the credentials using the session ID.
-    const issuanceNullifier = req.params.nullifier;
-    const _id = req.params._id;
-
+function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
     try {
-      const _number = BigInt(issuanceNullifier);
-    } catch (err: any) {
-      return res.status(400).json({
-        error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
-      });
-    }
+      // Caller must specify a session ID and a nullifier. We first lookup the user's creds
+      // using the nullifier. If no hit, then we lookup the credentials using the session ID.
+      const issuanceNullifier = req.params.nullifier;
+      const _id = req.params._id;
+
+      try {
+        const _number = BigInt(issuanceNullifier);
+      } catch (err: any) {
+        return res.status(400).json({
+          error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`
+        });
+      }
 
     // if (process.env.ENVIRONMENT == "dev") {
     //   const creds = cleanHandsDummyUserCreds;
@@ -1579,7 +1611,7 @@ async function issueCredsV4(req: Request, res: Response) {
       return res.status(400).json({ error: "Invalid _id" });
     }
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
+    const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
   
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -1599,24 +1631,31 @@ async function issueCredsV4(req: Request, res: Response) {
     }
 
     // First, check if the user is looking up their credentials using their nullifier
-    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(issuanceNullifier);
+    const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(config.CleanHandsNullifierAndCredsModel, issuanceNullifier);
     const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
 
     // as idvSessionId is already set in DB, we can directly get the creds from Onfido
     // without stringent validation
     if (nullifierIdvSessionId) {
-      const idvSessionResult = await getSessionById(nullifierIdvSessionId);
-      if (idvSessionResult.error) {
-        return res.status(400).json({ error: idvSessionResult.error });
+      let idvSessionObjectId = null;
+      try {
+        idvSessionObjectId = new ObjectId(nullifierIdvSessionId);
+      } catch (err: any) {
+        return res.status(400).json({ error: "Invalid idvSessionId" });
       }
 
-      const check_id = idvSessionResult!.session!.check_id;
+      const idvSession = await config.SessionModel.findOne({ _id: idvSessionObjectId }).exec();
+      if (!idvSession) {
+        return res.status(404).json({ error: "IDV session not found" });
+      }
+
+      const check_id = idvSession.check_id;
       if (!check_id) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
       }
 
-      const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);  
-      const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
+      const check = await getOnfidoCheck(config.onfidoAPIKey, check_id);  
+      const reports = await getOnfidoReports(config.onfidoAPIKey, check.report_ids);
       const documentReport = reports?.find((report) => report.name == "document");
 
       // get creds from onfido report
@@ -1638,13 +1677,15 @@ async function issueCredsV4(req: Request, res: Response) {
       // from the last 5 days (in the nullifierAndCreds query above) and the user
       // is only getting the credentials+nullifier that they were already issued.
       // However, we keep it here to be extra safe.
-      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-      if (user) {
-        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-        issueCredsV4Logger.alreadyRegistered(uuid);
-        // Fail session and return
-        await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
-        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+      if (config.environment === "live") {
+        const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+        if (user) {
+          // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+          issueCredsV4Logger.alreadyRegistered(uuid);
+          // Fail session and return
+          await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+          return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+        }
       }
 
       const creds = extractCreds({
@@ -1653,7 +1694,7 @@ async function issueCredsV4(req: Request, res: Response) {
         dateOfBirth,
       });
     
-      const response = issuev2CleanHands(issuanceNullifier, creds);
+      const response = issuev2CleanHands(config.cleanHandsIssuerPrivateKey, issuanceNullifier, creds);
       response.metadata = creds;
 
       issueCredsV4Logger.info({ uuid }, "Issuing credentials");
@@ -1674,18 +1715,24 @@ async function issueCredsV4(req: Request, res: Response) {
 
     // here instead of zkp, we get from onfido directly
     const idvSessionId = req.query.idvSessionId;
-    const idvSessionResult = await getSessionById(idvSessionId as string);
-    if (idvSessionResult.error) {
-      return res.status(400).json({ error: idvSessionResult.error });
+    let idvSessionObjectId = null;
+    try {
+      idvSessionObjectId = new ObjectId(idvSessionId as string);
+    } catch (err: any) {
+      return res.status(400).json({ error: "Invalid idvSessionId" });
     }
-    const idvSession = idvSessionResult.session;
 
-    const check_id = idvSession?.check_id;
+    const idvSession = await config.SessionModel.findOne({ _id: idvSessionObjectId }).exec();
+    if (!idvSession) {
+      return res.status(404).json({ error: "IDV session not found" });
+    }
+
+    const check_id = idvSession.check_id;
     if (!check_id) {
       return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
     }
 
-    const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
+    const check = await getOnfidoCheck(config.onfidoAPIKey, check_id);
     const validationResultCheck = validateCheck(check);
     if (!validationResultCheck.success && !validationResultCheck.hasReports) {
       issueCredsV4Logger.info(validationResultCheck, "Check validation failed")
@@ -1696,7 +1743,7 @@ async function issueCredsV4(req: Request, res: Response) {
       });
     }
 
-    const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
+    const reports = await getOnfidoReports(config.onfidoAPIKey, check.report_ids);
     if (!validationResultCheck.success && (!reports || reports.length == 0)) {
       issueCredsV4Logger.info({ report_ids: check.report_ids }, "No reports found: "+ check_id)
 
@@ -1756,16 +1803,14 @@ async function issueCredsV4(req: Request, res: Response) {
         `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
         '&entity_type=individual';
       // sanctionsUrl.searchParams.append('country_residence', 'us')
-      const config = {
+      const reqConfig = {
         headers: {
           'Accept': 'application/json; version=2.2',
           'Authorization': 'Bearer ' + process.env.SANCTIONS_API_KEY
         }
       }
-      const resp = await fetch(sanctionsUrl, config)
+      const resp = await fetch(sanctionsUrl, reqConfig)
       const data = await resp.json()
-
-      console.log('sanctions io response', JSON.stringify(data, null, 2))
 
       // if (process.env.NODE_ENV == 'development') {
       //   data.results.push({
@@ -1798,7 +1843,7 @@ async function issueCredsV4(req: Request, res: Response) {
           si_identifier: result.si_identifier,
         }
         issueCredsV4Logger.info({ result: resultToLog }, "PEP result found");
-        const resultsObj = new SanctionsResult({
+        const resultsObj = new config.SanctionsResultModel({
           message: "PEP result found",
           ...resultToLog
         })
@@ -1900,13 +1945,15 @@ async function issueCredsV4(req: Request, res: Response) {
     );
 
     // Assert user hasn't registered yet
-    const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
-    if (user) {
-      // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
-      issueCredsV4Logger.alreadyRegistered(uuid);
-      // Fail session and return
-      await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
-      return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+    if (config.environment === "live") {
+      const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+      if (user) {
+        // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
+        issueCredsV4Logger.alreadyRegistered(uuid);
+        // Fail session and return
+        await failSession(session, toAlreadyRegisteredStr(user._id.toString()))
+        return res.status(400).json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+      }
     }
 
     const dbResponse = await saveUserToDb(uuid);
@@ -1918,12 +1965,12 @@ async function issueCredsV4(req: Request, res: Response) {
       dateOfBirth,
     });
   
-    const response = issuev2CleanHands(issuanceNullifier, creds);
+      const response = issuev2CleanHands(config.cleanHandsIssuerPrivateKey, issuanceNullifier, creds);
     response.metadata = creds;
     
     issueCredsV4Logger.info({ uuid }, "Issuing credentials");
 
-    const newNullifierAndCreds = new CleanHandsNullifierAndCreds({
+    const newNullifierAndCreds = new config.CleanHandsNullifierAndCredsModel({
       holoUserId: session.sigDigest,
       issuanceNullifier,
       uuid,
@@ -1938,35 +1985,47 @@ async function issueCredsV4(req: Request, res: Response) {
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: "An unknown error occurred" });
-  }
+    }
+  };
+}
+
+async function issueCredsV4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createIssueCredsV4RouteHandler(config)(req, res);
+}
+
+async function issueCredsV4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createIssueCredsV4RouteHandler(config)(req, res);
 }
 
 /**
  * Endpoint to allow the user to confirm the statement stored under "userDeclaration"
  * in the Clean Hands session. For v4 issuance.
  */
-async function confirmStatement(req: Request, res: Response) {
-  try {
-    const _id = req.params._id;
-
-    let objectId = null;
+function createConfirmStatementRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
     try {
-      objectId = new ObjectId(_id);
-    } catch (err: any) {
-      return res.status(400).json({ error: "Invalid _id" });
-    }
+      const _id = req.params._id;
 
-    const session = await AMLChecksSession.findOne({ _id: objectId }).exec();
-  
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+      let objectId = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err: any) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
 
-    if (session.status !== cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
-      return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION}'`,
-      });
-    }
+      const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
+    
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      if (session.status !== cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION}'`,
+        });
+      }
 
     if (!session?.userDeclaration?.statement) {
       return res.status(400).json({
@@ -1982,44 +2041,69 @@ async function confirmStatement(req: Request, res: Response) {
   } catch (err: any) {
     console.log("POST /aml-sessions/statement/confirm: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
-  }
+    }
+  };
+}
+
+async function confirmStatementLive(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createConfirmStatementRouteHandler(config)(req, res);
+}
+
+async function confirmStatementSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createConfirmStatementRouteHandler(config)(req, res);
 }
 
 /**
  * Get session(s) associated with sigDigest or id.
  */
-async function getSessions(req: Request, res: Response) {
-  try {
-    const sigDigest = req.query.sigDigest;
-    const id = req.query.id;
+function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.query.sigDigest;
+      const id = req.query.id;
 
-    if (!sigDigest && !id) {
-      return res.status(400).json({ error: "sigDigest or id is required" });
-    }
-
-    let sessions;
-    if (id) {
-      let objectId = null;
-      try {
-        objectId = new ObjectId(id as string);
-      } catch (err: any) {
-        return res.status(400).json({ error: "Invalid id" });
+      if (!sigDigest && !id) {
+        return res.status(400).json({ error: "sigDigest or id is required" });
       }
-      sessions = await AMLChecksSession.find({ _id: objectId }).exec();
-    } else {
-      sessions = await AMLChecksSession.find({ sigDigest }).exec();
-    }
 
-    return res.status(200).json(sessions);
+      let sessions;
+      if (id) {
+        let objectId = null;
+        try {
+          objectId = new ObjectId(id as string);
+        } catch (err: any) {
+          return res.status(400).json({ error: "Invalid id" });
+        }
+        sessions = await config.AMLChecksSessionModel.find({ _id: objectId }).exec();
+      } else {
+        sessions = await config.AMLChecksSessionModel.find({ sigDigest }).exec();
+      }
+
+      return res.status(200).json(sessions);
   } catch (err: any) {
     console.log("GET /aml-sessions: Error encountered", err.message);
     return res.status(500).json({ error: "An unknown error occurred" });
-  }
+    }
+  };
+}
+
+async function getSessionsLive(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createGetSessionsRouteHandler(config)(req, res);
+}
+
+async function getSessionsSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createGetSessionsRouteHandler(config)(req, res);
 }
 
 export {
-  postSession,
-  postSessionv2,
+  postSessionLive as postSession,
+  postSessionSandbox,
+  postSessionv2Live as postSessionv2,
+  postSessionv2Sandbox,
   createPayPalOrder,
   payForSession,
   payForSessionV2,
@@ -2029,7 +2113,10 @@ export {
   issueCreds,
   issueCredsV2,
   issueCredsV3,
-  issueCredsV4,
-  confirmStatement,
-  getSessions,
+  issueCredsV4Live as issueCredsV4,
+  issueCredsV4Sandbox,
+  confirmStatementLive as confirmStatement,
+  confirmStatementSandbox,
+  getSessionsLive as getSessions,
+  getSessionsSandbox,
 };

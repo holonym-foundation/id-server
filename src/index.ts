@@ -13,7 +13,7 @@ import sessionStatus, { sandboxRouter as sandboxSessionStatus } from "./routes/s
 import ipInfo from "./routes/ip-info.js";
 import prices from "./routes/prices.js";
 import sessions, { sandboxRouter as sandboxSessions } from "./routes/sessions.js";
-import amlSessions from "./routes/aml-sessions.js";
+import amlSessions, { sandboxRouter as sandboxAmlSessions } from "./routes/aml-sessions.js";
 import biometricsSessions from "./routes/biometrics-sessions.js";
 import silk from "./routes/silk.js";
 import facetec from "./routes/facetec.js";
@@ -97,6 +97,7 @@ app.use("/direct-verification", directVerification)
 app.use("/sandbox/sessions", sandboxSessions);
 app.use("/sandbox/session-status", sandboxSessionStatus);
 app.use("/sandbox/onfido", sandboxOnfido);
+app.use("/sandbox/aml-sessions", sandboxAmlSessions);
 app.use("/sandbox/credentials", sandboxCredentials);
 app.use("/sandbox/nullifiers", sandboxNullifiers);
 app.use("/sandbox/orders", sandboxOrders);

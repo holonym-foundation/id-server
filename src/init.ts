@@ -23,11 +23,13 @@ import {
   NullifierAndCredsSchema,
   SandboxNullifierAndCredsSchema,
   CleanHandsNullifierAndCredsSchema,
+  sandboxCleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
   amlChecksSessionSchema,
+  sandboxAmlChecksSessionSchema,
   biometricsSessionSchema,
   GalxeCampaignZeroUserSchema,
   SilkPeanutCampaignsMetadataSchema,
@@ -58,9 +60,11 @@ import {
   INullifierAndCreds,
   ISandboxNullifierAndCreds,
   ICleanHandsNullifierAndCreds,
+  ISandboxCleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
   IVerificationCollisionMetadata,
   IAmlChecksSession,
+  ISandboxAmlChecksSession,
   IBiometricsSession,
   IGalxeCampaignZeroUser,
   ISilkPeanutCampaignsMetadata,
@@ -285,6 +289,11 @@ async function initializeMongoDb() {
     CleanHandsNullifierAndCredsSchema
   );
 
+  const SandboxCleanHandsNullifierAndCreds = mongoose.model(
+    "SandboxCleanHandsNullifierAndCreds",
+    sandboxCleanHandsNullifierAndCredsSchema
+  );
+
   const BiometricsNullifierAndCreds = mongoose.model(
     "BiometricsNullifierAndCreds",
     BiometricsNullifierAndCredsSchema
@@ -306,6 +315,8 @@ async function initializeMongoDb() {
   );
 
   const AMLChecksSession = mongoose.model("AMLChecksSession", amlChecksSessionSchema);
+
+  const SandboxAMLChecksSession = mongoose.model("SandboxAMLChecksSession", sandboxAmlChecksSessionSchema);
 
   const BiometricsSession = mongoose.model("BiometricsSession", biometricsSessionSchema);
 
@@ -391,11 +402,13 @@ async function initializeMongoDb() {
     NullifierAndCreds,
     SandboxNullifierAndCreds,
     CleanHandsNullifierAndCreds,
+    SandboxCleanHandsNullifierAndCreds,
     BiometricsNullifierAndCreds,
     DailyVerificationCount,
     DailyVerificationDeletions,
     VerificationCollisionMetadata,
     AMLChecksSession,
+    SandboxAMLChecksSession,
     BiometricsSession,
     BiometricsAllowSybilsSession,
     GalxeCampaignZeroUser,
@@ -430,11 +443,13 @@ let UserVerifications: Model<IUserVerifications>,
   NullifierAndCreds: Model<INullifierAndCreds>,
   SandboxNullifierAndCreds: Model<ISandboxNullifierAndCreds>,
   CleanHandsNullifierAndCreds: Model<ICleanHandsNullifierAndCreds>,
+  SandboxCleanHandsNullifierAndCreds: Model<ISandboxCleanHandsNullifierAndCreds>,
   BiometricsNullifierAndCreds: Model<IBiometricsNullifierAndCreds>,
   DailyVerificationCount: Model<IDailyVerificationCount>,
   DailyVerificationDeletions: Model<IDailyVerificationDeletions>,
   VerificationCollisionMetadata: Model<IVerificationCollisionMetadata>,
   AMLChecksSession: Model<IAmlChecksSession>,
+  SandboxAMLChecksSession: Model<ISandboxAmlChecksSession>,
   BiometricsSession: Model<IBiometricsSession>,
   BiometricsAllowSybilsSession: Model<IBiometricsSession>,
   GalxeCampaignZeroUser: Model<IGalxeCampaignZeroUser>,
@@ -467,11 +482,13 @@ initializeMongoDb().then((result) => {
     NullifierAndCreds = result.NullifierAndCreds;
     SandboxNullifierAndCreds = result.SandboxNullifierAndCreds;
     CleanHandsNullifierAndCreds = result.CleanHandsNullifierAndCreds;
+    SandboxCleanHandsNullifierAndCreds = result.SandboxCleanHandsNullifierAndCreds;
     BiometricsNullifierAndCreds = result.BiometricsNullifierAndCreds;
     DailyVerificationCount = result.DailyVerificationCount;
     DailyVerificationDeletions = result.DailyVerificationDeletions;
     VerificationCollisionMetadata = result.VerificationCollisionMetadata;
     AMLChecksSession = result.AMLChecksSession;
+    SandboxAMLChecksSession = result.SandboxAMLChecksSession;
     BiometricsSession = result.BiometricsSession;
     BiometricsAllowSybilsSession = result.BiometricsAllowSybilsSession;
     GalxeCampaignZeroUser = result.GalxeCampaignZeroUser;
@@ -510,7 +527,11 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       UserCredentialsV2Model: SandboxUserCredentialsV2,
       EncryptedNullifiersModel: SandboxEncryptedNullifiers,
       OrderModel: SandboxOrder,
+      AMLChecksSessionModel: SandboxAMLChecksSession,
+      CleanHandsNullifierAndCredsModel: SandboxCleanHandsNullifierAndCreds,
+      SanctionsResultModel: SanctionsResult,
       issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
+      cleanHandsIssuerPrivateKey: process.env.HOLONYM_SANDBOX_CLEAN_HANDS_ISSUER_PRIVKEY!,
     }
   }
 
@@ -524,7 +545,11 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     UserCredentialsV2Model: UserCredentialsV2,
     EncryptedNullifiersModel: EncryptedNullifiers,
     OrderModel: Order,
+    AMLChecksSessionModel: AMLChecksSession,
+    CleanHandsNullifierAndCredsModel: CleanHandsNullifierAndCreds,
+    SanctionsResultModel: SanctionsResult,
     issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
+    cleanHandsIssuerPrivateKey: process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
   }
 }
 
@@ -550,6 +575,7 @@ export {
   DailyVerificationDeletions,
   VerificationCollisionMetadata,
   AMLChecksSession,
+  SandboxAMLChecksSession,
   BiometricsSession,
   BiometricsAllowSybilsSession,
   GalxeCampaignZeroUser,
