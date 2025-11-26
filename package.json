@@ -1,9 +1,9 @@
 {
   "scripts": {
-    "start": "bun src/server.ts",
-    "start:dev": "bash scripts/run.sh dev",
-    "start:prod": "bash scripts/run.sh prod",
-    "build:prod": "bash scripts/build.sh prod",
+    "dev": "bun src/server.ts",
+    "dev:docker": "bash scripts/run.sh dev",
+    "prod:docker": "bash scripts/run.sh prod",
+    "prod:build:docker": "bash scripts/build.sh prod",
     "dev-daemon": "cargo run --manifest-path=./daemon/Cargo.toml",
     "test": "bun test"
   },
