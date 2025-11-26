@@ -12,12 +12,10 @@ async function getAccessToken() {
   });
   const config = {
     auth: {
-      username: process.env.PAYPAL_CLIENT_ID,
-      password: process.env.PAYPAL_SECRET,
+      username: process.env.PAYPAL_CLIENT_ID as string,
+      password: process.env.PAYPAL_SECRET as string,
     },
   };
-  // ignoring "Property 'post' does not exist on type 'typeof import()'"
-  // @ts-ignore
   const response = await axios.post(url, data, config);
   return response?.data?.access_token;
 }
@@ -30,8 +28,6 @@ async function getOrder(id: string, accessToken: string) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
-  // ignoring "Property 'get' does not exist on type 'typeof import()'"
-  // @ts-ignore
   const resp = await axios.get(url, config);
   return resp.data;
 }
@@ -44,8 +40,6 @@ async function getRefundDetails(id: string, accessToken: string) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
-  // ignoring "Property 'get' does not exist on type 'typeof import()'"
-  // @ts-ignore
   const resp = await axios.get(url, config);
   return resp.data;
 }
@@ -60,8 +54,6 @@ async function capturePayPalOrder(orderId: string) {
       Authorization: `Bearer ${accessToken}`,
     },
   };
-  // ignoring "Property 'post' does not exist on type 'typeof import()'"
-  // @ts-ignore
   const resp = await axios.post(url, {}, config);
 
   return resp.data;
@@ -158,8 +150,6 @@ async function refundMintFeePayPal(session: HydratedDocument<ISession>) {
     // invoice_id: "INVOICE-123",
     note_to_payer: "Failed verification",
   };
-  // ignoring "Property 'post' does not exist on type 'typeof import()'"
-  // @ts-ignore
   const resp = await axios.post(url, data, config);
 
   if (resp.data?.status !== "COMPLETED") {

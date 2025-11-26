@@ -81,8 +81,6 @@ export async function enrollment3d(req: Request, res: Response) {
         message: "liveness check: sending to server",
       });
 
-      // Ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-      // @ts-ignore
       const enrollmentResponse = await axios.post(
         `${getFaceTecBaseURL(req)}/enrollment-3d`,
         faceTecParams,

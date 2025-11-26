@@ -1,3 +1,4 @@
+import axios from "axios";
 import { ObjectId } from "mongodb";
 import { HydratedDocument } from "mongoose";
 import { poseidon } from "circomlibjs-old";
@@ -241,8 +242,6 @@ async function createPayPalOrder(req: Request, res: Response) {
       },
     };
 
-    // Ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(url, body, axiosConfig);
 
     const order = resp.data;

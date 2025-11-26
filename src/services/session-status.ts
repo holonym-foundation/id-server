@@ -112,8 +112,6 @@ async function getIdenfySessionStatus(
 // @deprecated - Use getOnfidoCheckAsync instead
 // async function getOnfidoCheck(check_id: string) {
 //   try {
-//     // ignoring: "Property 'get' does not exist on type 'typeof import(...)"
-//     // @ts-ignore
 //     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
 //       headers: {
 //         "Content-Type": "application/json",

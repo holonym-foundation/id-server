@@ -79,8 +79,6 @@ async function v1CreateSession(req: Request, res: Response) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,
@@ -160,8 +158,6 @@ async function v2CreateSession(req: Request, res: Response) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,

@@ -21,8 +21,6 @@ export async function createOnfidoApplicant(onfidoAPIKey: string) {
         Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.us.onfido.com/v3.6/applicants",
       reqBody,
@@ -50,8 +48,6 @@ export async function createOnfidoSdkToken(onfidoAPIKey: string, applicant_id: s
         Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.us.onfido.com/v3.6/sdk_token",
       body,
@@ -82,8 +78,6 @@ export async function createOnfidoCheck(onfidoAPIKey: string, applicant_id: stri
         Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.us.onfido.com/v3.6/checks",
       reqBody,
@@ -113,8 +107,6 @@ export async function createOnfidoWorkflowRun(onfidoAPIKey: string, applicant_id
         Authorization: `Token token=${onfidoAPIKey}`,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.us.onfido.com/v3.6/workflow_runs",
       reqBody,
@@ -128,8 +120,6 @@ export async function createOnfidoWorkflowRun(onfidoAPIKey: string, applicant_id
 
 export async function getOnfidoCheck(onfidoAPIKey: string, check_id: string) {
   try {
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
       headers: {
         "Content-Type": "application/json",
@@ -150,8 +140,6 @@ export async function getOnfidoReports(onfidoAPIKey: string, report_ids: Array<s
   try {
     const reports = [];
     for (const report_id of report_ids) {
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
       const resp = await axios.get(
         `https://api.us.onfido.com/v3.6/reports/${report_id}`,
         {

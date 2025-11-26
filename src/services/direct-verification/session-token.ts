@@ -61,8 +61,6 @@ export async function sessionToken(req: Request, res: Response) {
         message: 'starting verification session'
       });
 
-      // Ignoring "Property 'get' does not exist on type 'typeof import(...)"
-      // @ts-ignore
       const resp = await axios.get(
         `${getFaceTecBaseURL(req)}/session-token`,
         {

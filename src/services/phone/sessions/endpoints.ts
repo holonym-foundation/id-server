@@ -342,7 +342,6 @@ async function refundMintFeePayPal(
     },
     note_to_payer: 'Failed verification'
   }
-  // @ts-ignore
   const resp = await axios.post(url, data, config)
 
   if (resp.data?.status !== 'COMPLETED') {
@@ -535,7 +534,6 @@ export async function createPayPalOrder(
       }
     }
 
-    // @ts-ignore
     const resp = await axios.post(url, body, config)
 
     const order = resp.data

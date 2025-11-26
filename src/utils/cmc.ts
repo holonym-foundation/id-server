@@ -48,7 +48,6 @@ export async function setMultiplePricesInCache(prices: Record<CryptoPriceSlug, n
  * Wrapper around the CMC price API.
  */
 export function getLatestCryptoPrice(id: number | string) {
-  // @ts-ignore
   return axios.get(
     `https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id=${id}`,
     {

@@ -147,8 +147,6 @@ async function postSession(req: Request, res: Response) {
 
     // Get country from IP address
     const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.get(
       `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
     );
@@ -206,8 +204,6 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
 
       // Get country from IP address
       const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-      // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-      // @ts-ignore
       const resp = await axios.get(
         `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
       );

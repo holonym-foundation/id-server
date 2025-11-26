@@ -65,8 +65,6 @@ function createCreateApplicant(config: SandboxVsLiveKYCRouteHandlerConfig) {
           Authorization: `Token token=${config.onfidoAPIKey}`,
         },
       };
-      // Ignoring "Property 'post' does not exist on type 'typeof import(...)"
-      // @ts-ignore
       const applicantResp = await axios.post(
         "https://api.us.onfido.com/v3.6/applicants",
         reqBody,
@@ -88,8 +86,6 @@ function createCreateApplicant(config: SandboxVsLiveKYCRouteHandlerConfig) {
           Authorization: `Token token=${config.onfidoAPIKey}`,
         },
       };
-      // Ignoring "Property 'post' does not exist on type 'typeof import(...)"
-      // @ts-ignore
       const sdkTokenResp = await axios.post(
         "https://api.us.onfido.com/v3.6/sdk_token",
         reqBody2,

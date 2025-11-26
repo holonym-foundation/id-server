@@ -73,8 +73,6 @@ export async function processRequest(req: Request, res: Response) {
     faceTecParams.externalDatabaseRefID = userId
 
     // Process Request
-    // Ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       `${getFaceTecBaseURL(req)}/process-request`,
       {

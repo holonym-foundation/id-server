@@ -9,8 +9,6 @@ export async function postNotification({
 }) {
   // 
   try {
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
     webhookURL,
       {

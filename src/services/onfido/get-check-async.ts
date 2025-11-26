@@ -134,7 +134,6 @@ export async function getOnfidoCheckAsync(SessionModel: Model<ISession | ISandbo
  */
 async function callOnfidoCheckAPI(onfidoAPIKey: string, check_id: string): Promise<any> {
   try {
-    // @ts-ignore
     const resp = await axios.get(`https://api.us.onfido.com/v3.6/checks/${check_id}`, {
       headers: {
         "Content-Type": "application/json",

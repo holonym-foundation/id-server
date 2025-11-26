@@ -25,8 +25,6 @@ export async function createVeriffSession(data?: any) {
         "X-AUTH-CLIENT": process.env.VERIFF_PUBLIC_API_KEY,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://api.veriff.me/v1/sessions",
       reqBody,
@@ -44,8 +42,6 @@ export async function getVeriffSessionDecision(sessionId: string) {
       .update(Buffer.from(sessionId, "utf8"))
       .digest("hex")
       .toLowerCase();
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.get(
       `https://api.veriff.me/v1/sessions/${sessionId}/decision`,
       {

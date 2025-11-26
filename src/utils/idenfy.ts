@@ -16,8 +16,6 @@ export async function createIdenfyToken(sigDigest: string) {
         ).toString("base64")}`,
       },
     };
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://ivs.idenfy.com/api/v2/token",
       reqBody,
@@ -34,8 +32,6 @@ export async function createIdenfyToken(sigDigest: string) {
  */
 export async function getIdenfySessionStatus(scanRef: string) {
   try {
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       `https://ivs.idenfy.com/api/v2/status`,
       {
@@ -65,8 +61,6 @@ export async function getIdenfySessionStatus(scanRef: string) {
  */
 export async function getIdenfySessionVerificationData(scanRef: string) {
   try {
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.post(
       "https://ivs.idenfy.com/api/v2/data",
       {
@@ -93,8 +87,6 @@ export async function getIdenfySessionVerificationData(scanRef: string) {
 
 export async function deleteIdenfySession(scanRef: string) {
   try {
-    // ignoring "Property 'post' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     return await axios.post(
       "https://ivs.idenfy.com/api/v2/delete",
       {

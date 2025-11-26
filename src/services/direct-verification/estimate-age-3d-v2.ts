@@ -56,8 +56,6 @@ export async function estimateAge3dV2(req: Request, res: Response) {
     const AGE_CHECK_TARGET = 5
 
     try {
-      // Ignoring "Property 'post' does not exist on type 'typeof import(...)"
-      // @ts-ignore
       const checkAgeResponse = await axios.post(
         `${getFaceTecBaseURL(req)}/estimate-age-3d-v2`,
         {

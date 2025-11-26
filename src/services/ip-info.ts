@@ -5,8 +5,6 @@ async function getCountry(req: Request, res: Response) {
   try {
     const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.get(
       `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
     );
@@ -26,8 +24,6 @@ async function getIpAndCountry(req: Request, res: Response) {
   try {
     const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-    // ignoring "Property 'get' does not exist on type 'typeof import(...)'"
-    // @ts-ignore
     const resp = await axios.get(
       `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
     );

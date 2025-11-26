@@ -130,7 +130,6 @@ export async function sendCode(req: Request, res: Response) {
       })
     }
 
-    // @ts-ignore
     const response = await axios.get<{ fraud_score?: number }>(
       `https://ipqualityscore.com/api/json/phone/${process.env.IPQUALITYSCORE_APIKEY}/${number}?country[]=${countryCode}`
     )
