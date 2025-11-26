@@ -1,12 +1,11 @@
 {
   "scripts": {
-    "start": "rm -rf dist && nodemon --ext ts,js,json --exec \"node --loader ts-node/esm\" src/server.ts",
-    "build": "rm -rf dist && tsc",
+    "start": "bun src/server.ts",
     "start:dev": "bash scripts/run.sh dev",
     "start:prod": "bash scripts/run.sh prod",
     "build:prod": "bash scripts/build.sh prod",
     "dev-daemon": "cargo run --manifest-path=./daemon/Cargo.toml",
-    "test": "npm run build && TESTING=true npx mocha --timeout 5s"
+    "test": "bun test"
   },
   "type": "module",
   "dependencies": {
@@ -56,8 +55,6 @@
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.26.0",
     "mocha": "^10.0.0",
-    "nodemon": "^3.1.10",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
 }

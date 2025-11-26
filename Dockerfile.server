@@ -12,16 +12,16 @@ ENV ZOKRATES_HOME=/home/zokrates/.zokrates
 ENV PATH=/home/zokrates/.zokrates/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV ZOKRATES_STDLIB=/home/zokrates/.zokrates/stdlib
 
-ENV NODE_ENV=production
-
 WORKDIR /app
 
+RUN npm install -g bun@1.2.21
+
 COPY package*.json ./
-RUN npm ci --include=dev
+RUN bun install --frozen-lockfile
 
 COPY . .
 
-RUN npm run build
+ENV NODE_ENV=production
 
 # Use 3000 for production, but allow overriding for development
 ARG PORT=3000
@@ -29,4 +29,4 @@ ENV PORT=$PORT
 
 EXPOSE $PORT
 
-CMD ["dumb-init", "node", "./dist/server"]
+CMD ["dumb-init", "bun", "src/server"]
