@@ -22,6 +22,7 @@ import orders, { sandboxRouter as sandboxOrders } from "./routes/orders.js";
 import whitelists from "./routes/whitelists.js";
 import constants from "./routes/constants.js";
 import directVerification from "./routes/direct-verification.js"
+import phone, { phoneRouterSandbox } from "./routes/phone.js";
 
 const app = express();
 
@@ -92,6 +93,7 @@ app.use("/orders", orders);
 app.use("/whitelists", whitelists);
 app.use("/constants", constants);
 app.use("/direct-verification", directVerification)
+app.use("/phone", phone);
 
 // ---------- Sandbox routes ----------
 app.use("/sandbox/sessions", sandboxSessions);
@@ -101,6 +103,7 @@ app.use("/sandbox/aml-sessions", sandboxAmlSessions);
 app.use("/sandbox/credentials", sandboxCredentials);
 app.use("/sandbox/nullifiers", sandboxNullifiers);
 app.use("/sandbox/orders", sandboxOrders);
+app.use("/sandbox/phone", phoneRouterSandbox);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

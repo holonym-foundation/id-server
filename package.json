@@ -18,6 +18,7 @@
     "@stellar/stellar-sdk": "^13.3.0",
     "@valkey/valkey-glide": "^2.0.1",
     "@verax-attestation-registry/verax-sdk": "^2.2.1",
+    "aws-sdk": "^2.1295.0",
     "axios": "^0.27.2",
     "big-integer": "^1.6.51",
     "circomlibjs-old": "npm:circomlibjs@^0.0.8",
@@ -28,6 +29,8 @@
     "express": "^4.18.1",
     "holonym-wasm-issuer": "^0.2.2",
     "holonym-wasm-issuer-v2": "npm:holonym-wasm-issuer@^2.0.0",
+    "libphonenumber-js": "^1.10.44",
+    "messente_api": "^1.5.0",
     "moment": "^2.30.1",
     "mongodb": "^4.11.0",
     "mongoose": "^6.7.2",
@@ -42,6 +45,7 @@
     "zokrates-js": "^1.1.4"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.2",
     "@types/cors": "^2.8.5",
     "@types/express": "^5.0.3",
     "@types/node": "^24.2.0",

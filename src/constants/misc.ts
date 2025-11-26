@@ -61,6 +61,9 @@ export const sessionStatusEnum = {
   REFUNDED: "REFUNDED",
 };
 
+export type SessionStatus =
+  (typeof sessionStatusEnum)[keyof typeof sessionStatusEnum]
+
 export const biometricsAllowSybilsSessionStatusEnum = {
   ...sessionStatusEnum,
   // PASSED_LIVENESS_CHECK is after IN_PROGRESS, before ISSUED
@@ -79,18 +82,6 @@ export const directVerificationSessionStatusEnum = {
   VERIFICATION_FAILED: "VERIFICATION_FAILED" as const
 };
 
-// export const ethereumProvider = new ethers.providers.AlchemyProvider(
-//   "homestead",
-//   process.env.ALCHEMY_APIKEY
-// );
-// export const optimismProvider = new ethers.providers.AlchemyProvider(
-//   "optimism",
-//   process.env.ALCHEMY_APIKEY
-// );
-// export const optimismGoerliProvider = new ethers.providers.AlchemyProvider(
-//   "optimism-goerli",
-//   process.env.ALCHEMY_APIKEY
-// );
 export const ethereumProvider = new ethers.providers.JsonRpcProvider(
   process.env.ETHEREUM_RPC_URL
 );

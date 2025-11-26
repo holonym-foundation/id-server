@@ -5,3 +5,7 @@ node_modules
 .gitignore
 notes.txt
 out.wtns
+*.test.ts
+*.test.js
+**/*.test.ts
+**/*.test.js
