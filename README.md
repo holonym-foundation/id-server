@@ -40,7 +40,9 @@ You also need a .env.docker.dev file.
 
 Go through .env.docker.dev and update the environment variables. Some environment variables are already correctly set in the .env.example file for local development.
 
-### 4. Database setup
+### 4. Datastore setup
+
+**MongoDB**
 
 This server uses MongoDB. You can run MongoDB in various ways, as long as you are able to access it using a connection string. Once you set up the database, set the `MONGO_DB_CONNECTION_STR` environment variable.
 
@@ -49,6 +51,18 @@ You can run the MongoDB Docker container.
         docker run -d --network host --name id-server-mongo -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=password mongo
 
 Alternatively, you can setup a MongoDB cluster using MongoDB Atlas. To connect to the cluster in the app, simply ensure that the `MONGO_DB_CONNECTION_STR` variable is set to the connection string provided by Atlas.
+
+**DynamoDB**
+
+```bash
+docker run -p 8000:8000 amazon/dynamodb-local
+```
+
+**Valkey**
+
+```bash
+docker run valkey/valkey
+```
 
 ## Run
 

@@ -1,29 +1,24 @@
 import AWS from 'aws-sdk'
 
-// Validate required AWS credentials are present
-if (!process.env.AWS_DYNAMODB_ACCESS_KEY_ID) {
-  throw new Error(
-    'AWS_DYNAMODB_ACCESS_KEY_ID environment variable is required for connecting to DynamoDB'
-  )
-}
-if (!process.env.AWS_DYNAMODB_SECRET_ACCESS_KEY) {
-  throw new Error(
-    'AWS_DYNAMODB_SECRET_ACCESS_KEY environment variable is required for connecting to DynamoDB'
-  )
-}
+const credentials = {
+  accessKeyId: process.env.AWS_DYNAMODB_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_DYNAMODB_SECRET_ACCESS_KEY
+} as AWS.Credentials
 
-// Configure AWS credentials from environment variables
 AWS.config.update({
   region: 'us-east-2',
-  credentials: {
-    // accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    // secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    accessKeyId: process.env.AWS_DYNAMODB_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_DYNAMODB_SECRET_ACCESS_KEY
-  }
+  credentials: process.env.NODE_ENV === 'production'
+    ? credentials
+    : undefined
 })
 
-export const ddb = new AWS.DynamoDB({ apiVersion: '2012-08-10' })
+export const ddb = new AWS.DynamoDB({
+  // In prod, we set endpoint to undefined so that the default endpoint from the SDK is used
+  endpoint: process.env.NODE_ENV === 'development'
+    ? process.env.AWS_DYNAMODB_LOCAL_ENDPOINT
+    : undefined,
+  apiVersion: '2012-08-10'
+})
 
 export interface PayPalOrder {
   id: string
