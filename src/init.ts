@@ -117,12 +117,12 @@ function validateEnv() {
       "MONGO_CERT_FILE_NAME environment variable is not set"
     );
     assert.ok(
-      process.env.AWS_ACCESS_KEY_ID,
-      "AWS_ACCESS_KEY_ID environment variable is not set"
+      process.env.AWS_S3_ACCESS_KEY_ID,
+      "AWS_S3_ACCESS_KEY_ID environment variable is not set"
     );
     assert.ok(
-      process.env.AWS_SECRET_ACCESS_KEY,
-      "AWS_SECRET_ACCESS_KEY environment variable is not set"
+      process.env.AWS_S3_SECRET_ACCESS_KEY,
+      "AWS_S3_SECRET_ACCESS_KEY environment variable is not set"
     );
     assert.ok(
       process.env.ADMIN_EMAILS,
@@ -165,13 +165,13 @@ async function initializeDailyVerificationDeletions(
 }
 
 async function initializeMongoDb() {
-  if (process.env.ENVIRONMENT != "dev") {
+  if (process.env.NODE_ENV != "development") {
     // Download certificate used for TLS connection
     try {
       const s3 = new AWS.S3({
         credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY as string,
+          accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID as string,
+          secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY as string,
         },
         region: "us-east-1",
       });

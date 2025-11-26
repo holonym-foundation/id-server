@@ -53,6 +53,12 @@ Alternatively, you can setup a MongoDB cluster using MongoDB Atlas. To connect t
 docker run -p 8000:8000 amazon/dynamodb-local
 ```
 
+After starting DynamoDB Local, create the required tables and indexes by running:
+
+```bash
+./scripts/setup-dynamodb-local.sh
+```
+
 **Valkey**
 
 ```bash

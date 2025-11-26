@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "dev:docker": "bash scripts/run.sh dev",
     "prod:docker": "bash scripts/run.sh prod",
     "prod:build:docker": "bash scripts/build.sh prod",

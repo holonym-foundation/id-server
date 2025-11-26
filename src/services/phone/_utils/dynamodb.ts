@@ -5,19 +5,17 @@ const credentials = {
   secretAccessKey: process.env.AWS_DYNAMODB_SECRET_ACCESS_KEY
 } as AWS.Credentials
 
-AWS.config.update({
-  region: 'us-east-2',
-  credentials: process.env.NODE_ENV === 'production'
-    ? credentials
-    : undefined
-})
-
 export const ddb = new AWS.DynamoDB({
+  apiVersion: '2012-08-10',
+  credentials,
+  // For some reason, local dynamodb doesn't work if region is set to us-east-2
+  region: process.env.NODE_ENV === 'development'
+    ? 'us-east-1'
+    : 'us-east-2',
   // In prod, we set endpoint to undefined so that the default endpoint from the SDK is used
   endpoint: process.env.NODE_ENV === 'development'
     ? process.env.AWS_DYNAMODB_LOCAL_ENDPOINT
     : undefined,
-  apiVersion: '2012-08-10'
 })
 
 export interface PayPalOrder {
