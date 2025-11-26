@@ -2,25 +2,20 @@ Backend for Holonym's ID service.
 
 ## Requirements
 
-- Node.js ^18.9.0
+- Bun ^1.2.21
 - Docker ^20.10.18
 
 (Other versions might work too.)
 
 ## Local environment setup
 
-### 1. Node.js
+### 1. Bun
 
-Use [nvm](https://github.com/nvm-sh/nvm#about) to use the correct Node version.
+Install Bun by following the instructions at [bun.sh](https://bun.sh/docs/installation).
 
-1.  Follow the instructions in the [nvm repo](https://github.com/nvm-sh/nvm#about) to install nvm.
-2.  Install and use the correct version of Node.
+### 2. Install dependencies
 
-        nvm install
-
-### 2. Install Node dependencies
-
-        npm install
+        bun install
 
 ### 3. Environment variables
 
@@ -70,12 +65,12 @@ Ensure that the MongoDB database is running and that environment variables are s
 
 Open a terminal window, navigate to the root directory of this repo, and run:
 
-        npm run start:dev
+        bun run start:dev
 
 Note that the daemon can also be run. However, for development, running the daemon is not necessary.
 
 ## Test
 
-We use mocha for tests. Run tests with:
+We use bun's built-in test runner. Run tests with:
 
-        npm test
+        bun test
