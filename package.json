@@ -5,7 +5,8 @@
     "prod:docker": "bash scripts/run.sh prod",
     "prod:build:docker": "bash scripts/build.sh prod",
     "dev-daemon": "cargo run --manifest-path=./daemon/Cargo.toml",
-    "test": "bun test"
+    "test": "bun test",
+    "check:types": "tsc --noEmit"
   },
   "type": "module",
   "dependencies": {

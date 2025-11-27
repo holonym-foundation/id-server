@@ -6,6 +6,8 @@ import {
   // getAddress as getAddressv1
 } from 'holonym-wasm-issuer-v2'
 import express, { Request, Response, NextFunction } from 'express'
+import { valkeyClient } from '../../utils/valkey-glide.js'
+import { makeUnknownErrorLoggable } from '../../utils/errors.js'
 import {
   addNumber,
   numberExists,
@@ -20,7 +22,6 @@ import {
   // putSandboxNullifierAndCreds,
   // getSandboxNullifierAndCredsByNullifier
 } from './_utils/dynamodb.js'
-import { valkeyClient } from '../../utils/valkey-glide.js'
 import {
   failPhoneSession,
   setPhoneSessionIssued,
@@ -251,7 +252,7 @@ export async function sendCodeSandbox(req: Request, res: Response) {
       .status(200)
       .json({ success: true, message: 'Sandbox mode: OTP not sent' })
   } catch (err) {
-    console.error('Error in /send/v4/sandbox:', err)
+    console.log('phone/sendCodeSandbox: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).send('An unknown error occurred')
   }
 }
@@ -482,7 +483,7 @@ export async function getCredentials(req: Request, res: Response) {
 
     return res.send(creds)
   } catch (err) {
-    console.log(`getCredentials v6: error for session ${sessionId}`, err)
+    console.log(`getCredentials v6: error for session ${sessionId}`, makeUnknownErrorLoggable(err))
 
     const error = err as Error
 
@@ -606,7 +607,7 @@ export async function getCredentialsSandbox(req: Request, res: Response) {
   } catch (err) {
     console.log(
       `getCredentials v6 sandbox: error for session ${sessionId}`,
-      err
+      makeUnknownErrorLoggable(err)
     )
 
     // We do not set session status to VERIFICATION_FAILED for sandbox mode

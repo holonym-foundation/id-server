@@ -33,6 +33,7 @@ import { getSessionById } from "../../utils/sessions.js";
 import { objectIdFiveDaysAgo } from "../../utils/utils.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
 import type { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js"
+import { makeUnknownErrorLoggable } from "../../utils/errors.js";
 
 const postSessionsV2Logger = logger.child({
   msgPrefix: "[POST /sessions/v2] ",
@@ -168,7 +169,7 @@ async function postSession(req: Request, res: Response) {
 
     return res.status(201).json({ session });
   } catch (err: any) {
-    console.log("POST /sessions: Error encountered", err.message);
+    console.log("POST /sessions: Error encountered", makeUnknownErrorLoggable(err).message);
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
@@ -279,7 +280,7 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
 
       return res.status(201).json({ session });
     } catch (err: any) {
-      console.log("POST /sessions: Error encountered", err.message);
+      console.log("POST /sessions: Error encountered", makeUnknownErrorLoggable(err).message);
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }
@@ -363,19 +364,10 @@ async function createPayPalOrder(req: Request, res: Response) {
 
     return res.status(201).json(order);
   } catch (err: any) {
-    if (err.response) {
-      createPayPalOrderLogger.error(
-        { error: err.response.data },
-        "Error creating PayPal order"
-      );
-    } else if (err.request) {
-      createPayPalOrderLogger.error(
-        { error: err.request.data },
-        "Error creating PayPal order"
-      );
-    } else {
-      createPayPalOrderLogger.error({ error: err }, "Error creating PayPal order");
-    }
+    createPayPalOrderLogger.error(
+      { error: makeUnknownErrorLoggable(err) },
+      "Error creating PayPal order"
+    );
     return res.status(500).json({ error: "An unknown error occurred" });
   }
 }
@@ -453,19 +445,10 @@ async function createIdvSession(req: Request, res: Response) {
     const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
-    if (err.response) {
-      createIdvSessionLogger.error(
-        { error: err.response.data },
-        "Error creating IDV session"
-      );
-    } else if (err.request) {
-      createIdvSessionLogger.error(
-        { error: err.request.data },
-        "Error creating IDV session"
-      );
-    } else {
-      createIdvSessionLogger.error({ error: err }, "Error creating IDV session");
-    }
+    createIdvSessionLogger.error(
+      { error: makeUnknownErrorLoggable(err) },
+      "Error creating IDV session"
+    );
 
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -563,19 +546,10 @@ async function createIdvSessionV2(req: Request, res: Response) {
     const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
-    if (err.response) {
-      createIdvSessionV2Logger.error(
-        { error: err.response.data },
-        "Error creating IDV session"
-      );
-    } else if (err.request) {
-      createIdvSessionV2Logger.error(
-        { error: err.request.data },
-        "Error creating IDV session"
-      );
-    } else {
-      createIdvSessionV2Logger.error({ error: err }, "Error creating IDV session");
-    }
+    createIdvSessionV2Logger.error(
+      { error: makeUnknownErrorLoggable(err) },
+      "Error creating IDV session"
+    );
 
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -678,20 +652,10 @@ async function createIdvSessionV3(req: Request, res: Response) {
     const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
-    console.log("err.message", err.message);
-    if (err.response) {
-      createIdvSessionLogger.error(
-        { error: err.response.data },
-        "Error creating IDV session"
-      );
-    } else if (err.request) {
-      createIdvSessionLogger.error(
-        { error: err.request.data },
-        "Error creating IDV session"
-      );
-    } else {
-      createIdvSessionLogger.error({ error: err }, "Error creating IDV session");
-    }
+    createIdvSessionLogger.error(
+      { error: makeUnknownErrorLoggable(err) },
+      "Error creating IDV session"
+    );
 
     return res.status(500).json({ error: "An unknown error occurred", err });
   }
@@ -752,19 +716,10 @@ async function setIdvProvider(req: Request, res: Response) {
     const idvSession = await handleIdvSessionCreation(config, session, createIdvSessionLogger);
     return res.status(201).json(idvSession);
   } catch (err: any) {
-    if (err.response) {
-      createIdvSessionLogger.error(
-        { error: err.response.data },
-        "Error setting IDV provider and creating IDV session"
-      );
-    } else if (err.request) {
-      createIdvSessionLogger.error(
-        { error: err.request.data },
-        "Error setting IDV provider and creating IDV session"
-      );
-    } else {
-      createIdvSessionLogger.error({ error: err }, "Error setting IDV provider and creating IDV session");
-    }
+    createIdvSessionLogger.error(
+      { error: makeUnknownErrorLoggable(err) },
+      "Error setting IDV provider and creating IDV session"
+    );
 
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -850,7 +805,7 @@ function createRefreshOnfidoTokenRouteHandler(config: SandboxVsLiveKYCRouteHandl
         sdk_token: sdkTokenData.token,
       });
     } catch (err: any) {
-      refreshOnfidoTokenLogger.error({ error: err }, "Error refreshing Onfido token");
+      refreshOnfidoTokenLogger.error({ error: makeUnknownErrorLoggable(err) }, "Error refreshing Onfido token");
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }
@@ -909,8 +864,11 @@ function createCreateOnfidoCheckEndpointRouteHandler(config: SandboxVsLiveKYCRou
         id: check.id,
       });
     } catch (err: any) {
-      console.error(
-        { error: err, applicant_id: req.body.applicant_id },
+      createOnfidoCheckLogger.error(
+        {
+          error: makeUnknownErrorLoggable(err),
+          applicant_id: req.body.applicant_id,
+        },
         "Error creating Onfido check"
       );
       return res.status(500).json({ error: "An unknown error occurred" });
@@ -992,17 +950,9 @@ async function refund(req: Request, res: Response) {
       );
     }
 
-    if (err.response) {
-      console.error({ error: err.response.data }, "Error during refund");
-    } else if (err.request) {
-      console.error({ error: err.request.data }, "Error during refund");
-    } else {
-      console.error({ error: err }, "Error during refund");
-    }
-
     console.log(
       "POST /sessions/:_id/idv-session/refund/v2: Error encountered",
-      err.message
+      makeUnknownErrorLoggable(err)
     );
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -1066,23 +1016,9 @@ async function refundV2(req: Request, res: Response) {
       );
     }
 
-    if (err.response) {
-      console.error(
-        { error: JSON.stringify(err.response.data, null, 2) },
-        "Error during refund"
-      );
-    } else if (err.request) {
-      console.error(
-        { error: JSON.stringify(err.request.data, null, 2) },
-        "Error during refund"
-      );
-    } else {
-      console.error({ error: err }, "Error during refund");
-    }
-
     console.log(
       "POST /sessions/:_id/idv-session/refund: Error encountered",
-      err.message
+      makeUnknownErrorLoggable(err)
     );
     return res.status(500).json({ error: "An unknown error occurred" });
   }
@@ -1118,7 +1054,7 @@ function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfi
 
       return res.status(200).json(sessions);
     } catch (err: any) {
-      console.log("GET /sessions: Error encountered", err.message);
+      console.log("GET /sessions: Error encountered", makeUnknownErrorLoggable(err));
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }

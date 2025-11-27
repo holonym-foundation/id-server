@@ -114,7 +114,7 @@ export function upgradeV3Logger(logger: pino.Logger): UpgradedLogger {
   upgradedLogger.unexpected = (err) => {
     logger.error(
       {
-        error: err.message ?? err.toString(),
+        error: err,
         tags: [
           "action:getCredentialsV3",
           "error:unexpectedError",

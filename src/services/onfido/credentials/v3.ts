@@ -18,7 +18,7 @@ import {
 import { getSessionById, failSession } from "../../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
-import { toAlreadyRegisteredStr } from "../../../utils/errors.js";
+import { toAlreadyRegisteredStr, makeUnknownErrorLoggable } from "../../../utils/errors.js";
 import { upgradeV3Logger, ValidationResult } from "./error-logger.js";
 import {
   validateCheck,
@@ -281,7 +281,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       }
 
       // Otherwise, log the unexpected error
-      endpointLoggerV3.unexpected(err)
+      endpointLoggerV3.unexpected(makeUnknownErrorLoggable(err))
 
       return res.status(500).json({
         error: "An unexpected error occurred.",

@@ -6,6 +6,7 @@ import { pinoOptions, logger } from "../../utils/logger.js";
 import { desiredOnfidoReports } from "../../constants/onfido.js";
 import { ADMIN_EMAILS } from "../../utils/constants.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
+import { makeUnknownErrorLoggable } from "../../utils/errors.js";
 
 const v1EndpointLogger = logger.child({
   msgPrefix: "[POST /onfido/check] ",
@@ -92,7 +93,7 @@ function createV1CreateCheck(config: SandboxVsLiveKYCRouteHandlerConfig) {
         id: check.id,
       });
     } catch (err) {
-      v1EndpointLogger.error({ err }, "Error creating check");
+      v1EndpointLogger.error({ error: makeUnknownErrorLoggable(err) }, "Error creating check");
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }
@@ -197,7 +198,7 @@ function createV2CreateCheck(config: SandboxVsLiveKYCRouteHandlerConfig) {
       });
     } catch (err) {
       v2EndpointLogger.error(
-        { error: err, applicant_id: req.body.applicant_id },
+        { error: makeUnknownErrorLoggable(err), applicant_id: req.body.applicant_id },
         "Error creating check"
       );
       return res.status(500).json({ error: "An unknown error occurred" });

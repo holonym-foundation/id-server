@@ -28,6 +28,7 @@ import {
 } from "./utils.js"
 import { OnfidoDocumentReport, OnfidoReport } from "../../../types.js";
 import { getRouteHandlerConfig } from "../../../init.js";
+import { makeUnknownErrorLoggable } from "../../../utils/errors.js";
 
 const prodConfig = getRouteHandlerConfig("live")
 
@@ -239,7 +240,7 @@ export async function getCredentialsV2(req: Request, res: Response) {
     // Otherwise, log the unexpected error
     endpointLogger.error(
       {
-        error: err,
+        error: makeUnknownErrorLoggable(err),
         tags: [
           "action:getCredentialsV2",
           "error:unexpectedError",

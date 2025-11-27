@@ -26,6 +26,7 @@ import {
   updateSessionStatus,
 } from "./utils.js"
 import { getRouteHandlerConfig } from "../../../init.js";
+import { makeUnknownErrorLoggable } from "../../../utils/errors.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[GET /onfido/credentials] ",
@@ -155,7 +156,7 @@ export async function getCredentials(req: Request, res: Response) {
 
     return res.status(200).json(response);
   } catch (err) {
-    console.error(err);
+    console.error('getCredentials: Error:', makeUnknownErrorLoggable(err));
     return res.status(500).send();
   }
 }

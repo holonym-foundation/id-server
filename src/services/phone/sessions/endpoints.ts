@@ -33,6 +33,7 @@ import {
   getRefundDetails as getPayPalRefundDetails,
   capturePayPalOrder
 } from '../../../utils/paypal.js'
+import { makeUnknownErrorLoggable } from '../../../utils/errors.js'
 import { usdToETH, usdToFTM, usdToAVAX } from '../../../utils/cmc.js'
 import { getProvider, getTransaction, validateTx } from '../../orders/functions.js'
 
@@ -404,7 +405,7 @@ export async function postSession(req: Request, res: Response): Promise<Response
     })
   } catch (err) {
     const error = err as Error
-    console.log('postSession: Error:', error.message)
+    console.log('postSession: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -481,7 +482,7 @@ function createPostSessionV2(config: PostSessionConfig) {
       })
     } catch (err) {
       const error = err as Error
-      console.log('postSession: Error:', error.message)
+      console.log('postSession: Error:', makeUnknownErrorLoggable(error))
       return res.status(500).json({ error: 'An unknown error occurred' })
     }
   }
@@ -569,15 +570,7 @@ export async function createPayPalOrder(
 
     return res.status(201).json(order)
   } catch (err: any) {
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error({ error: err.response.data }, 'Error creating PayPal order')
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error({ error: err.request.data }, 'Error creating PayPal order')
-    } else {
-      console.error({ error: err }, 'Error creating PayPal order')
-    }
+    console.log('createPayPalOrder: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -643,15 +636,7 @@ export async function payment(req: Request, res: Response): Promise<Response> {
 
     return res.status(200).json({ success: true })
   } catch (err: any) {
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error('session payment endpoint: error:', err.response.data)
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error('session payment endpoint: error:', err.request.data)
-    } else {
-      console.error('session payment endpoint: error:', err)
-    }
+    console.log('phone/sessions/payment: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -737,16 +722,7 @@ export async function paymentV2(req: Request, res: Response): Promise<Response> 
 
     return res.status(200).json({ success: true })
   } catch (err: any) {
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error({ error: err.response.data }, 'Error in paymentV2')
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error({ error: err.request.data }, 'Error in paymentV2')
-    } else {
-      console.error({ error: err }, 'Error in paymentV2')
-    }
-
+    console.log('phone/sessions/paymentV2: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -817,16 +793,7 @@ export async function paymentV3(req: Request, res: Response): Promise<Response> 
 
     return res.status(200).json({ success: true })
   } catch (err: any) {
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error({ error: err.response.data }, 'Error in paymentV3')
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error({ error: err.request.data }, 'Error in paymentV3')
-    } else {
-      console.error({ error: err }, 'Error in paymentV3')
-    }
-
+    console.log('phone/sessions/paymentV3: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -900,7 +867,7 @@ export async function refund(req: Request, res: Response): Promise<Response> {
       console.log('Error encountered while deleting mutex', err)
     }
 
-    console.log('Error encountered', err)
+    console.log('phone/sessions/refund: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -970,23 +937,7 @@ export async function refundV2(req: Request, res: Response): Promise<Response> {
       console.log('Error encountered while deleting mutex', err)
     }
 
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error(
-        { error: JSON.stringify(err.response.data, null, 2) },
-        'Error during refund'
-      )
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error(
-        { error: JSON.stringify(err.request.data, null, 2) },
-        'Error during refund'
-      )
-    } else {
-      console.error({ error: err }, 'Error during refund')
-    }
-
-    console.log('Error encountered', err)
+    console.log('phone/sessions/refundV2: Error:', makeUnknownErrorLoggable(err))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -1029,7 +980,7 @@ function createGetSessions(config: GetSessionsConfig) {
       return res.status(200).json(sessions)
     } catch (err) {
       const error = err as Error
-      console.log('GET /sessions: Error:', error.message)
+      console.log('GET /sessions: Error:', makeUnknownErrorLoggable(error))
       return res.status(500).json({ error: 'An unknown error occurred' })
     }
   }
@@ -1104,7 +1055,7 @@ export async function generateVoucher(req: Request, res: Response): Promise<Resp
     })
   } catch (err) {
     const error = err as Error
-    console.log('generateVoucher: Error:', error.message)
+    console.log('generateVoucher: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -1151,15 +1102,7 @@ export async function redeemVoucher(req: Request, res: Response): Promise<Respon
     await updateVoucher(voucherId, true, id, null)
     return res.status(200).json({ success: true })
   } catch (err: any) {
-    // @ts-ignore
-    if (axios.isAxiosError(err) && err.response) {
-      console.error({ error: err.response.data }, 'Error in redeemVoucher')
-      // @ts-ignore
-    } else if (axios.isAxiosError(err) && err.request) {
-      console.error({ error: err.request.data }, 'Error in redeemVoucher')
-    } else {
-      console.error({ error: err }, 'Error in redeemVoucher')
-    }
+    console.log('phone/sessions/redeemVoucher: Error:', makeUnknownErrorLoggable(err))
 
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
@@ -1187,7 +1130,7 @@ export async function isVoucherRedeemed(
     }
   } catch (err) {
     const error = err as Error
-    console.log('isVoucherRedeemed: Error:', error.message)
+    console.log('phone/sessions/isVoucherRedeemed: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }

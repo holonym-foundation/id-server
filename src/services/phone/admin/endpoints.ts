@@ -9,6 +9,7 @@ import {
 } from '../_utils/dynamodb.js'
 import { sessionStatusEnum } from '../../../constants/misc.js'
 import AWS from 'aws-sdk'
+import { makeUnknownErrorLoggable } from '../../../utils/errors.js'
 
 /**
  * ENDPOINT.
@@ -69,7 +70,7 @@ export async function userSessions(req: Request, res: Response): Promise<Respons
     )
   } catch (err) {
     const error = err as Error
-    console.log('admin/user-sessions: Error:', error.message)
+    console.log('admin/user-sessions: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -125,7 +126,7 @@ export async function failSession(req: Request, res: Response): Promise<Response
     })
   } catch (err) {
     const error = err as Error
-    console.log('admin/fail-session: Error:', error.message)
+    console.log('admin/fail-session: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }
@@ -204,7 +205,7 @@ export async function deletePhoneNumber(
     })
   } catch (err) {
     const error = err as Error
-    console.log('admin/delete-phone-number: Error:', error.message)
+    console.log('admin/delete-phone-number: Error:', makeUnknownErrorLoggable(error))
     return res.status(500).json({ error: 'An unknown error occurred' })
   }
 }

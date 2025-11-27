@@ -5,6 +5,7 @@ import { sendEmail } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { ADMIN_EMAILS } from "../../utils/constants.js";
 import type { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
+import { makeUnknownErrorLoggable } from "../../utils/errors.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /onfido/applicant] ",
@@ -97,7 +98,7 @@ function createCreateApplicant(config: SandboxVsLiveKYCRouteHandlerConfig) {
         sdk_token: sdkTokenResp.data.token,
       });
     } catch (err) {
-      endpointLogger.error({ error: err }, "Error creating applicant");
+      endpointLogger.error({ error: makeUnknownErrorLoggable(err) }, "Error creating applicant");
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }
