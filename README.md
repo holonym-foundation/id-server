@@ -49,6 +49,8 @@ Alternatively, you can setup a MongoDB cluster using MongoDB Atlas. To connect t
 
 **DynamoDB**
 
+Option 1, using docker:
+
 ```bash
 docker run -p 8000:8000 amazon/dynamodb-local
 ```
@@ -57,6 +59,36 @@ After starting DynamoDB Local, create the required tables and indexes by running
 
 ```bash
 ./scripts/setup-dynamodb-local.sh
+```
+
+Option 2, using NoSQL Workbench:
+
+See [NoSQL Workbench](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/workbench.html) to run Dynamo DB locally and use it also as a GUI.
+
+tl;dr: https://youtu.be/Mq3tM8so3xU 
+
+Once you have NoSQL Workbench running, look to the bottom left area and turn on “DDB local” toggle to run a local DynamoDB instance.
+
+For the first time, you need to load the data model `./dynamodb-model.json. From the home screen of NoSQL Workbench, refer to the top right area and click on “Import data model”, import the model JSON file.
+
+Then to get started with tables as defined in the model, go to “Visualizer”, load the model and “Commit to Amazon DynamoDB” and select your local connection.
+
+You can get connection credentials by clicking on the connection’s “⋮” button.
+
+**Setting up AWS.config for local DynamoDB
+
+At the top of `dynamodb.js`, update the line 2 as below
+
+```javascript
+AWS.config.update({
+    credentials: {
+        accessKeyId: "ijpw4p",
+        secretAccessKey: "5fhibc",
+    },
+    region: 'us-east-2'
+});
+
+var ddb = new AWS.DynamoDB();
 ```
 
 **Valkey**
@@ -80,3 +112,21 @@ Note that the daemon can also be run. However, for development, running the daem
 We use bun's built-in test runner. Run tests with:
 
         bun test
+
+## Other heplful bits for local development
+
+### Phone verification
+
+**Skipping IP Quality Score check for running locally**
+In `check-number.jt`, you can comment out `GET` request to `https://ipqualityscore.com` from ~ line 202 to 206. Then comment out check out `isSafe` from ~ line 228 - 233.
+
+**Skipping OTP sending for running locally**
+In `otp.js` ~ line 62, you can comment out `sendOTP` and log `otp` to be entered for verification.
+
+So with all these setup, `.env` is not needed.
+
+```javascript
+// await sendOTP(phoneNumber, otp);
+console.log("cacheOTP: ", phoneNumber, otp);
+```
+
