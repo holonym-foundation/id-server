@@ -266,7 +266,7 @@ function getIsRegistered(phoneNumber: string): Promise<boolean> {
         return
       }
 
-      if (result && !process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING) {
+      if (result && process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true') {
         resolve(true)
         return
       }
@@ -288,7 +288,7 @@ function getIsRegisteredWithinLast11Months(
 
       if (
         result?.Item?.insertedAt?.N &&
-        !process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING
+        process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true'
       ) {
         const now = new Date()
         const insertedAt = new Date(parseInt(result.Item.insertedAt.N))
@@ -322,7 +322,7 @@ function getIsRegisteredWithinLast11MonthsAndNotLast5Days(
 
       if (
         result?.Item?.insertedAt?.N &&
-        !process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING
+        process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true'
       ) {
         const now = new Date()
         const insertedAt = new Date(parseInt(result.Item.insertedAt.N))
@@ -425,7 +425,7 @@ export async function getCredentials(req: Request, res: Response) {
 
       await setPhoneSessionIssued(sessionId)
 
-      if (!process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING) {
+      if (process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true') {
         addNumber(phoneByNullifier)
       }
 
@@ -475,7 +475,7 @@ export async function getCredentials(req: Request, res: Response) {
     await setPhoneSessionIssued(sessionId)
 
     // Allow disabling of Sybil resistance for testing this script can be tested more than once ;)
-    if (!process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING) {
+    if (process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true') {
       addNumber(req.params.number)
     }
 
