@@ -33,6 +33,7 @@ import {
 } from "../../utils/clean-hands-nullifier-and-creds.js";
 import { parseStatementForUserCertification } from '../../utils/clean-hands-misc.js'
 import {
+  findOneCleanHandsUserVerificationLast11Months,
   findOneCleanHandsUserVerification11Months5Days
 } from "../../utils/user-verifications.js";
 import { makeUnknownErrorLoggable, toAlreadyRegisteredStr } from "../../utils/errors.js";
@@ -1902,7 +1903,7 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
 
       // Assert user hasn't registered yet
       if (config.environment === "live") {
-        const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+        const user = await findOneCleanHandsUserVerificationLast11Months(uuid);
         if (user) {
           // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
           issueCredsV4Logger.alreadyRegistered(uuid);
