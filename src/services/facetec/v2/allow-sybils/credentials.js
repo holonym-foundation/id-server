@@ -89,7 +89,7 @@ async function getCredentials(req, res) {
     logger.info({ session }, "Session found");
 
     if (session.status === biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED) {
-      endpointLogger.verificationPreviouslyFailed(session);
+      endpointLogger.verificationPreviouslyFailed(null, session);
       return res.status(400).json({
         error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
       });
