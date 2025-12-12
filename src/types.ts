@@ -511,6 +511,16 @@ export type ISessionRetryWhitelist = {
   tier: number;     // Rate limit tier (e.g., 1 = 15 requests, 2 = 20 requests, etc.)
 };
 
+export type IPaymentRedemption = {
+  _id?: Types.ObjectId;
+  commitment: string;  // bytes32 commitment hash
+  redeemedAt?: Date;   // When the payment was redeemed
+  service?: string;    // Service identifier (bytes32)
+  fulfillmentReceipt?: string;  // Receipt from verifier-server when SBT is minted
+};
+
+export type ISandboxPaymentRedemption = IPaymentRedemption;
+
 // ---------------- MongoDB schemas for direct verification service ----------------
 
 export namespace DirectVerification {
@@ -563,6 +573,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
   SanctionsResultModel: Model<ISanctionsResult>
+  PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
 }

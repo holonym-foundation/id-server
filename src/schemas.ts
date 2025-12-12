@@ -34,7 +34,9 @@ import {
   IVerificationCollisionMetadata,
   IGalxeCampaignZeroUser,
   ISilkPeanutCampaignsMetadata,
-  ISessionRetryWhitelist
+  ISessionRetryWhitelist,
+  IPaymentRedemption,
+  ISandboxPaymentRedemption
 } from "./types.js"
 dotenv.config();
 
@@ -991,6 +993,49 @@ const SilkPeanutCampaignsMetadataSchema = new Schema<ISilkPeanutCampaignsMetadat
   campaignId: String,
 });
 
+const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  redeemedAt: {
+    type: Date,
+    required: false,
+  },
+  service: {
+    type: String,
+    required: false,
+  },
+  fulfillmentReceipt: {
+    type: String,
+    required: false,
+  },
+});
+PaymentRedemptionSchema.index({ commitment: 1 });
+
+const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  redeemedAt: {
+    type: Date,
+    required: false,
+  },
+  service: {
+    type: String,
+    required: false,
+  },
+  fulfillmentReceipt: {
+    type: String,
+    required: false,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxPaymentRedemptionSchema.index({ commitment: 1 });
+
 export {
   userVerificationsSchema,
   idvSessionsSchema,
@@ -1024,4 +1069,6 @@ export {
   SessionRetryWhitelistSchema,
   SanctionsResultSchema,
   DirectVerification,
+  PaymentRedemptionSchema,
+  SandboxPaymentRedemptionSchema,
 };

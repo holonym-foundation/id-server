@@ -16,6 +16,7 @@ import { refundFailedCleanHandsSession } from "../services/admin/refund-failed-c
 import { issueVeraxAttestation } from "../services/admin/issue-verax-attestation.js";
 import { getUserHasBackedupCredentials } from "../services/admin/user-has-backedup-credentials.js";
 import { whitelistCleanHandsSession } from "../services/admin/whitelist-clean-hands-session.js";
+import { refundPayment } from "../services/admin/refund-payment.js";
 
 const router = express.Router();
 
@@ -40,5 +41,6 @@ router.post("/user-clean-hands-sessions", userCleanHandsSessions);
 router.post("/fail-clean-hands-session", failCleanHandsSession);
 // router.post("/refund-failed-clean-hands-session", refundFailedCleanHandsSession);
 // router.post("/whitelist-clean-hands-session", whitelistCleanHandsSession);
+router.post("/payments/refund", refundPayment);
 
 export default router;

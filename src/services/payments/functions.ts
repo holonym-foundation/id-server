@@ -1,0 +1,381 @@
+import { ethers } from "ethers";
+import { v4 as uuidV4 } from "uuid";
+import { valkeyClient } from "../../utils/valkey-glide.js";
+import { TimeUnit } from "@valkey/valkey-glide";
+import {
+  ethereumProvider,
+  optimismProvider,
+  optimismGoerliProvider,
+  fantomProvider,
+  avalancheProvider,
+  auroraProvider,
+  baseProvider,
+  idvSessionUSDPrice,
+  humanIDPaymentsABI,
+} from "../../constants/misc.js";
+
+/**
+ * Get Human ID Payments contract address for a given chain ID
+ */
+export function getHumanIDPaymentsContractAddress(chainId: number): string {
+  const address = humanIDPaymentsContractAddresses[chainId];
+  if (!address) {
+    throw new Error(`Human ID Payments contract address not configured for chain ID ${chainId}`);
+  }
+  if (address === "TODO") {
+    throw new Error(`Human ID Payments contract address for chain ID ${chainId} is not set. Please update humanIDPaymentsContractAddresses in services/payments/functions.ts`);
+  }
+  return address;
+}
+import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
+import { IPaymentRedemption } from "../../types.js";
+import { pinoOptions, logger } from "../../utils/logger.js";
+
+const paymentsLogger = logger.child({
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "payments",
+  },
+});
+
+/**
+ * Get provider for a given chain ID
+ */
+export function getProvider(chainId: number): ethers.providers.JsonRpcProvider {
+  if (chainId === 1) {
+    return ethereumProvider;
+  } else if (chainId === 10) {
+    return optimismProvider;
+  } else if (chainId === 250) {
+    return fantomProvider;
+  } else if (chainId === 8453) {
+    return baseProvider;
+  } else if (chainId === 43114) {
+    return avalancheProvider;
+  } else if (chainId === 1313161554) {
+    return auroraProvider;
+  } else if (process.env.NODE_ENV === "development" && chainId === 420) {
+    return optimismGoerliProvider;
+  } else {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+}
+
+/**
+ * Calculate price in token for a given USD amount and chain ID
+ */
+export async function calculatePriceInToken(
+  usdAmount: number,
+  chainId: number
+): Promise<string> {
+  let priceInToken: number;
+  
+  if ([1, 10, 1313161554, 8453].includes(chainId)) {
+    priceInToken = await usdToETH(usdAmount);
+  } else if (chainId === 250) {
+    priceInToken = await usdToFTM(usdAmount);
+  } else if (chainId === 43114) {
+    priceInToken = await usdToAVAX(usdAmount);
+  } else if (process.env.NODE_ENV === "development" && chainId === 420) {
+    priceInToken = await usdToETH(usdAmount);
+  } else {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+
+  // Round to 18 decimal places to avoid underflow errors
+  const decimals = 18;
+  const multiplier = 10 ** decimals;
+  const rounded = Math.round(priceInToken * multiplier) / multiplier;
+
+  return ethers.utils.parseEther(rounded.toString()).toString();
+}
+
+/**
+ * Generate EIP-191 signature for payment
+ * Signs: keccak256(abi.encode(amount, commitment, service, chainId, timestamp))
+ */
+export async function generatePaymentSignature(
+  amount: string,
+  commitment: string,
+  service: string,
+  chainId: number,
+  timestamp: number
+): Promise<string> {
+  if (!process.env.PAYMENTS_ORACLE_PRIVATE_KEY) {
+    throw new Error("PAYMENTS_ORACLE_PRIVATE_KEY environment variable is not set");
+  }
+
+  const wallet = new ethers.Wallet(process.env.PAYMENTS_ORACLE_PRIVATE_KEY);
+  
+  // Create the message hash as per the contract: keccak256(abi.encode(amount, commitment, service, chainId, timestamp))
+  const messageHash = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["uint256", "bytes32", "bytes32", "uint256", "uint256"],
+      [amount, commitment, service, chainId, timestamp]
+    )
+  );
+
+  // Sign with EIP-191 prefix (ethers automatically adds the prefix)
+  const signature = await wallet.signMessage(ethers.utils.arrayify(messageHash));
+  
+  return signature;
+}
+
+/**
+ * Generate EIP-191 signature for refund
+ * Signs: keccak256(abi.encode(commitment, chainId, timestamp))
+ */
+export async function generateRefundSignature(
+  commitment: string,
+  chainId: number,
+  timestamp: number
+): Promise<string> {
+  if (!process.env.PAYMENTS_ORACLE_PRIVATE_KEY) {
+    throw new Error("PAYMENTS_ORACLE_PRIVATE_KEY environment variable is not set");
+  }
+
+  const wallet = new ethers.Wallet(process.env.PAYMENTS_ORACLE_PRIVATE_KEY);
+  
+  // Create the message hash as per the contract: keccak256(abi.encode(commitment, chainId, timestamp))
+  const messageHash = ethers.utils.keccak256(
+    ethers.utils.defaultAbiCoder.encode(
+      ["bytes32", "uint256", "uint256"],
+      [commitment, chainId, timestamp]
+    )
+  );
+
+  // Sign with EIP-191 prefix (ethers automatically adds the prefix)
+  const signature = await wallet.signMessage(ethers.utils.arrayify(messageHash));
+  
+  return signature;
+}
+
+/**
+ * Get payment details from smart contract
+ */
+export async function getPaymentFromContract(
+  commitment: string,
+  chainId: number,
+  contractAddress: string
+): Promise<{
+  commitment: string;
+  service: string;
+  timestamp: number;
+  sender: string;
+  amount: string;
+  refunded: boolean;
+} | null> {
+  try {
+    const provider = getProvider(chainId);
+    const contract = new ethers.Contract(
+      contractAddress,
+      humanIDPaymentsABI,
+      provider
+    );
+
+    const payment = await contract.payments(commitment);
+    
+    // Check if payment exists (amount > 0)
+    if (payment.amount.toString() === "0") {
+      return null;
+    }
+
+    return {
+      commitment: payment.commitment,
+      service: payment.service,
+      timestamp: payment.timestamp.toNumber(),
+      sender: payment.sender,
+      amount: payment.amount.toString(),
+      refunded: payment.refunded,
+    };
+  } catch (error: any) {
+    paymentsLogger.error({ error: error.message, commitment, chainId }, "Error getting payment from contract");
+    throw error;
+  }
+}
+
+/**
+ * Store reservation token in valkey with TTL (5 minutes)
+ */
+export async function storeReservationToken(
+  token: string,
+  commitment: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<void> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:reservation:${token}`;
+  // TTL: 5 minutes (300 seconds)
+  await valkeyClient.set(key, commitment, { expiry: { type: TimeUnit.Seconds, count: 5 * 60 } });
+}
+
+/**
+ * Get and delete reservation token from valkey
+ */
+export async function getReservationToken(
+  token: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<string | null> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:reservation:${token}`;
+  const commitment = await valkeyClient.get(key);
+  
+  if (commitment) {
+    // Delete the token after reading
+    await valkeyClient.del([key]);
+    return commitment as string;
+  }
+  
+  return null;
+}
+
+/**
+ * Store refund-pending record in valkey with TTL (10 minutes)
+ */
+export async function storeRefundPending(
+  commitment: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<void> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:refund-pending:${commitment}`;
+  // TTL: 10 minutes (600 seconds)
+  await valkeyClient.set(key, "1", { expiry: { type: TimeUnit.Seconds, count: 10 * 60 } });
+}
+
+/**
+ * Check if refund is pending
+ */
+export async function isRefundPending(
+  commitment: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<boolean> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:refund-pending:${commitment}`;
+  const exists = await valkeyClient.exists([key]);
+  return exists > 0;
+}
+
+/**
+ * Store redemption-pending record in valkey with TTL (5 minutes)
+ */
+export async function storeRedemptionPending(
+  commitment: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<void> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:redemption-pending:${commitment}`;
+  // TTL: 5 minutes (300 seconds)
+  await valkeyClient.set(key, "1", { expiry: { type: TimeUnit.Seconds, count: 5 * 60 } });
+}
+
+/**
+ * Check if redemption is pending
+ */
+export async function isRedemptionPending(
+  commitment: string,
+  environment: "sandbox" | "live" = "live"
+): Promise<boolean> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:redemption-pending:${commitment}`;
+  const exists = await valkeyClient.exists([key]);
+  return exists > 0;
+}
+
+/**
+ * Get or create redemption record
+ */
+export async function getRedemptionRecord(
+  commitment: string,
+  PaymentRedemptionModel: any
+): Promise<IPaymentRedemption | null> {
+  return await PaymentRedemptionModel.findOne({ commitment });
+}
+
+/**
+ * Check if payment is redeemed
+ */
+export async function isPaymentRedeemed(
+  commitment: string,
+  PaymentRedemptionModel: any
+): Promise<boolean> {
+  const redemption = await PaymentRedemptionModel.findOne({ commitment, redeemed: true });
+  return redemption !== null;
+}
+
+/**
+ * Mark payment as redeemed
+ */
+export async function markPaymentAsRedeemed(
+  commitment: string,
+  PaymentRedemptionModel: any,
+  service?: string,
+  fulfillmentReceipt?: string
+): Promise<void> {
+  const updateData: any = {
+    commitment,
+    redeemed: true,
+    redeemedAt: new Date(),
+  };
+  if (service) {
+    updateData.service = service;
+  }
+  if (fulfillmentReceipt) {
+    updateData.fulfillmentReceipt = fulfillmentReceipt;
+  }
+  await PaymentRedemptionModel.findOneAndUpdate(
+    { commitment },
+    updateData,
+    { upsert: true, new: true }
+  );
+}
+
+/**
+ * Derive commitment from secret (keccak256 hash of the secret)
+ */
+export function deriveCommitmentFromSecret(secret: string): string {
+  return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(secret));
+}
+
+/**
+ * Verify commitment secret by hashing it and comparing with commitment
+ */
+export function verifyCommitmentSecret(
+  secret: string,
+  commitment: string
+): boolean {
+  // Commitment should be keccak256 hash of the secret
+  const derivedCommitment = deriveCommitmentFromSecret(secret);
+  return derivedCommitment.toLowerCase() === commitment.toLowerCase();
+}
+
+/**
+ * Generate a unique reservation token
+ */
+export function generateReservationToken(): string {
+  return uuidV4();
+}
+

@@ -47,6 +47,8 @@ const supportedChainIds = [
   8453, // Base
   43114, // Avalanche
   1313161554, // Aurora
+  // For sandbox
+  11155420, // Optimism Goerli
 ];
 if (process.env.NODE_ENV === "development") {
   supportedChainIds.push(420); // Optimism goerli
@@ -155,3 +157,28 @@ export const suiClient = new SuiClient({
   // url: getFullnodeUrl("mainnet")
   url: process.env.SUI_RPC_URL as string
 });
+
+// ---------------- Human ID Payments Contract Addresses ----------------
+const humanIDPaymentsContractAddresses: Record<number, string> = {
+  1: "TODO", // Ethereum
+  10: "TODO", // Optimism
+  250: "TODO", // Fantom
+  8453: "TODO", // Base
+  43114: "TODO", // Avalanche
+  1313161554: "TODO", // Aurora
+  // For sandbox
+  11155420: "0xF98798e9dAC28928F1E5EE6109d5eb2797152E92", // Optimism Goerli
+};
+
+if (process.env.NODE_ENV === "development") {
+  humanIDPaymentsContractAddresses[420] = "TODO"; // Optimism Goerli
+}
+
+/**
+ * HumanIDPayments contract ABI
+ */
+export const humanIDPaymentsABI = [
+  "function payments(bytes32) public view returns (bytes32 commitment, bytes32 service, uint256 timestamp, address sender, uint256 amount, bool refunded)",
+  "function getBalance() external view returns (uint256)",
+  "function forceRefund(bytes32 commitment) external",
+];
