@@ -182,3 +182,8 @@ export const humanIDPaymentsABI = [
   "function getBalance() external view returns (uint256)",
   "function forceRefund(bytes32 commitment) external",
 ];
+
+/**
+ * Service identifier for SBT minting
+ */
+export const PAYMENT_SERVICE_SBT_MINT = '0x' + 'mint_zeronym_v3_sbt'.padEnd(64, '0').slice(0, 64);

@@ -521,6 +521,21 @@ export type IPaymentRedemption = {
 
 export type ISandboxPaymentRedemption = IPaymentRedemption;
 
+export type IPaymentSecret = {
+  _id?: Types.ObjectId;
+  encryptedSecret: {
+    ciphertext: string;
+    iv: string;
+  };  // Encrypted payment secret
+  commitment: string;  // bytes32 commitment hash (derived from secret)
+  holoUserId: string;  // Holonym user ID
+  createdAt?: Date;  // When the secret was created/stored
+  service?: string;  // Service identifier (bytes32)
+  chainId?: number;  // Chain ID where payment was made
+};
+
+export type ISandboxPaymentSecret = IPaymentSecret;
+
 // ---------------- MongoDB schemas for direct verification service ----------------
 
 export namespace DirectVerification {
@@ -574,6 +589,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
+  PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
 }
