@@ -36,7 +36,9 @@ import {
   ISilkPeanutCampaignsMetadata,
   ISessionRetryWhitelist,
   IPaymentRedemption,
-  ISandboxPaymentRedemption
+  ISandboxPaymentRedemption,
+  IPaymentSecret,
+  ISandboxPaymentSecret
 } from "./types.js"
 dotenv.config();
 
@@ -1036,6 +1038,73 @@ const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
 // Indexes are probably not needed for sandbox mode.
 // SandboxPaymentRedemptionSchema.index({ commitment: 1 });
 
+const PaymentSecretSchema = new Schema<IPaymentSecret>({
+  encryptedSecret: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: true,
+  },
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  holoUserId: {
+    type: String,
+    required: true,
+  },
+  createdAt: {
+    type: Date,
+    required: false,
+    default: Date.now,
+  },
+  service: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+});
+PaymentSecretSchema.index({ holoUserId: 1 });
+
+const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
+  encryptedSecret: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: true,
+  },
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  holoUserId: {
+    type: String,
+    required: true,
+  },
+  createdAt: {
+    type: Date,
+    required: false,
+    default: Date.now,
+  },
+  service: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxPaymentSecretSchema.index({ holoUserId: 1 });
+
 export {
   userVerificationsSchema,
   idvSessionsSchema,
@@ -1071,4 +1140,6 @@ export {
   DirectVerification,
   PaymentRedemptionSchema,
   SandboxPaymentRedemptionSchema,
+  PaymentSecretSchema,
+  SandboxPaymentSecretSchema,
 };

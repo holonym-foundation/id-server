@@ -24,6 +24,7 @@ import constants from "./routes/constants.js";
 import directVerification from "./routes/direct-verification.js"
 import phone, { phoneRouterSandbox } from "./routes/phone.js";
 import payments, { sandboxRouter as sandboxPayments } from "./routes/payments.js";
+import paymentSecrets, { sandboxRouter as sandboxPaymentSecrets } from "./routes/payment-secrets.js";
 
 const app = express();
 
@@ -96,6 +97,7 @@ app.use("/constants", constants);
 app.use("/direct-verification", directVerification)
 app.use("/phone", phone);
 app.use("/payments", payments);
+app.use("/payment-secrets", paymentSecrets);
 
 // ---------- Sandbox routes ----------
 app.use("/sandbox/sessions", sandboxSessions);
