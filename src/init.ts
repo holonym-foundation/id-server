@@ -39,7 +39,9 @@ import {
   CleanHandsSessionWhitelistSchema,
   SessionRetryWhitelistSchema,
   SanctionsResultSchema,
-  DirectVerification as DirectVerificationSchemas
+  DirectVerification as DirectVerificationSchemas,
+  PaymentRedemptionSchema,
+  SandboxPaymentRedemptionSchema
 } from "./schemas.js";
 import dotenv from "dotenv";
 import {
@@ -75,7 +77,9 @@ import {
   ISessionRetryWhitelist,
   ISanctionsResult,
   DirectVerification,
-  SandboxVsLiveKYCRouteHandlerConfig
+  SandboxVsLiveKYCRouteHandlerConfig,
+  IPaymentRedemption,
+  ISandboxPaymentRedemption
 } from "./types.js";
 dotenv.config();
 
@@ -386,6 +390,16 @@ async function initializeMongoDb() {
     DirectVerificationSchemas.SessionSchema
   );
 
+  const PaymentRedemption = mongoose.model(
+    "PaymentRedemption",
+    PaymentRedemptionSchema
+  );
+
+  const SandboxPaymentRedemption = mongoose.model(
+    "SandboxPaymentRedemption",
+    SandboxPaymentRedemptionSchema
+  );
+
   return {
     UserVerifications,
     IDVSessions,
@@ -422,7 +436,9 @@ async function initializeMongoDb() {
     DVCustomer,
     DVAPIKey,
     DVOrder,
-    DVSession
+    DVSession,
+    PaymentRedemption,
+    SandboxPaymentRedemption
   };
 }
 
@@ -463,7 +479,9 @@ let UserVerifications: Model<IUserVerifications>,
   DVCustomer: Model<DirectVerification.ICustomer>,
   DVAPIKey: Model<DirectVerification.IAPIKey>,
   DVOrder: Model<DirectVerification.IOrder>,
-  DVSession: Model<DirectVerification.ISession>;
+  DVSession: Model<DirectVerification.ISession>,
+  PaymentRedemption: Model<IPaymentRedemption>,
+  SandboxPaymentRedemption: Model<ISandboxPaymentRedemption>;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -503,6 +521,8 @@ initializeMongoDb().then((result) => {
     DVAPIKey = result.DVAPIKey;
     DVOrder = result.DVOrder;
     DVSession = result.DVSession;
+    PaymentRedemption = result.PaymentRedemption;
+    SandboxPaymentRedemption = result.SandboxPaymentRedemption;
   } else {
     logger.error("MongoDB initialization failed");
     throw new Error("MongoDB initialization failed");
@@ -530,6 +550,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       AMLChecksSessionModel: SandboxAMLChecksSession,
       CleanHandsNullifierAndCredsModel: SandboxCleanHandsNullifierAndCreds,
       SanctionsResultModel: SanctionsResult,
+      PaymentRedemptionModel: SandboxPaymentRedemption,
       issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
       cleanHandsIssuerPrivateKey: process.env.HOLONYM_SANDBOX_CLEAN_HANDS_ISSUER_PRIVKEY!,
     }
@@ -545,6 +566,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     UserCredentialsV2Model: UserCredentialsV2,
     EncryptedNullifiersModel: EncryptedNullifiers,
     OrderModel: Order,
+    PaymentRedemptionModel: PaymentRedemption,
     AMLChecksSessionModel: AMLChecksSession,
     CleanHandsNullifierAndCredsModel: CleanHandsNullifierAndCreds,
     SanctionsResultModel: SanctionsResult,
@@ -590,6 +612,8 @@ export {
   DVAPIKey,
   DVOrder,
   DVSession,
+  PaymentRedemption,
+  SandboxPaymentRedemption,
   zokProvider,
   getRouteHandlerConfig,
 };
