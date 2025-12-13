@@ -121,6 +121,17 @@ export function validateReports(reports: Array<OnfidoReport>, metaSession: ISess
       // we can ignore this check for such sessions.
       // NOTE: May 14, 2024: We are disablign the ipCountry check because it seems to be
       // turning down honest users while being game-able by sybils.
+      if (!report.properties.issuing_country) {
+        return {
+          error: `Verification failed. Onfido failed to detect document's issuing country (country reported as '${report.properties.issuing_country}').`,
+          log: {
+            msg: "Unsupported country. report.properties.issuing_country is empty",
+            data: {
+              country: report.properties.issuing_country,
+            },
+          },
+        };
+      }
       if (!countryCodeToPrime[report.properties.issuing_country as keyof typeof countryCodeToPrime]) {
         return {
           error: `Verification failed. Unsupported country ${report.properties.issuing_country}`,
