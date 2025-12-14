@@ -159,7 +159,7 @@ export const suiClient = new SuiClient({
 });
 
 // ---------------- Human ID Payments Contract Addresses ----------------
-const humanIDPaymentsContractAddresses: Record<number, string> = {
+export const humanIDPaymentsContractAddresses: Record<number, string> = {
   1: "TODO", // Ethereum
   10: "TODO", // Optimism
   250: "TODO", // Fantom

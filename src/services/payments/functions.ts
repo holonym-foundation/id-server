@@ -13,20 +13,6 @@ import {
   idvSessionUSDPrice,
   humanIDPaymentsABI,
 } from "../../constants/misc.js";
-
-/**
- * Get Human ID Payments contract address for a given chain ID
- */
-export function getHumanIDPaymentsContractAddress(chainId: number): string {
-  const address = humanIDPaymentsContractAddresses[chainId];
-  if (!address) {
-    throw new Error(`Human ID Payments contract address not configured for chain ID ${chainId}`);
-  }
-  if (address === "TODO") {
-    throw new Error(`Human ID Payments contract address for chain ID ${chainId} is not set. Please update humanIDPaymentsContractAddresses in services/payments/functions.ts`);
-  }
-  return address;
-}
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { IPaymentRedemption } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
@@ -201,7 +187,7 @@ export async function getPaymentFromContract(
 export async function storeReservationToken(
   token: string,
   commitment: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<void> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -218,7 +204,7 @@ export async function storeReservationToken(
  */
 export async function getReservationToken(
   token: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<string | null> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -242,7 +228,7 @@ export async function getReservationToken(
  */
 export async function storeRefundPending(
   commitment: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<void> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -259,7 +245,7 @@ export async function storeRefundPending(
  */
 export async function isRefundPending(
   commitment: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<boolean> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -276,7 +262,7 @@ export async function isRefundPending(
  */
 export async function storeRedemptionPending(
   commitment: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<void> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -293,7 +279,7 @@ export async function storeRedemptionPending(
  */
 export async function isRedemptionPending(
   commitment: string,
-  environment: "sandbox" | "live" = "live"
+  environment: "sandbox" | "live"
 ): Promise<boolean> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
@@ -303,6 +289,22 @@ export async function isRedemptionPending(
   const key = `${prefix}payment:redemption-pending:${commitment}`;
   const exists = await valkeyClient.exists([key]);
   return exists > 0;
+}
+
+/**
+ * Delete redemption-pending record from valkey
+ */
+export async function deleteRedemptionPending(
+  commitment: string,
+  environment: "sandbox" | "live"
+): Promise<void> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:redemption-pending:${commitment}`;
+  await valkeyClient.del([key]);
 }
 
 /**
