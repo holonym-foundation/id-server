@@ -7,10 +7,9 @@ import {
   isRedemptionPending,
   isRefundPending,
   storeRefundPending,
-  getHumanIDPaymentsContractAddress,
 } from "../payments/functions.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { humanIDPaymentsABI } from "../../constants/misc.js";
+import { humanIDPaymentsABI, humanIDPaymentsContractAddresses } from "../../constants/misc.js";
 import { getRouteHandlerConfig } from "../../init.js";
 
 const adminRefundPaymentLogger = logger.child({
@@ -53,7 +52,10 @@ export async function refundPayment(req: Request, res: Response) {
     }
 
     // Check if payment exists onchain
-    const contractAddress = getHumanIDPaymentsContractAddress(chainIdNum);
+    const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
+    if (!contractAddress) {
+      return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+    }
     const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
 
     if (!payment) {
@@ -70,17 +72,17 @@ export async function refundPayment(req: Request, res: Response) {
     }
 
     // Check if redemption is pending
-    if (await isRedemptionPending(commitment)) {
+    if (await isRedemptionPending(commitment, liveConfig.environment)) {
       return res.status(400).json({ error: "Redemption is pending for this payment" });
     }
 
     // Check if refund is pending
-    if (await isRefundPending(commitment)) {
+    if (await isRefundPending(commitment, liveConfig.environment)) {
       return res.status(400).json({ error: "Refund is already pending" });
     }
 
     // Insert refund-pending record with 10 min TTL to prevent race conditions
-    await storeRefundPending(commitment);
+    await storeRefundPending(commitment, liveConfig.environment);
 
     // Call forceRefund on contract using admin wallet
     const provider = getProvider(chainIdNum);

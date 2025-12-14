@@ -11,17 +11,17 @@ import {
   isRefundPending,
   storeRedemptionPending,
   isRedemptionPending,
+  deleteRedemptionPending,
   getRedemptionRecord,
   isPaymentRedeemed,
   markPaymentAsRedeemed,
   deriveCommitmentFromSecret,
   generateReservationToken,
-  getHumanIDPaymentsContractAddress,
 } from "./functions.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { idvSessionUSDPrice } from "../../constants/misc.js";
+import { idvSessionUSDPrice, humanIDPaymentsContractAddresses } from "../../constants/misc.js";
 
 const paymentsLogger = logger.child({
   base: {
@@ -103,6 +103,15 @@ async function createPaymentParamsSandbox(req: Request, res: Response) {
 function createReserveRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
+      // Check API key
+      const apiKey = req.headers["x-api-key"];
+      if (!process.env.PAYMENT_REDEMPTION_API_KEY || !apiKey) {
+        return res.status(401).json({ error: "Unauthorized. No API key found." });
+      }
+      if (apiKey !== process.env.PAYMENT_REDEMPTION_API_KEY) {
+        return res.status(401).json({ error: "Invalid API key." });
+      }
+
       const { secret, chainId, service } = req.body;
 
       if (!secret || typeof secret !== "string") {
@@ -124,7 +133,10 @@ function createReserveRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandle
       const commitment = deriveCommitmentFromSecret(secret);
 
       // Check if payment exists onchain
-      const contractAddress = getHumanIDPaymentsContractAddress(chainIdNum);
+      const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
+      if (!contractAddress) {
+        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+      }
       const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
 
       if (!payment) {
@@ -194,6 +206,15 @@ async function reserveRedemptionSandbox(req: Request, res: Response) {
 function createCompleteRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
+      // Check API key
+      const apiKey = req.headers["x-api-key"];
+      if (!process.env.PAYMENT_REDEMPTION_API_KEY || !apiKey) {
+        return res.status(401).json({ error: "Unauthorized. No API key found." });
+      }
+      if (apiKey !== process.env.PAYMENT_REDEMPTION_API_KEY) {
+        return res.status(401).json({ error: "Invalid API key." });
+      }
+
       const { reservationToken, service, fulfillmentReceipt } = req.body;
 
       if (!reservationToken || typeof reservationToken !== "string") {
@@ -247,6 +268,64 @@ async function completeRedemptionProd(req: Request, res: Response) {
 async function completeRedemptionSandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createCompleteRedemptionRouteHandler(config)(req, res);
+}
+
+/**
+ * POST /payments/redemption/cancel
+ * Cancel a reserved redemption (cleanup on error)
+ */
+function createCancelRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      // Check API key
+      const apiKey = req.headers["x-api-key"];
+      if (!process.env.PAYMENT_REDEMPTION_API_KEY || !apiKey) {
+        return res.status(401).json({ error: "Unauthorized. No API key found." });
+      }
+      if (apiKey !== process.env.PAYMENT_REDEMPTION_API_KEY) {
+        return res.status(401).json({ error: "Invalid API key." });
+      }
+
+      const { reservationToken } = req.body;
+
+      if (!reservationToken || typeof reservationToken !== "string") {
+        return res.status(400).json({ error: "reservationToken is required" });
+      }
+
+      // Get commitment from reservation token (this also deletes the token)
+      const commitment = await getReservationToken(reservationToken, config.environment);
+
+      if (!commitment) {
+        return res.status(400).json({ error: "Invalid or expired reservation token" });
+      }
+
+      // Delete the redemption-pending record
+      await deleteRedemptionPending(commitment, config.environment);
+
+      paymentsLogger.info(
+        { commitment, reservationToken, environment: config.environment },
+        "Cancelled redemption reservation"
+      );
+
+      return res.status(200).json({
+        message: "Redemption reservation cancelled",
+        commitment,
+      });
+    } catch (error: any) {
+      paymentsLogger.error({ error: error.message }, "Error cancelling redemption");
+      return res.status(500).json({ error: error.message || "An unknown error occurred" });
+    }
+  };
+}
+
+async function cancelRedemptionProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createCancelRedemptionRouteHandler(config)(req, res);
+}
+
+async function cancelRedemptionSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createCancelRedemptionRouteHandler(config)(req, res);
 }
 
 /**
@@ -322,6 +401,74 @@ async function requestRefundSandbox(req: Request, res: Response) {
   return createRequestRefundRouteHandler(config)(req, res);
 }
 
+/**
+ * GET /payments/status
+ * Check payment status (redeemed, unredeemed, or pending)
+ */
+function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const { commitment, chainId } = req.query;
+
+      if (!commitment || typeof commitment !== "string") {
+        return res.status(400).json({ error: "commitment is required" });
+      }
+      if (chainId === undefined || chainId === null) {
+        return res.status(400).json({ error: "chainId is required" });
+      }
+
+      const chainIdNum = typeof chainId === "number" ? chainId : Number(chainId);
+      if (isNaN(chainIdNum)) {
+        return res.status(400).json({ error: "chainId must be a number" });
+      }
+
+      // Validate chainId and get contract address
+      const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
+      if (!contractAddress) {
+        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+      }
+
+      // Check if payment exists onchain
+      const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
+
+      if (!payment) {
+        return res.status(404).json({ error: "Payment not found onchain" });
+      }
+
+      // Check if already redeemed
+      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel)) {
+        return res.status(200).json({ status: "redeemed" });
+      }
+
+      // Check if redemption is pending
+      if (await isRedemptionPending(commitment, config.environment)) {
+        return res.status(200).json({ status: "pending-redemption" });
+      }
+
+      // Check if refund is pending
+      if (await isRefundPending(commitment, config.environment)) {
+        return res.status(200).json({ status: "pending-refund" });
+      }
+
+      // Payment exists but no redemption or pending operations
+      return res.status(200).json({ status: "unredeemed" });
+    } catch (error: any) {
+      paymentsLogger.error({ error: error.message }, "Error checking payment status");
+      return res.status(500).json({ error: error.message || "An unknown error occurred" });
+    }
+  };
+}
+
+async function paymentStatusProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPaymentStatusRouteHandler(config)(req, res);
+}
+
+async function paymentStatusSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPaymentStatusRouteHandler(config)(req, res);
+}
+
 export {
   createPaymentParamsProd,
   createPaymentParamsSandbox,
@@ -329,6 +476,10 @@ export {
   reserveRedemptionSandbox,
   completeRedemptionProd,
   completeRedemptionSandbox,
+  cancelRedemptionProd,
+  cancelRedemptionSandbox,
   requestRefundProd,
   requestRefundSandbox,
+  paymentStatusProd,
+  paymentStatusSandbox,
 };

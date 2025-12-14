@@ -40,7 +40,7 @@ function campaignIdToWorkflowId(campaignId: string) {
 async function handleIdvSessionCreation(
   config: SandboxVsLiveKYCRouteHandlerConfig,
   session: HydratedDocument<ISession>,
-  logger: pino.Logger<pino.LoggerOptions>
+  logger: pino.Logger
 ) {
   if (session.idvProvider === "veriff") {
     const veriffSession = await createVeriffSession();

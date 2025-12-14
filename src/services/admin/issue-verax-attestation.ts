@@ -189,6 +189,7 @@ async function attest(subject: string, circuitId: string, publicValues: any[], r
   const schemaId = "0x1c14fd320660a59a50eb1f795116193a59c26f2463c0705b79d8cb97aa9f419b"
   // @ts-ignore
   const expiry = Math.floor(BigInt(publicValues[0]).toString());
+  // @ts-ignore
   await veraxSdk.portal.attestV2(
     portalAddr,
     {
