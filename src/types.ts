@@ -530,8 +530,6 @@ export type IPaymentSecret = {
   commitment: string;  // bytes32 commitment hash (derived from secret)
   holoUserId: string;  // Holonym user ID
   createdAt?: Date;  // When the secret was created/stored
-  service?: string;  // Service identifier (bytes32)
-  chainId?: number;  // Chain ID where payment was made
 };
 
 export type ISandboxPaymentSecret = IPaymentSecret;
