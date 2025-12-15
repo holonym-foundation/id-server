@@ -109,6 +109,7 @@ app.use("/sandbox/nullifiers", sandboxNullifiers);
 app.use("/sandbox/orders", sandboxOrders);
 app.use("/sandbox/phone", phoneRouterSandbox);
 app.use("/sandbox/payments", sandboxPayments);
+app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

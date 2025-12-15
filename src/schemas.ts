@@ -1060,14 +1060,6 @@ const PaymentSecretSchema = new Schema<IPaymentSecret>({
     required: false,
     default: Date.now,
   },
-  service: {
-    type: String,
-    required: false,
-  },
-  chainId: {
-    type: Number,
-    required: false,
-  },
 });
 PaymentSecretSchema.index({ holoUserId: 1 });
 
@@ -1092,14 +1084,6 @@ const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
     type: Date,
     required: false,
     default: Date.now,
-  },
-  service: {
-    type: String,
-    required: false,
-  },
-  chainId: {
-    type: Number,
-    required: false,
   },
 });
 // Indexes are probably not needed for sandbox mode.
