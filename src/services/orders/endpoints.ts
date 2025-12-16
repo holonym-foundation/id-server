@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import {
-  getProvider,
   getTransaction,
   validateTx,
   validateTxNoOrderId,
@@ -10,6 +9,7 @@ import {
   getOrderByTxHash,
 } from "./functions.js";
 import { idvSessionUSDPrice } from "../../constants/misc.js";
+import { getProvider } from '../../utils/misc.js'
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSuiOrderTransactionStatus } from "./sui/endpoints.js"
 import { getOrderTransactionStatus as getStellarOrderTransactionStatus } from "./stellar/endpoints.js"

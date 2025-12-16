@@ -2,43 +2,9 @@ import { ethers } from "ethers";
 import { Order } from "../../init.js";
 import { idvSessionUSDPrice } from "../../constants/misc.js";
 import { retry } from "../../utils/utils.js";
-import {
-  idServerPaymentAddress,
-  ethereumProvider,
-  optimismProvider,
-  optimismGoerliProvider,
-  optimismSepoliaProvider,
-  fantomProvider,
-  avalancheProvider,
-  auroraProvider,
-  baseProvider,
-} from "../../constants/misc.js";
+import { idServerPaymentAddress } from "../../constants/misc.js";
+import { getProvider } from "../..//utils/misc.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
-
-function getProvider(chainId) {
-  let provider;
-  if (chainId == 1) {
-    provider = ethereumProvider;
-  } else if (chainId == 10) {
-    provider = optimismProvider;
-  } else if (chainId == 250) {
-    provider = fantomProvider;
-  } else if (chainId == 8453) {
-    provider = baseProvider;
-  } else if (chainId == 43114) {
-    provider = avalancheProvider;
-  } else if (chainId == 1313161554) {
-    provider = auroraProvider;
-  } else if (chainId == 420) {
-    provider = optimismGoerliProvider;
-  } else if (chainId == 11155420) {
-    provider = optimismSepoliaProvider;
-  } else {
-    throw new Error(`Invalid chainId (${chainId}). Could not get provider`)
-  }
-
-  return provider;
-}
 
 function getTransaction(chainId, txHash) {
   // console.log("getTransaction", chainId, txHash);
@@ -340,7 +306,6 @@ async function getOrderByTxHash(req, res) {
 
 export {
   getTransaction,
-  getProvider,
   validateTx,
   validateTxNoOrderId,
   validateTxConfirmation,
