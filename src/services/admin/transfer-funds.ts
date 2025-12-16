@@ -62,7 +62,7 @@ async function withdrawFromPaymentContracts(
     const chainId = parseInt(chainIdStr);
 
     // Skip if contract address is not set
-    if (contractAddress === "TODO" || !contractAddress) {
+    if (!contractAddress) {
       continue;
     }
 
