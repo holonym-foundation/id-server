@@ -15,15 +15,19 @@ import {
   companyAddressFTM,
   companyAddressAVAX,
   companyAddressBase,
+  companyAddressAurora,
   horizonServer,
   krakenXLMAddress,
   krakenXLMMemo,
   suiClient,
   companySuiAddress,
+  humanIDPaymentsContractAddresses,
+  humanIDPaymentsABI,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { mistToSui, suiToMist } from "../../utils/sui.js";
 import { postNotification } from "../../utils/slack.js";
+import { getProvider } from "../../utils/misc.js";
 
 // const endpointLogger = logger.child({
 //   msgPrefix: "[DELETE /admin/transfer-funds] ",
@@ -31,6 +35,92 @@ import { postNotification } from "../../utils/slack.js";
 //     ...pinoOptions.base,
 //   },
 // });
+
+/**
+ * Company addresses for each chain
+ */
+const companyAddressByChain: Record<number, string> = {
+  1: companyENS, // Ethereum
+  10: companyAddressOP, // Optimism
+  250: companyAddressFTM, // Fantom
+  8453: companyAddressBase, // Base
+  43114: companyAddressAVAX, // Avalanche
+  1313161554: companyAddressAurora, // Aurora
+  11155420: companyAddressOP, // Optimism Sepolia (use same as Optimism)
+  420: companyAddressOP, // Optimism Goerli (use same as Optimism)
+};
+
+/**
+ * Withdraw funds from HumanIDPayments contracts across all chains
+ */
+async function withdrawFromPaymentContracts(
+  txReceipts: Record<string, any>
+): Promise<void> {
+  const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY as string);
+
+  for (const [chainIdStr, contractAddress] of Object.entries(humanIDPaymentsContractAddresses)) {
+    const chainId = parseInt(chainIdStr);
+
+    // Skip if contract address is not set
+    if (contractAddress === "TODO" || !contractAddress) {
+      continue;
+    }
+
+    try {
+      const provider = getProvider(chainId);
+      const connectedWallet = wallet.connect(provider);
+      const contract = new ethers.Contract(
+        contractAddress,
+        humanIDPaymentsABI,
+        connectedWallet
+      );
+
+      // Get contract balance
+      const balance = await contract.getBalance();
+
+      // Define minimum balance thresholds (in ETH/native token)
+      const minBalance = chainId === 250
+        ? ethers.utils.parseEther("1000") // Fantom: 1000 FTM
+        : chainId === 43114
+        ? ethers.utils.parseEther("10") // Avalanche: 10 AVAX
+        : ethers.utils.parseEther("0.1"); // Other chains: 0.1 ETH
+
+      if (balance.gte(minBalance)) {
+        const companyAddress = companyAddressByChain[chainId];
+
+        // Withdraw all funds to company address
+        const tx = await contract.withdrawTo(balance, companyAddress);
+        const receipt = await tx.wait();
+
+        const chainName = getChainName(chainId);
+        txReceipts[`${chainName}_payment_contract`] = receipt;
+
+        console.log(`Withdrawn ${ethers.utils.formatEther(balance)} from ${chainName} payment contract`);
+      }
+    } catch (err) {
+      console.error(`Error withdrawing from payment contract on chain ${chainId}:`, err);
+      // Continue with other chains even if one fails
+      // TODO: Alert slack if wallet doesn't have sufficient balance to pay for the withdraw transaction
+    }
+  }
+}
+
+/**
+ * Get human-readable chain name
+ */
+function getChainName(chainId: number): string {
+  const chainNames: Record<number, string> = {
+    1: "ethereum",
+    10: "optimism",
+    250: "fantom",
+    8453: "base",
+    43114: "avalanche",
+    1313161554: "aurora",
+    11155420: "optimism_sepolia",
+    420: "optimism_goerli",
+  };
+  return chainNames[chainId] || `chain_${chainId}`;
+}
 
 /**
  * Endpoint to be called by daemon to periodically transfer funds from
@@ -218,6 +308,9 @@ async function transferFunds(req: Request, res: Response) {
       console.error('error trying to transfer sui funds', err)
     }
 
+    // Withdraw funds from HumanIDPayments contracts \\
+    await withdrawFromPaymentContracts(txReceipts);
+
     await notifySlack(txReceipts)
 
     return res.status(200).json(txReceipts);
@@ -257,6 +350,30 @@ async function notifySlack(txReceipts: Record<string, any>) {
     if (txReceipts.sui) {
       txLinks['Sui'] = `https://suivision.xyz/txblock/${txReceipts.sui}`
     }
+
+    // Payment contract withdrawals
+    if (txReceipts.ethereum_payment_contract) {
+      txLinks['Ethereum Payment Contract'] = `https://etherscan.io/tx/${txReceipts.ethereum_payment_contract.transactionHash}`
+    }
+    if (txReceipts.optimism_payment_contract) {
+      txLinks['Optimism Payment Contract'] = `https://optimistic.etherscan.io/tx/${txReceipts.optimism_payment_contract.transactionHash}`
+    }
+    if (txReceipts.fantom_payment_contract) {
+      txLinks['Fantom Payment Contract'] = `https://ftmscan.com/tx/${txReceipts.fantom_payment_contract.transactionHash}`
+    }
+    if (txReceipts.base_payment_contract) {
+      txLinks['Base Payment Contract'] = `https://basescan.org/tx/${txReceipts.base_payment_contract.transactionHash}`
+    }
+    if (txReceipts.avalanche_payment_contract) {
+      txLinks['Avalanche Payment Contract'] = `https://snowtrace.io/tx/${txReceipts.avalanche_payment_contract.transactionHash}`
+    }
+    if (txReceipts.aurora_payment_contract) {
+      txLinks['Aurora Payment Contract'] = `https://explorer.aurora.dev/tx/${txReceipts.aurora_payment_contract.transactionHash}`
+    }
+    if (txReceipts.optimism_sepolia_payment_contract) {
+      txLinks['Optimism Sepolia Payment Contract'] = `https://sepolia-optimism.etherscan.io/tx/${txReceipts.optimism_sepolia_payment_contract.transactionHash}`
+    }
+
     const linksBulletPoints = Object.entries(txLinks)
       .map(([chain, url]) => `• ${chain}: <${url}|${txLinks[chain]}>`)
       .join('\n')

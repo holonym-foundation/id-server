@@ -32,13 +32,13 @@ const paymentsLogger = logger.child({
 });
 
 /**
- * POST /payments/payment-params
+ * GET /payments/payment-params
  * Get price and signature for a payment
  */
 function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { commitment, service, chainId } = req.body;
+      const { commitment, service, chainId } = req.query;
 
       if (!commitment || typeof commitment !== "string") {
         return res.status(400).json({ error: "commitment is required" });
@@ -80,7 +80,7 @@ function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHand
         chainId: chainIdNum,
       });
     } catch (error: any) {
-      paymentsLogger.error({ error: error.message }, "Error getting price");
+      paymentsLogger.error({ error: error.message }, "Error in GET /payments/payment-params");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });
     }
   };

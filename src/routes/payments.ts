@@ -16,7 +16,7 @@ import {
 
 const prodRouter = express.Router();
 
-prodRouter.post("/payment-params", createPaymentParamsProd);
+prodRouter.get("/payment-params", createPaymentParamsProd);
 
 // POST /payments/redemption/reserve - Redemption Phase 1: Reserve redemption
 prodRouter.post("/redemption/reserve", reserveRedemptionProd);
@@ -36,7 +36,7 @@ prodRouter.get("/status", paymentStatusProd);
 
 const sandboxRouter = express.Router();
 
-sandboxRouter.post("/payment-params", createPaymentParamsSandbox);
+sandboxRouter.get("/payment-params", createPaymentParamsSandbox);
 
 // POST /payments/redemption/reserve - Redemption Phase 1: Reserve redemption
 sandboxRouter.post("/redemption/reserve", reserveRedemptionSandbox);

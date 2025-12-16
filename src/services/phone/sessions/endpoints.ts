@@ -35,7 +35,8 @@ import {
 } from '../../../utils/paypal.js'
 import { makeUnknownErrorLoggable } from '../../../utils/errors.js'
 import { usdToETH, usdToFTM, usdToAVAX } from '../../../utils/cmc.js'
-import { getProvider, getTransaction, validateTx } from '../../orders/functions.js'
+import { getProvider } from '../../../utils/misc.js'
+import { getTransaction, validateTx } from '../../orders/functions.js'
 
 interface ValidationResult {
   status?: number

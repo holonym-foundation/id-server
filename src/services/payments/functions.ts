@@ -14,6 +14,7 @@ import {
   humanIDPaymentsABI,
 } from "../../constants/misc.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
+import { getProvider } from '../../utils/misc.js';
 import { IPaymentRedemption } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
@@ -26,29 +27,6 @@ const paymentsLogger = logger.child({
 });
 
 /**
- * Get provider for a given chain ID
- */
-export function getProvider(chainId: number): ethers.providers.JsonRpcProvider {
-  if (chainId === 1) {
-    return ethereumProvider;
-  } else if (chainId === 10) {
-    return optimismProvider;
-  } else if (chainId === 250) {
-    return fantomProvider;
-  } else if (chainId === 8453) {
-    return baseProvider;
-  } else if (chainId === 43114) {
-    return avalancheProvider;
-  } else if (chainId === 1313161554) {
-    return auroraProvider;
-  } else if (process.env.NODE_ENV === "development" && chainId === 420) {
-    return optimismGoerliProvider;
-  } else {
-    throw new Error(`Unsupported chain ID: ${chainId}`);
-  }
-}
-
-/**
  * Calculate price in token for a given USD amount and chain ID
  */
 export async function calculatePriceInToken(
@@ -57,7 +35,7 @@ export async function calculatePriceInToken(
 ): Promise<string> {
   let priceInToken: number;
   
-  if ([1, 10, 1313161554, 8453].includes(chainId)) {
+  if ([1, 10, 1313161554, 8453, 11155420].includes(chainId)) {
     priceInToken = await usdToETH(usdAmount);
   } else if (chainId === 250) {
     priceInToken = await usdToFTM(usdAmount);

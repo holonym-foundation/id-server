@@ -181,9 +181,12 @@ export const humanIDPaymentsABI = [
   "function payments(bytes32) public view returns (bytes32 commitment, bytes32 service, uint256 timestamp, address sender, uint256 amount, bool refunded)",
   "function getBalance() external view returns (uint256)",
   "function forceRefund(bytes32 commitment) external",
+  "function withdraw(uint256 amount) external",
+  "function withdrawTo(uint256 amount, address payable to) external",
+  "function withdrawAll() external",
 ];
 
 /**
  * Service identifier for SBT minting
  */
-export const PAYMENT_SERVICE_SBT_MINT = '0x' + 'mint_zeronym_v3_sbt'.padEnd(64, '0').slice(0, 64);
+export const PAYMENT_SERVICE_SBT_MINT = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('mint_zeronym_v3_sbt'))

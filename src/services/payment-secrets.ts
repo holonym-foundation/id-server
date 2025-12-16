@@ -15,9 +15,7 @@ const putEndpointLogger = logger.child({ msgPrefix: "[PUT /payment-secrets] " })
 async function validatePutPaymentSecretArgs(
   holoUserId: string | null | undefined,
   commitment: string | null | undefined,
-  encryptedSecret: any,
-  service?: string | null | undefined,
-  chainId?: number | null | undefined
+  encryptedSecret: any
 ) {
   // Require that args are present
   if (!holoUserId || holoUserId == "null" || holoUserId == "undefined") {
@@ -50,14 +48,6 @@ async function validatePutPaymentSecretArgs(
     return { error: "encryptedSecret.iv is required and must be a string" };
   }
 
-  if (service !== undefined && service !== null && typeof service != "string") {
-    return { error: "service must be a string if provided" };
-  }
-
-  if (chainId !== undefined && chainId !== null && typeof chainId != "number") {
-    return { error: "chainId must be a number if provided" };
-  }
-
   return { success: true };
 }
 
@@ -65,9 +55,7 @@ async function storeOrUpdatePaymentSecret(
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>,
   holoUserId: string,
   commitment: string,
-  encryptedSecret: { ciphertext: string, iv: string },
-  service?: string,
-  chainId?: number
+  encryptedSecret: { ciphertext: string, iv: string }
 ) {
   // Check if document exists to determine if this is a new insertion (for limit checking)
   let existingDoc;
@@ -85,13 +73,13 @@ async function storeOrUpdatePaymentSecret(
     // Check if user has exceeded the limit of 10 payment secrets per year
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    
+
     try {
       const count = await PaymentSecretModel.countDocuments({
         holoUserId: holoUserId,
         createdAt: { $gte: oneYearAgo },
       }).exec();
-      
+
       if (count >= 10) {
         return { error: "User has reached the limit of 10 payment secrets per year." };
       }
@@ -102,19 +90,11 @@ async function storeOrUpdatePaymentSecret(
   }
 
   // Build update object
-  const updateData: any = {
+  const updateData = {
     holoUserId,
     commitment,
     encryptedSecret,
   };
-
-  if (service !== undefined && service !== null) {
-    updateData.service = service;
-  }
-
-  if (chainId !== undefined && chainId !== null) {
-    updateData.chainId = chainId;
-  }
 
   // Use findOneAndUpdate with upsert for atomic update/create
   try {
@@ -205,15 +185,11 @@ function createPutPaymentSecret(config: SandboxVsLiveKYCRouteHandlerConfig) {
     const holoUserId = req?.body?.holoUserId;
     const commitment = req?.body?.commitment;
     const encryptedSecret = req?.body?.encryptedSecret;
-    const service = req?.body?.service;
-    const chainId = req?.body?.chainId;
 
     const validationResult = await validatePutPaymentSecretArgs(
       holoUserId,
       commitment,
-      encryptedSecret,
-      service,
-      chainId
+      encryptedSecret
     );
     if (validationResult.error) {
       putEndpointLogger.error({ error: validationResult.error }, "Invalid request body");
@@ -224,9 +200,7 @@ function createPutPaymentSecret(config: SandboxVsLiveKYCRouteHandlerConfig) {
       config.PaymentSecretModel,
       holoUserId,
       commitment,
-      encryptedSecret,
-      service,
-      chainId
+      encryptedSecret
     );
     if (storeOrUpdateResult.error) {
       putEndpointLogger.error({ error: storeOrUpdateResult.error, holoUserId, commitment });

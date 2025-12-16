@@ -2,13 +2,13 @@ import { Request, Response } from "express";
 import { ethers } from "ethers";
 import {
   getPaymentFromContract,
-  getProvider,
   isPaymentRedeemed,
   isRedemptionPending,
   isRefundPending,
   storeRefundPending,
 } from "../payments/functions.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { getProvider } from '../../utils/misc.js';
 import { humanIDPaymentsABI, humanIDPaymentsContractAddresses } from "../../constants/misc.js";
 import { getRouteHandlerConfig } from "../../init.js";
 
