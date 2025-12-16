@@ -159,20 +159,16 @@ export const suiClient = new SuiClient({
 });
 
 // ---------------- Human ID Payments Contract Addresses ----------------
-export const humanIDPaymentsContractAddresses: Record<number, string> = {
+export const humanIDPaymentsContractAddresses: Record<number, string | null> = {
   1: "0xa2ca14c7d625895e6939961B87CE378836ca840F", // Ethereum
   10: "0xbE6C430BD2d5851A1E97d468E5432BcF7d689D94", // Optimism
-  250: "TODO", // Fantom
+  250: null, // Fantom
   8453: "0x916863E0239B4e0a70705659130Ef27649aDB801", // Base
   43114: "0xFa0FFfDc21476245cd8a667DAec4E049eb5337Db", // Avalanche
-  1313161554: "TODO", // Aurora
+  1313161554: null, // Aurora
   // For sandbox
   11155420: "0xF98798e9dAC28928F1E5EE6109d5eb2797152E92", // Optimism Sepolia
 };
-
-if (process.env.NODE_ENV === "development") {
-  humanIDPaymentsContractAddresses[420] = "TODO"; // Optimism Goerli
-}
 
 /**
  * HumanIDPayments contract ABI
