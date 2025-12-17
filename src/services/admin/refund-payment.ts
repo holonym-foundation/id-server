@@ -113,15 +113,16 @@ export async function refundPayment(req: Request, res: Response) {
       return res.status(500).json({ error: "Contract call failed", details: err?.message || String(err) });
     }
     adminRefundPaymentLogger.info(
-      { commitment, chainId: chainIdNum },
-      "Admin requested refund"
+      { commitment, chainId: chainIdNum, txHash },
+      "Admin force refund completed successfully"
     );
 
     return res.status(200).json({
-      message: "Refund request processed. Admin should call forceRefund on contract.",
+      message: "Refund processed successfully",
       commitment,
       chainId: chainIdNum,
       contractAddress,
+      txHash,
     });
   } catch (error: any) {
     adminRefundPaymentLogger.error({ error: error.message }, "Error processing admin refund");
