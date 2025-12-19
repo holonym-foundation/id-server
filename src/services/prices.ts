@@ -90,7 +90,6 @@ async function getPriceV2(req: Request, res: Response) {
     }
 
     if (ids.length === 0) {
-      console.log("all fulfilled from cache");
       return res.status(200).json(cachedPrices);
     }
 

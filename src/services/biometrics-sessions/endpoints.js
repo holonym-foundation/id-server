@@ -127,7 +127,6 @@ async function postSessionV2(req, res) {
  * Get session(s) associated with sigDigest or id.
  */
 async function getSessions(req, res) {
-  console.log("GET /sessions");
   try {
     const sigDigest = req.query.sigDigest;
     const id = req.query.id;

@@ -56,7 +56,7 @@ const companyAddressByChain: Record<number, string> = {
 async function withdrawFromPaymentContracts(
   txReceipts: Record<string, any>
 ): Promise<void> {
-  const wallet = new ethers.Wallet(process.env.PAYMENTS_PRIVATE_KEY as string);
+  const adminWallet = new ethers.Wallet(process.env.PAYMENTS_ADMIN_PRIVATE_KEY as string);
 
   for (const [chainIdStr, contractAddress] of Object.entries(humanIDPaymentsContractAddresses)) {
     const chainId = parseInt(chainIdStr);
@@ -68,7 +68,7 @@ async function withdrawFromPaymentContracts(
 
     try {
       const provider = getProvider(chainId);
-      const connectedWallet = wallet.connect(provider);
+      const connectedWallet = adminWallet.connect(provider);
       const contract = new ethers.Contract(
         contractAddress,
         humanIDPaymentsABI,
@@ -82,20 +82,34 @@ async function withdrawFromPaymentContracts(
       const minBalance = chainId === 250
         ? ethers.utils.parseEther("1000") // Fantom: 1000 FTM
         : chainId === 43114
-        ? ethers.utils.parseEther("10") // Avalanche: 10 AVAX
+        ? ethers.utils.parseEther("20") // Avalanche: 20 AVAX
         : ethers.utils.parseEther("0.1"); // Other chains: 0.1 ETH
 
       if (balance.gte(minBalance)) {
+        // First, if admin wallet is running low on funds (which it needs for gas), withdraw
+        // from the contract to the admin wallet.
+        const adminBalance = await connectedWallet.getBalance();
+        const expectedAdminBalance = minBalance.div(ethers.utils.parseEther("50"));
+        if (adminBalance.lt(expectedAdminBalance)) {
+          const tx = await contract.withdrawTo(expectedAdminBalance, connectedWallet.address);
+          const receipt = await tx.wait();
+          txReceipts[`${getChainName(chainId)}_admin_wallet`] = receipt;
+          console.log(`Withdrew ${ethers.utils.formatEther(expectedAdminBalance)} from ${getChainName(chainId)} payment contract to admin wallet`);
+        }
+
         const companyAddress = companyAddressByChain[chainId];
 
-        // Withdraw all funds to company address
-        const tx = await contract.withdrawTo(balance, companyAddress);
-        const receipt = await tx.wait();
+        // Withdraw only the amount above the refund threshold, leaving minBalance in contract for refunds
+        const withdrawAmount = balance.sub(minBalance).sub(expectedAdminBalance);
+        if (withdrawAmount.gt(0)) {
+          const tx = await contract.withdrawTo(withdrawAmount, companyAddress);
+          const receipt = await tx.wait();
 
-        const chainName = getChainName(chainId);
-        txReceipts[`${chainName}_payment_contract`] = receipt;
+          const chainName = getChainName(chainId);
+          txReceipts[`${chainName}_payment_contract`] = receipt;
 
-        console.log(`Withdrawn ${ethers.utils.formatEther(balance)} from ${chainName} payment contract`);
+          console.log(`Withdrew ${ethers.utils.formatEther(balance)} from ${chainName} payment contract`);
+        }
       }
     } catch (err) {
       console.error(`Error withdrawing from payment contract on chain ${chainId}:`, err);

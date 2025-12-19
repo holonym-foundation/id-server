@@ -172,14 +172,33 @@ export const humanIDPaymentsContractAddresses: Record<number, string | null> = {
 
 /**
  * HumanIDPayments contract ABI
+ * Includes all functions from HumanIDPayments and inherited AccessControl
  */
 export const humanIDPaymentsABI = [
-  "function payments(bytes32) public view returns (bytes32 commitment, bytes32 service, uint256 timestamp, address sender, uint256 amount, bool refunded)",
+  // HumanIDPayments public/external functions
+  "function pay(bytes32 commitment, bytes32 service, uint256 timestamp, bytes memory signature) external payable",
+  "function batchPay(bytes32[] calldata commitments, bytes32[] calldata services, uint256[] calldata amounts, uint256[] calldata timestamps, bytes[] calldata signatures) external payable",
+  "function refund(bytes32 commitment, uint256 timestamp, bytes memory signature) external",
   "function getBalance() external view returns (uint256)",
+  "function deposit() external payable",
+  "function receive() external payable",
   "function forceRefund(bytes32 commitment) external",
   "function withdraw(uint256 amount) external",
   "function withdrawTo(uint256 amount, address payable to) external",
   "function withdrawAll() external",
+  "function setOracleAddress(address newOracle) external",
+  // HumanIDPayments public state variables
+  "function payments(bytes32) public view returns (bytes32 commitment, bytes32 service, uint256 timestamp, address sender, uint256 amount, bool refunded)",
+  "function oracleAddress() public view returns (address)",
+  "function ADMIN_ROLE() public view returns (bytes32)",
+  // AccessControl functions
+  "function hasRole(bytes32 role, address account) public view returns (bool)",
+  "function getRoleAdmin(bytes32 role) public view returns (bytes32)",
+  "function grantRole(bytes32 role, address account) public",
+  "function revokeRole(bytes32 role, address account) public",
+  "function renounceRole(bytes32 role, address account) public",
+  "function supportsInterface(bytes4 interfaceId) public view returns (bool)",
+  "function DEFAULT_ADMIN_ROLE() public view returns (bytes32)",
 ];
 
 /**
