@@ -38,6 +38,7 @@ const endpointLogger = logger.child({
 
 export async function processRequest(req, res) {
   try {
+    console.log('/v2/no-sybils/process-request entered');
     const sid = req.body.sid;
     const faceTecParams = req.body.faceTecParams
 
@@ -55,6 +56,8 @@ export async function processRequest(req, res) {
     }
 
     const session = await BiometricsSession.findOne({ _id: objectId }).exec();
+
+    console.log('/v2/no-sybils/process-request session:', session);
 
     if (!session) {
       return res.status(400).json({ error: true, errorMessage: "Session not found" });
@@ -112,12 +115,14 @@ export async function processRequest(req, res) {
 
     const data = resp.data;
     // console.log('/process-request response:', data);
+    console.log('/v2/no-sybils/process-request response from /process-request:', JSON.stringify(data, null, 2));
 
     // The /process-request endpoint handles multiple request types. (The FaceTec docs and code
     // are unforunately not transparent about what it does exactly.) When it returns
     // "livenessProven", we assume that a liveness check was performed; and in this case,
     // we want to enroll the user.
     if (data?.result?.livenessProven) {
+      console.log('/v2/no-sybils/process-request sending /3d-db/enroll request');
       req.app.locals.sseManager.sendToClient(sid, {
         status: "in_progress",
         message: "liveness check: sending to server",
@@ -141,6 +146,7 @@ export async function processRequest(req, res) {
           }
         );
         // console.log("3d-db/enroll response:", resp.data);
+        console.log('/v2/no-sybils/process-request response from /3d-db/enroll:', JSON.stringify(resp.data, null, 2));
 
         if (!resp.data.success || !resp.data.wasProcessed) {
           endpointLogger.info(
@@ -157,6 +163,7 @@ export async function processRequest(req, res) {
             .status(400)
             .json({ error: "duplicate check: /3d-db enrollment failed" });
         } else {
+          console.log('/v2/no-sybils/process-request request to /3d-db/enroll was successful');
           req.app.locals.sseManager.sendToClient(sid, {
             status: "completed",
             message: "biometrics verification successful, proceed to next step",
