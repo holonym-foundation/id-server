@@ -115,7 +115,7 @@ export async function processRequest(req, res) {
 
     const data = resp.data;
     // console.log('/process-request response:', data);
-    console.log('/v2/no-sybils/process-request response from /process-request:', JSON.stringify(data, null, 2));
+    console.log('/v2/no-sybils/process-request response from /process-request:', JSON.stringify(data));
 
     // The /process-request endpoint handles multiple request types. (The FaceTec docs and code
     // are unforunately not transparent about what it does exactly.) When it returns
@@ -146,7 +146,7 @@ export async function processRequest(req, res) {
           }
         );
         // console.log("3d-db/enroll response:", resp.data);
-        console.log('/v2/no-sybils/process-request response from /3d-db/enroll:', JSON.stringify(resp.data, null, 2));
+        console.log('/v2/no-sybils/process-request response from /3d-db/enroll:', JSON.stringify(resp.data));
 
         if (!resp.data.success || !resp.data.wasProcessed) {
           endpointLogger.info(

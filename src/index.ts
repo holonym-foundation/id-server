@@ -51,6 +51,7 @@ const sseManager = {
     sid: string,
     sendUpdate: (data: any) => void
   ) => {
+    console.log(`Adding SSE client with SID: ${sid}`);
     sseManager.clients.set(sid, sendUpdate);
   },
   
@@ -60,6 +61,7 @@ const sseManager = {
   
   sendToClient: (sid: string, data: any) => {
     const sendUpdate = sseManager.clients.get(sid);
+    console.log('Sending SSE to client with SID:', sid, sendUpdate);
     if (sendUpdate) {
       sendUpdate(data);
       return true;
