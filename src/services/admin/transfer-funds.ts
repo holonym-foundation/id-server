@@ -54,7 +54,8 @@ const companyAddressByChain: Record<number, string> = {
  * Withdraw funds from HumanIDPayments contracts across all chains
  */
 async function withdrawFromPaymentContracts(
-  txReceipts: Record<string, any>
+  txReceipts: Record<string, any>,
+  errors: Array<{ chain: string; error: string }>
 ): Promise<void> {
   const adminWallet = new ethers.Wallet(process.env.PAYMENTS_ADMIN_PRIVATE_KEY as string);
 
@@ -112,9 +113,14 @@ async function withdrawFromPaymentContracts(
         }
       }
     } catch (err) {
+      const chainName = getChainName(chainId);
+      const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`Error withdrawing from payment contract on chain ${chainId}:`, err);
+      errors.push({
+        chain: chainName,
+        error: errorMessage
+      });
       // Continue with other chains even if one fails
-      // TODO: Alert slack if wallet doesn't have sufficient balance to pay for the withdraw transaction
     }
   }
 }
@@ -323,9 +329,10 @@ async function transferFunds(req: Request, res: Response) {
     }
 
     // Withdraw funds from HumanIDPayments contracts \\
-    await withdrawFromPaymentContracts(txReceipts);
+    const withdrawalErrors: Array<{ chain: string; error: string }> = [];
+    await withdrawFromPaymentContracts(txReceipts, withdrawalErrors);
 
-    await notifySlack(txReceipts)
+    await notifySlack(txReceipts, withdrawalErrors)
 
     return res.status(200).json(txReceipts);
   } catch (err) {
@@ -337,7 +344,10 @@ async function transferFunds(req: Request, res: Response) {
   }
 }
 
-async function notifySlack(txReceipts: Record<string, any>) {
+async function notifySlack(
+  txReceipts: Record<string, any>,
+  errors: Array<{ chain: string; error: string }> = []
+) {
   try {
     const txLinks: Record<string, string> = {}
     if (txReceipts.ethereum) {
@@ -391,11 +401,21 @@ async function notifySlack(txReceipts: Record<string, any>) {
     const linksBulletPoints = Object.entries(txLinks)
       .map(([chain, url]) => `• ${chain}: <${url}|${txLinks[chain]}>`)
       .join('\n')
-    if (Object.entries(txLinks).length > 0) {
+    
+    let message = `id-server transferred funds from hot wallets to company cold wallets.\n\n${linksBulletPoints}`;
+    
+    if (errors.length > 0) {
+      const errorBulletPoints = errors
+        .map(({ chain, error }) => `• ${chain}: ${error}`)
+        .join('\n');
+      message += `\n\n*Errors encountered during payment contract withdrawals:*\n${errorBulletPoints}`;
+    }
+    
+    if (Object.entries(txLinks).length > 0 || errors.length > 0) {
       console.log('transfer-funds: sending slack notification')
       await postNotification({
         webhookURL: process.env.SLACK_WEBHOOK as string,
-        message: `id-server transferred funds from hot wallets to company cold wallets.\n\n${linksBulletPoints}`
+        message
       })
     }
   } catch (err) {
