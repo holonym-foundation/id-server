@@ -20,14 +20,14 @@ const adminRefundPaymentLogger = logger.child({
   },
 });
 
-const liveConfig = getRouteHandlerConfig("live");
-
 /**
  * POST /admin/payments/refund
  * Admin-initiated refund (force refund)
  */
 export async function refundPayment(req: Request, res: Response) {
   try {
+    const liveConfig = getRouteHandlerConfig("live");
+
     const { commitment, chainId } = req.body;
 
     // Check API key

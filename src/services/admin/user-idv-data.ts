@@ -23,8 +23,6 @@ import { deleteIdenfySession } from "../../utils/idenfy.js";
 //   },
 // });
 
-const prodConfig = getRouteHandlerConfig("live");
-
 function dateToObjectId(date: Date): ObjectId {
   // https://stackoverflow.com/a/8753670
   return new ObjectId(Math.floor(date.getTime() / 1000).toString(16) + "0000000000000000");
@@ -36,6 +34,7 @@ async function setDeletedFromIDVProvider(session: HydratedDocument<ISession>) {
 }
 
 async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
+  const liveConfig = getRouteHandlerConfig("live");
   switch (session.idvProvider) {
     case "veriff":
       if (session.sessionId) {
@@ -47,7 +46,7 @@ async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
       break;
     case "onfido":
       if (session.applicant_id) {
-        const result = await deleteOnfidoApplicant(prodConfig.onfidoAPIKey, session.applicant_id);
+        const result = await deleteOnfidoApplicant(liveConfig.onfidoAPIKey, session.applicant_id);
         if (result?.status == 204) {
           setDeletedFromIDVProvider(session);
         }

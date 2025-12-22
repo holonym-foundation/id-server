@@ -38,8 +38,6 @@ const endpointLogger = logger.child({
   },
 });
 
-const prodConfig = getRouteHandlerConfig("live")
-
 /**
  * ENDPOINT
  *
@@ -47,6 +45,7 @@ const prodConfig = getRouteHandlerConfig("live")
  */
 export async function getCredentials(req: Request, res: Response) {
   try {
+   const liveConfig = getRouteHandlerConfig("live")
     // if (process.env.ENVIRONMENT == "dev") {
     //   const creds = newDummyUserCreds;
 
@@ -77,7 +76,7 @@ export async function getCredentials(req: Request, res: Response) {
       });
     }
 
-    const check = await getOnfidoCheck(prodConfig.onfidoAPIKey, check_id);
+    const check = await getOnfidoCheck(liveConfig.onfidoAPIKey, check_id);
     const validationResultCheck = validateCheck(check);
     if (validationResultCheck.error) {
       endpointLogger.error(
@@ -87,7 +86,7 @@ export async function getCredentials(req: Request, res: Response) {
       return res.status(400).json({ error: validationResultCheck.error });
     }
 
-    const reports = await getOnfidoReports(prodConfig.onfidoAPIKey, check.report_ids);
+    const reports = await getOnfidoReports(liveConfig.onfidoAPIKey, check.report_ids);
     if (!reports || reports.length == 0) {
       endpointLogger.error("No reports found");
       return res.status(400).json({ error: "No reports found" });
@@ -99,7 +98,7 @@ export async function getCredentials(req: Request, res: Response) {
         ? validationResult.reasons.join(";")
         : validationResult.error;
       await updateSessionStatus(
-        prodConfig.SessionModel,
+        liveConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         failureReason
@@ -125,7 +124,7 @@ export async function getCredentials(req: Request, res: Response) {
 
       endpointLogger.error({ uuidV2: uuidNew }, "User has already registered");
       await updateSessionStatus(
-        prodConfig.SessionModel,
+        liveConfig.SessionModel,
         check_id,
         sessionStatusEnum.VERIFICATION_FAILED,
         `User has already registered. User ID: ${user._id}`
@@ -148,11 +147,11 @@ export async function getCredentials(req: Request, res: Response) {
     ));
     response.metadata = creds;
 
-    await deleteOnfidoApplicant(prodConfig.onfidoAPIKey, check.applicant_id);
+    await deleteOnfidoApplicant(liveConfig.onfidoAPIKey, check.applicant_id);
 
     endpointLogger.info({ uuidV2: uuidNew, check_id }, "Issuing credentials");
 
-    await updateSessionStatus(prodConfig.SessionModel, check_id, sessionStatusEnum.ISSUED);
+    await updateSessionStatus(liveConfig.SessionModel, check_id, sessionStatusEnum.ISSUED);
 
     return res.status(200).json(response);
   } catch (err) {
