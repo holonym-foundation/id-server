@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { Session, BiometricsSession } from "../../../../init.js";
 import {
   sessionStatusEnum,
+  biometricsSessionStatusEnum
 } from "../../../../constants/misc.js";
 // import {
 //   getDateAsInt,
@@ -164,6 +165,8 @@ export async function processRequest(req, res) {
             .json({ error: "duplicate check: /3d-db enrollment failed" });
         } else {
           console.log('/v2/no-sybils/process-request request to /3d-db/enroll was successful');
+          session.status = biometricsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+          await session.save();
           req.app.locals.sseManager.sendToClient(sid, {
             status: "completed",
             message: "biometrics verification successful, proceed to next step",

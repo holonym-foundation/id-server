@@ -66,7 +66,7 @@ export const sessionStatusEnum = {
 export type SessionStatus =
   (typeof sessionStatusEnum)[keyof typeof sessionStatusEnum]
 
-export const biometricsAllowSybilsSessionStatusEnum = {
+export const biometricsSessionStatusEnum = {
   ...sessionStatusEnum,
   // PASSED_LIVENESS_CHECK is after IN_PROGRESS, before ISSUED
   PASSED_LIVENESS_CHECK: "PASSED_LIVENESS_CHECK",

@@ -12,7 +12,7 @@ import {
 } from "../../../../init.js";
 import { issue as issuev2 } from "holonym-wasm-issuer-v2";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
-import { biometricsAllowSybilsSessionStatusEnum } from "../../../../constants/misc.js";
+import { biometricsSessionStatusEnum } from "../../../../constants/misc.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
 import { upgradeV3Logger } from "../../error-logger.js";
 
@@ -88,7 +88,7 @@ async function getCredentials(req, res) {
     // log session, to debug for race condition
     logger.info({ session }, "Session found");
 
-    if (session.status === biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED) {
+    if (session.status === biometricsSessionStatusEnum.VERIFICATION_FAILED) {
       endpointLogger.verificationPreviouslyFailed(null, session);
       return res.status(400).json({
         error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
@@ -115,12 +115,12 @@ async function getCredentials(req, res) {
 
     if (
       ![
-        biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK,
-        biometricsAllowSybilsSessionStatusEnum.ISSUED
+        biometricsSessionStatusEnum.PASSED_LIVENESS_CHECK,
+        biometricsSessionStatusEnum.ISSUED
       ].includes(session.status)
     ) {
       return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK}'`,
+        error: `Session status is '${session.status}'. Expected '${biometricsSessionStatusEnum.PASSED_LIVENESS_CHECK}'`,
       });
     }
 
@@ -168,7 +168,7 @@ async function getCredentials(req, res) {
             },
             "Duplicate check: found duplicates"
           );
-          session.status = biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED;
+          session.status = biometricsSessionStatusEnum.VERIFICATION_FAILED;
           session.verificationFailureReason = `Face scan failed as highly matching duplicates are found.`;
           await session.save();
 
@@ -239,7 +239,7 @@ async function getCredentials(req, res) {
       `Issue biometrics-allow-sybils credentials`
     );
 
-    session.status = biometricsAllowSybilsSessionStatusEnum.ISSUED;
+    session.status = biometricsSessionStatusEnum.ISSUED;
     await session.save();
 
     return res.status(200).json(issueV2Response);

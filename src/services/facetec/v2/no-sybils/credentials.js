@@ -20,7 +20,7 @@ import {
   objectIdFiveDaysAgo,
 } from "../../../../utils/utils.js";
 import { pinoOptions, logger } from "../../../../utils/logger.js";
-import { sessionStatusEnum } from "../../../../constants/misc.js";
+import { biometricsSessionStatusEnum } from "../../../../constants/misc.js";
 import {
   findOneUserVerificationLast11Months,
   findOneUserVerification11Months5Days,
@@ -101,7 +101,7 @@ async function getCredentials(req, res) {
       return res.status(400).json({ error: "Session not found" });
     }
 
-    if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+    if (session.status === biometricsSessionStatusEnum.VERIFICATION_FAILED) {
       endpointLogger.verificationPreviouslyFailed(session.externalDatabaseRefID, session);
       return res.status(400).json({
         error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
@@ -161,16 +161,16 @@ async function getCredentials(req, res) {
         `Issue biometrics credentials with issuanceNullifier`
       );
       
-      await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
+      await updateSessionStatus(session, biometricsSessionStatusEnum.ISSUED, null);
 
       return res.status(200).json(issueV2Response);
     }
 
     // If the session isn't in progress, we do not issue credentials. If the session is ISSUED,
     // then the lookup via nullifier should have worked above.
-    if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+    if (session.status !== biometricsSessionStatusEnum.PASSED_LIVENESS_CHECK) {
       return res.status(400).json({
-        error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}'`,
+        error: `Session status is '${session.status}'. Expected '${biometricsSessionStatusEnum.IN_PROGRESS}'`,
       });
     }
 
@@ -228,7 +228,7 @@ async function getCredentials(req, res) {
           );
           await updateSessionStatus(
             session,
-            sessionStatusEnum.VERIFICATION_FAILED,
+            biometricsSessionStatusEnum.VERIFICATION_FAILED,
             `Face scan failed as highly matching duplicates are found.`
           );
 
@@ -319,7 +319,7 @@ async function getCredentials(req, res) {
     });
     await newNullifierAndCreds.save();
 
-    await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
+    await updateSessionStatus(session, biometricsSessionStatusEnum.ISSUED, null);
 
     return res.status(200).json(issueV2Response);
     
@@ -387,7 +387,7 @@ async function getCredentials(req, res) {
     //     });
     //     await newNullifierAndCreds.save();
 
-    //     await updateSessionStatus(session, sessionStatusEnum.ISSUED, null);
+    //     await updateSessionStatus(session, biometricsSessionStatusEnum.ISSUED, null);
 
     //     return res.status(200).json(issueV2Response);
     //   } else {

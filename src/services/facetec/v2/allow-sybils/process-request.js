@@ -2,7 +2,7 @@ import axios from "axios";
 import { ObjectId } from "mongodb";
 import { BiometricsAllowSybilsSession } from "../../../../init.js";
 import {
-  biometricsAllowSybilsSessionStatusEnum,
+  biometricsSessionStatusEnum,
 } from "../../../../constants/misc.js";
 import {
   updateSessionStatus,
@@ -45,7 +45,7 @@ export async function processRequest(req, res) {
       return res.status(400).json({ error: true, errorMessage: "Session not found" });
     }
 
-    if (session.status !== biometricsAllowSybilsSessionStatusEnum.IN_PROGRESS) {
+    if (session.status !== biometricsSessionStatusEnum.IN_PROGRESS) {
       return res
         .status(400)
         .json({ error: true, errorMessage: `Session is not in progress. It is ${session.status}.` });
@@ -57,7 +57,7 @@ export async function processRequest(req, res) {
       // Fail session so user can collect refund
       await updateSessionStatus(
         session,
-        biometricsAllowSybilsSessionStatusEnum.VERIFICATION_FAILED,
+        biometricsSessionStatusEnum.VERIFICATION_FAILED,
         failureReason
       );
 
@@ -165,7 +165,7 @@ export async function processRequest(req, res) {
             .status(400)
             .json({ error: "duplicate check: /3d-db enrollment failed" });
         } else {
-          session.status = biometricsAllowSybilsSessionStatusEnum.PASSED_LIVENESS_CHECK;
+          session.status = biometricsSessionStatusEnum.PASSED_LIVENESS_CHECK;
           await session.save();
 
           req.app.locals.sseManager.sendToClient(sid, {
