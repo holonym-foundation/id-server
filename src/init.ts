@@ -43,7 +43,13 @@ import {
   PaymentRedemptionSchema,
   SandboxPaymentRedemptionSchema,
   PaymentSecretSchema,
-  SandboxPaymentSecretSchema
+  SandboxPaymentSecretSchema,
+  PaymentCommitmentSchema,
+  SandboxPaymentCommitmentSchema,
+  HumanIDCreditsUserSchema,
+  SandboxHumanIDCreditsUserSchema,
+  HumanIDCreditsPaymentSecretSchema,
+  SandboxHumanIDCreditsPaymentSecretSchema
 } from "./schemas.js";
 import dotenv from "dotenv";
 import {
@@ -83,7 +89,13 @@ import {
   IPaymentRedemption,
   ISandboxPaymentRedemption,
   IPaymentSecret,
-  ISandboxPaymentSecret
+  ISandboxPaymentSecret,
+  IPaymentCommitment,
+  ISandboxPaymentCommitment,
+  IHumanIDCreditsUser,
+  ISandboxHumanIDCreditsUser,
+  IHumanIDCreditsPaymentSecret,
+  ISandboxHumanIDCreditsPaymentSecret
 } from "./types.js";
 dotenv.config();
 
@@ -414,6 +426,36 @@ async function initializeMongoDb() {
     SandboxPaymentSecretSchema
   );
 
+  const PaymentCommitment = mongoose.model(
+    "PaymentCommitment",
+    PaymentCommitmentSchema
+  );
+
+  const SandboxPaymentCommitment = mongoose.model(
+    "SandboxPaymentCommitment",
+    SandboxPaymentCommitmentSchema
+  );
+
+  const HumanIDCreditsUser = mongoose.model(
+    "HumanIDCreditsUser",
+    HumanIDCreditsUserSchema
+  );
+
+  const SandboxHumanIDCreditsUser = mongoose.model(
+    "SandboxHumanIDCreditsUser",
+    SandboxHumanIDCreditsUserSchema
+  );
+
+  const HumanIDCreditsPaymentSecret = mongoose.model(
+    "HumanIDCreditsPaymentSecret",
+    HumanIDCreditsPaymentSecretSchema
+  );
+
+  const SandboxHumanIDCreditsPaymentSecret = mongoose.model(
+    "SandboxHumanIDCreditsPaymentSecret",
+    SandboxHumanIDCreditsPaymentSecretSchema
+  );
+
   return {
     UserVerifications,
     IDVSessions,
@@ -454,7 +496,13 @@ async function initializeMongoDb() {
     PaymentRedemption,
     SandboxPaymentRedemption,
     PaymentSecret,
-    SandboxPaymentSecret
+    SandboxPaymentSecret,
+    PaymentCommitment,
+    SandboxPaymentCommitment,
+    HumanIDCreditsUser,
+    SandboxHumanIDCreditsUser,
+    HumanIDCreditsPaymentSecret,
+    SandboxHumanIDCreditsPaymentSecret
   };
 }
 
@@ -499,7 +547,13 @@ let UserVerifications: Model<IUserVerifications>,
   PaymentRedemption: Model<IPaymentRedemption>,
   SandboxPaymentRedemption: Model<ISandboxPaymentRedemption>,
   PaymentSecret: Model<IPaymentSecret>,
-  SandboxPaymentSecret: Model<ISandboxPaymentSecret>;
+  SandboxPaymentSecret: Model<ISandboxPaymentSecret>,
+  PaymentCommitment: Model<IPaymentCommitment>,
+  SandboxPaymentCommitment: Model<ISandboxPaymentCommitment>,
+  HumanIDCreditsUser: Model<IHumanIDCreditsUser>,
+  SandboxHumanIDCreditsUser: Model<ISandboxHumanIDCreditsUser>,
+  HumanIDCreditsPaymentSecret: Model<IHumanIDCreditsPaymentSecret>,
+  SandboxHumanIDCreditsPaymentSecret: Model<ISandboxHumanIDCreditsPaymentSecret>;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -543,6 +597,12 @@ initializeMongoDb().then((result) => {
     SandboxPaymentRedemption = result.SandboxPaymentRedemption;
     PaymentSecret = result.PaymentSecret;
     SandboxPaymentSecret = result.SandboxPaymentSecret;
+    PaymentCommitment = result.PaymentCommitment;
+    SandboxPaymentCommitment = result.SandboxPaymentCommitment;
+    HumanIDCreditsUser = result.HumanIDCreditsUser;
+    SandboxHumanIDCreditsUser = result.SandboxHumanIDCreditsUser;
+    HumanIDCreditsPaymentSecret = result.HumanIDCreditsPaymentSecret;
+    SandboxHumanIDCreditsPaymentSecret = result.SandboxHumanIDCreditsPaymentSecret;
   } else {
     logger.error("MongoDB initialization failed");
     throw new Error("MongoDB initialization failed");
@@ -572,6 +632,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       SanctionsResultModel: SanctionsResult,
       PaymentRedemptionModel: SandboxPaymentRedemption,
       PaymentSecretModel: SandboxPaymentSecret,
+      PaymentCommitmentModel: SandboxPaymentCommitment,
       issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
       cleanHandsIssuerPrivateKey: process.env.HOLONYM_SANDBOX_CLEAN_HANDS_ISSUER_PRIVKEY!,
     }
@@ -589,12 +650,33 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     OrderModel: Order,
     PaymentRedemptionModel: PaymentRedemption,
     PaymentSecretModel: PaymentSecret,
+    PaymentCommitmentModel: PaymentCommitment,
     AMLChecksSessionModel: AMLChecksSession,
     CleanHandsNullifierAndCredsModel: CleanHandsNullifierAndCreds,
     SanctionsResultModel: SanctionsResult,
     issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
     cleanHandsIssuerPrivateKey: process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
   }
+}
+
+/**
+ * Get route handler config for Human ID Credits endpoints
+ */
+function getCreditsRouteHandlerConfig(environment: "sandbox" | "live") {
+  if (environment === "sandbox") {
+    return {
+      HumanIDCreditsUserModel: SandboxHumanIDCreditsUser,
+      PaymentCommitmentModel: SandboxPaymentCommitment,
+      HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
+      PaymentRedemptionModel: SandboxPaymentRedemption,
+    };
+  }
+  return {
+    HumanIDCreditsUserModel: HumanIDCreditsUser,
+    PaymentCommitmentModel: PaymentCommitment,
+    HumanIDCreditsPaymentSecretModel: HumanIDCreditsPaymentSecret,
+    PaymentRedemptionModel: PaymentRedemption,
+  };
 }
 
 export {
@@ -636,6 +718,13 @@ export {
   DVSession,
   PaymentRedemption,
   SandboxPaymentRedemption,
+  PaymentCommitment,
+  SandboxPaymentCommitment,
+  HumanIDCreditsUser,
+  SandboxHumanIDCreditsUser,
+  HumanIDCreditsPaymentSecret,
+  SandboxHumanIDCreditsPaymentSecret,
   zokProvider,
   getRouteHandlerConfig,
+  getCreditsRouteHandlerConfig
 };

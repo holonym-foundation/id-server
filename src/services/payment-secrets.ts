@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
 import {
   ISandboxPaymentSecret,
   IPaymentSecret,
+  IPaymentCommitment,
   SandboxVsLiveKYCRouteHandlerConfig
 } from "../types.js";
-import { getRedemptionRecord } from "./payments/functions.js";
+import { getRedemptionRecord, createCommitmentRecord } from "./payments/functions.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /payment-secrets] " });
 const putEndpointLogger = logger.child({ msgPrefix: "[PUT /payment-secrets] " });
@@ -53,15 +54,37 @@ async function validatePutPaymentSecretArgs(
 
 async function storeOrUpdatePaymentSecret(
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>,
+  PaymentCommitmentModel: Model<IPaymentCommitment>,
   holoUserId: string,
   commitment: string,
   encryptedSecret: { ciphertext: string, iv: string }
 ) {
+  // Create or get PaymentCommitment record
+  let commitmentId: Types.ObjectId;
+  try {
+    const commitmentRecord = await createCommitmentRecord(
+      commitment,
+      'user',
+      PaymentCommitmentModel
+    );
+    if (!commitmentRecord._id) {
+      return { error: "Failed to get or create PaymentCommitment." };
+    }
+    commitmentId = commitmentRecord._id;
+  } catch (err) {
+    logger.error({ error: err }, "An error occurred while creating/getting PaymentCommitment");
+    return { error: "An error occurred while creating/getting PaymentCommitment." };
+  }
+
   // Check if document exists to determine if this is a new insertion (for limit checking)
+  // Check by commitmentId first (new way), then fall back to commitment (backward compatibility)
   let existingDoc;
   try {
     existingDoc = await PaymentSecretModel.findOne({
-      commitment: commitment,
+      $or: [
+        { commitmentId: commitmentId },
+        { commitment: commitment }
+      ]
     }).exec();
   } catch (err) {
     logger.error({ error: err }, "An error occurred while checking for existing payment secret");
@@ -89,17 +112,24 @@ async function storeOrUpdatePaymentSecret(
     }
   }
 
-  // Build update object
+  // Build update object with commitmentId (and keep commitment for backward compatibility)
   const updateData = {
     holoUserId,
-    commitment,
+    commitmentId,
+    commitment, // Keep for backward compatibility during migration
     encryptedSecret,
   };
 
   // Use findOneAndUpdate with upsert for atomic update/create
+  // Match by commitmentId if it exists, otherwise by commitment
   try {
     await PaymentSecretModel.findOneAndUpdate(
-      { commitment: commitment },
+      {
+        $or: [
+          { commitmentId: commitmentId },
+          { commitment: commitment }
+        ]
+      },
       updateData,
       { upsert: true, new: true }
     ).exec();
@@ -140,9 +170,23 @@ function createGetPaymentSecrets(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (checkRedemption) {
         const paymentSecretsWithRedemption = await Promise.all(
           paymentSecrets.map(async (secret) => {
+            let commitment = secret.commitment;
+            if (!commitment) {
+              if (!secret.commitmentId) {
+                throw new Error("Payment secret has neither 'commitment' nor 'commitmentId'.");
+              }
+              const paymentCommitmentDoc = await config.PaymentCommitmentModel.findOne({
+                _id: secret.commitmentId,
+              }).exec();
+              if (!paymentCommitmentDoc) {
+                throw new Error("No PaymentCommitment found for given commitmentId.");
+              }
+              commitment = paymentCommitmentDoc.commitment;
+            }
             const redemption = await getRedemptionRecord(
-              secret.commitment,
-              config.PaymentRedemptionModel
+              commitment,
+              config.PaymentRedemptionModel,
+              config.PaymentCommitmentModel
             );
             const secretObj: any = secret.toObject();
             if (redemption) {
@@ -198,6 +242,7 @@ function createPutPaymentSecret(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
     const storeOrUpdateResult = await storeOrUpdatePaymentSecret(
       config.PaymentSecretModel,
+      config.PaymentCommitmentModel,
       holoUserId,
       commitment,
       encryptedSecret

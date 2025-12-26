@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import { v4 as uuidV4 } from "uuid";
+import { Model, Types } from "mongoose";
 import { valkeyClient } from "../../utils/valkey-glide.js";
 import { TimeUnit } from "@valkey/valkey-glide";
 import {
@@ -15,7 +16,7 @@ import {
 } from "../../constants/misc.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { getProvider } from '../../utils/misc.js';
-import { IPaymentRedemption } from "../../types.js";
+import { IPaymentRedemption, IPaymentCommitment } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
 const paymentsLogger = logger.child({
@@ -286,38 +287,101 @@ export async function deleteRedemptionPending(
 }
 
 /**
- * Get or create redemption record
+ * Get redemption record by commitment
+ * Uses aggregation pipeline to efficiently join PaymentCommitment and PaymentRedemption in a single query
  */
 export async function getRedemptionRecord(
   commitment: string,
-  PaymentRedemptionModel: any
+  PaymentRedemptionModel: any,
+  PaymentCommitmentModel: Model<IPaymentCommitment>
 ): Promise<IPaymentRedemption | null> {
-  return await PaymentRedemptionModel.findOne({ commitment });
+  // Use aggregation pipeline to join PaymentCommitment and PaymentRedemption in a single query
+  const pipeline = [
+    // Stage 1: Match PaymentCommitment by commitment string
+    {
+      $match: { commitment }
+    },
+    // Stage 2: Lookup PaymentRedemption by commitmentId
+    {
+      $lookup: {
+        from: PaymentRedemptionModel.collection.name,
+        localField: '_id',
+        foreignField: 'commitmentId',
+        as: 'redemption'
+      }
+    },
+    // Stage 3: Unwind redemption array (should have 0 or 1 element)
+    {
+      $unwind: {
+        path: '$redemption',
+        preserveNullAndEmptyArrays: false // Only return if redemption exists
+      }
+    },
+    // Stage 4: Replace root with redemption document
+    {
+      $replaceRoot: { newRoot: '$redemption' }
+    }
+  ];
+
+  const results = await PaymentCommitmentModel.aggregate(pipeline).exec();
+  return results.length > 0 ? (results[0] as IPaymentRedemption) : null;
 }
 
 /**
  * Check if payment is redeemed
+ * Uses PaymentCommitment collection to look up commitmentId, then queries PaymentRedemption
  */
 export async function isPaymentRedeemed(
   commitment: string,
-  PaymentRedemptionModel: any
+  PaymentRedemptionModel: any,
+  PaymentCommitmentModel: Model<IPaymentCommitment>
 ): Promise<boolean> {
-  const redemption = await PaymentRedemptionModel.findOne({ commitment, redeemed: true });
+  // First, look up the PaymentCommitment to get the commitmentId
+  const commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  
+  if (!commitmentRecord || !commitmentRecord._id) {
+    return false;
+  }
+
+  // Query PaymentRedemption by commitmentId
+  const redemption = await PaymentRedemptionModel.findOne({ 
+    commitmentId: commitmentRecord._id,
+    redeemedAt: { $exists: true, $ne: null }
+  }).exec();
+  
   return redemption !== null;
 }
 
 /**
  * Mark payment as redeemed
+ * Uses PaymentCommitment collection to look up or create commitmentId, then creates/updates PaymentRedemption
  */
 export async function markPaymentAsRedeemed(
   commitment: string,
   PaymentRedemptionModel: any,
+  PaymentCommitmentModel: Model<IPaymentCommitment>,
   service?: string,
   fulfillmentReceipt?: string
 ): Promise<void> {
+  // First, get or create the PaymentCommitment to get the commitmentId
+  let commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  
+  if (!commitmentRecord) {
+    // Create PaymentCommitment if it doesn't exist (for backward compatibility during migration)
+    commitmentRecord = await PaymentCommitmentModel.create({
+      commitment,
+      sourceType: 'user', // Default to 'user' for existing payments
+      createdAt: new Date(),
+    });
+  }
+
+  if (!commitmentRecord._id) {
+    throw new Error('Failed to get or create PaymentCommitment');
+  }
+
+  // Create or update PaymentRedemption using commitmentId
   const updateData: any = {
-    commitment,
-    redeemed: true,
+    commitmentId: commitmentRecord._id,
     redeemedAt: new Date(),
   };
   if (service) {
@@ -326,8 +390,9 @@ export async function markPaymentAsRedeemed(
   if (fulfillmentReceipt) {
     updateData.fulfillmentReceipt = fulfillmentReceipt;
   }
+  
   await PaymentRedemptionModel.findOneAndUpdate(
-    { commitment },
+    { commitmentId: commitmentRecord._id },
     updateData,
     { upsert: true, new: true }
   );
@@ -357,5 +422,47 @@ export function verifyCommitmentSecret(
  */
 export function generateReservationToken(): string {
   return uuidV4();
+}
+
+/**
+ * Check if commitment exists in PaymentCommitments collection
+ * This is a helper function for the unified commitment storage system
+ */
+export async function commitmentExists(
+  commitment: string,
+  PaymentCommitmentModel: Model<IPaymentCommitment>
+): Promise<boolean> {
+  const exists = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  return exists !== null;
+}
+
+/**
+ * Get commitment record from PaymentCommitments collection
+ */
+export async function getCommitmentRecord(
+  commitment: string,
+  PaymentCommitmentModel: Model<IPaymentCommitment>
+): Promise<IPaymentCommitment | null> {
+  return await PaymentCommitmentModel.findOne({ commitment }).exec();
+}
+
+/**
+ * Create commitment record in PaymentCommitments collection
+ */
+export async function createCommitmentRecord(
+  commitment: string,
+  sourceType: 'user' | 'credits',
+  PaymentCommitmentModel: Model<IPaymentCommitment>
+): Promise<IPaymentCommitment> {
+  // Check if commitment already exists
+  const existing = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  if (existing) {
+    return existing;
+  }
+  return await PaymentCommitmentModel.create({
+    commitment,
+    sourceType,
+    createdAt: new Date(),
+  });
 }
 

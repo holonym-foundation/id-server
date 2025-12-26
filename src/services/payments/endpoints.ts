@@ -153,7 +153,7 @@ function createReserveRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandle
       }
 
       // Check if already redeemed
-      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel)) {
+      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel, config.PaymentCommitmentModel)) {
         return res.status(400).json({ error: "Payment has already been redeemed" });
       }
 
@@ -232,7 +232,7 @@ function createCompleteRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandl
       }
 
       // Check if already redeemed
-      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel)) {
+      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel, config.PaymentCommitmentModel)) {
         return res.status(400).json({ error: "Payment has already been redeemed" });
       }
 
@@ -240,6 +240,7 @@ function createCompleteRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandl
       await markPaymentAsRedeemed(
         commitment,
         config.PaymentRedemptionModel,
+        config.PaymentCommitmentModel,
         service,
         fulfillmentReceipt
       );
@@ -356,7 +357,7 @@ function createRequestRefundRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       const commitment = deriveCommitmentFromSecret(secret);
 
       // Check if payment is redeemed
-      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel)) {
+      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel, config.PaymentCommitmentModel)) {
         return res.status(400).json({ error: "Payment has already been redeemed" });
       }
 
@@ -436,7 +437,7 @@ function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       }
 
       // Check if already redeemed
-      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel)) {
+      if (await isPaymentRedeemed(commitment, config.PaymentRedemptionModel, config.PaymentCommitmentModel)) {
         return res.status(200).json({ status: "redeemed" });
       }
 

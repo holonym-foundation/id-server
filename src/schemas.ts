@@ -38,7 +38,13 @@ import {
   IPaymentRedemption,
   ISandboxPaymentRedemption,
   IPaymentSecret,
-  ISandboxPaymentSecret
+  ISandboxPaymentSecret,
+  IPaymentCommitment,
+  ISandboxPaymentCommitment,
+  IHumanIDCreditsUser,
+  ISandboxHumanIDCreditsUser,
+  IHumanIDCreditsPaymentSecret,
+  ISandboxHumanIDCreditsPaymentSecret
 } from "./types.js"
 dotenv.config();
 
@@ -1001,6 +1007,11 @@ const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
     required: true,
     unique: true,
   },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'PaymentCommitment',
+  },
   redeemedAt: {
     type: Date,
     required: false,
@@ -1015,12 +1026,18 @@ const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
   },
 });
 PaymentRedemptionSchema.index({ commitment: 1 });
+PaymentRedemptionSchema.index({ commitmentId: 1 });
 
 const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
   commitment: {
     type: String,
     required: true,
     unique: true,
+  },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'PaymentCommitment',
   },
   redeemedAt: {
     type: Date,
@@ -1051,6 +1068,11 @@ const PaymentSecretSchema = new Schema<IPaymentSecret>({
     required: true,
     unique: true,
   },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'PaymentCommitment',
+  },
   holoUserId: {
     type: String,
     required: true,
@@ -1062,6 +1084,7 @@ const PaymentSecretSchema = new Schema<IPaymentSecret>({
   },
 });
 PaymentSecretSchema.index({ holoUserId: 1 });
+PaymentSecretSchema.index({ commitmentId: 1 });
 
 const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
   encryptedSecret: {
@@ -1076,6 +1099,11 @@ const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
     required: true,
     unique: true,
   },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'PaymentCommitment',
+  },
   holoUserId: {
     type: String,
     required: true,
@@ -1088,6 +1116,152 @@ const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
 });
 // Indexes are probably not needed for sandbox mode.
 // SandboxPaymentSecretSchema.index({ holoUserId: 1 });
+
+// Human ID Credits schemas
+const PaymentCommitmentSchema = new Schema<IPaymentCommitment>({
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  sourceType: {
+    type: String,
+    required: true,
+    enum: ['user', 'credits'],
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+PaymentCommitmentSchema.index({ commitment: 1 });
+PaymentCommitmentSchema.index({ sourceType: 1 });
+
+const SandboxPaymentCommitmentSchema = new Schema<ISandboxPaymentCommitment>({
+  commitment: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  sourceType: {
+    type: String,
+    required: true,
+    enum: ['user', 'credits'],
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxPaymentCommitmentSchema.index({ commitment: 1 });
+// SandboxPaymentCommitmentSchema.index({ sourceType: 1 });
+
+const HumanIDCreditsUserSchema = new Schema<IHumanIDCreditsUser>({
+  walletAddress: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  name: {
+    type: String,
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+HumanIDCreditsUserSchema.index({ walletAddress: 1 });
+
+const SandboxHumanIDCreditsUserSchema = new Schema<ISandboxHumanIDCreditsUser>({
+  walletAddress: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  name: {
+    type: String,
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxHumanIDCreditsUserSchema.index({ walletAddress: 1 });
+
+const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecret>({
+  userId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'HumanIDCreditsUser',
+  },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'PaymentCommitment',
+  },
+  secret: {
+    type: String,
+    required: true,
+  },
+  chainId: {
+    type: Number,
+    required: true,
+  },
+  price: {
+    type: String,
+    required: true,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+HumanIDCreditsPaymentSecretSchema.index({ userId: 1 });
+HumanIDCreditsPaymentSecretSchema.index({ commitmentId: 1 });
+HumanIDCreditsPaymentSecretSchema.index({ chainId: 1 });
+
+const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCreditsPaymentSecret>({
+  userId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'SandboxHumanIDCreditsUser',
+  },
+  commitmentId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'SandboxPaymentCommitment',
+  },
+  secret: {
+    type: String,
+    required: true,
+  },
+  chainId: {
+    type: Number,
+    required: true,
+  },
+  price: {
+    type: String,
+    required: true,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxHumanIDCreditsPaymentSecretSchema.index({ userId: 1 });
+// SandboxHumanIDCreditsPaymentSecretSchema.index({ commitmentId: 1 });
+// SandboxHumanIDCreditsPaymentSecretSchema.index({ chainId: 1 });
 
 export {
   userVerificationsSchema,
@@ -1126,4 +1300,10 @@ export {
   SandboxPaymentRedemptionSchema,
   PaymentSecretSchema,
   SandboxPaymentSecretSchema,
+  PaymentCommitmentSchema,
+  SandboxPaymentCommitmentSchema,
+  HumanIDCreditsUserSchema,
+  SandboxHumanIDCreditsUserSchema,
+  HumanIDCreditsPaymentSecretSchema,
+  SandboxHumanIDCreditsPaymentSecretSchema,
 };

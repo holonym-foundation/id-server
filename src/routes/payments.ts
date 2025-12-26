@@ -13,6 +13,17 @@ import {
   paymentStatusProd,
   paymentStatusSandbox,
 } from "../services/payments/endpoints.js";
+import {
+  nonceProd,
+  siweAuthProd,
+  generateSecretsProd,
+  getSecretsProd,
+  nonceSandbox,
+  siweAuthSandbox,
+  generateSecretsSandbox,
+  getSecretsSandbox,
+} from '../services/payments/human-id-credits/endpoints.js';
+import { validateSessionMiddleware } from '../services/payments/human-id-credits/middleware.js';
 
 const prodRouter = express.Router();
 
@@ -31,6 +42,28 @@ prodRouter.post("/refund/request", requestRefundProd);
 
 // GET /payments/status - Check payment status
 prodRouter.get("/status", paymentStatusProd);
+
+// --------------------- Human ID Credits routes ---------------------
+
+// GET /payments/human-id-credits/auth/nonce - Get nonce for SIWE authentication
+prodRouter.get("/human-id-credits/auth/nonce", nonceProd);
+
+// POST /payments/human-id-credits/auth/siwe - Authenticate with SIWE
+prodRouter.post("/human-id-credits/auth/siwe", siweAuthProd);
+
+// POST /payments/human-id-credits/secrets/batch - Generate batch of payment secrets
+prodRouter.post(
+  "/human-id-credits/secrets/batch",
+  validateSessionMiddleware,
+  generateSecretsProd
+);
+
+// GET /payments/human-id-credits/secrets - Get list of generated payment secrets
+prodRouter.get(
+  "/human-id-credits/secrets",
+  validateSessionMiddleware,
+  getSecretsProd
+);
 
 // --------------------- Sandbox routes ---------------------
 
@@ -51,6 +84,28 @@ sandboxRouter.post("/refund/request", requestRefundSandbox);
 
 // GET /payments/status - Check payment status
 sandboxRouter.get("/status", paymentStatusSandbox);
+
+// --------------------- Human ID Credits routes ---------------------
+
+// GET /payments/human-id-credits/auth/nonce - Get nonce for SIWE authentication
+sandboxRouter.get("/human-id-credits/auth/nonce", nonceSandbox);
+
+// POST /payments/human-id-credits/auth/siwe - Authenticate with SIWE
+sandboxRouter.post("/human-id-credits/auth/siwe", siweAuthSandbox);
+
+// POST /payments/human-id-credits/secrets/batch - Generate batch of payment secrets
+sandboxRouter.post(
+  "/human-id-credits/secrets/batch",
+  validateSessionMiddleware,
+  generateSecretsSandbox
+);
+
+// GET /payments/human-id-credits/secrets - Get list of generated payment secrets
+sandboxRouter.get(
+  "/human-id-credits/secrets",
+  validateSessionMiddleware,
+  getSecretsSandbox
+);
 
 export default prodRouter;
 export { sandboxRouter };

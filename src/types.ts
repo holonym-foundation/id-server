@@ -513,7 +513,8 @@ export type ISessionRetryWhitelist = {
 
 export type IPaymentRedemption = {
   _id?: Types.ObjectId;
-  commitment: string;  // bytes32 commitment hash
+  commitment?: string;  // bytes32 commitment hash (KEEP for backward compatibility)
+  commitmentId?: Types.ObjectId;  // NEW: Reference to PaymentCommitments (optional during migration)
   redeemedAt?: Date;   // When the payment was redeemed
   service?: string;    // Service identifier (bytes32)
   fulfillmentReceipt?: string;  // Receipt from verifier-server when SBT is minted
@@ -527,12 +528,44 @@ export type IPaymentSecret = {
     ciphertext: string;
     iv: string;
   };  // Encrypted payment secret
-  commitment: string;  // bytes32 commitment hash (derived from secret)
+  commitment?: string;  // bytes32 commitment hash (KEEP for backward compatibility)
+  commitmentId?: Types.ObjectId;  // NEW: Reference to PaymentCommitments (optional during migration)
   holoUserId: string;  // Holonym user ID
   createdAt?: Date;  // When the secret was created/stored
 };
 
 export type ISandboxPaymentSecret = IPaymentSecret;
+
+// Human ID Credits types
+export type IPaymentCommitment = {
+  _id?: Types.ObjectId;
+  commitment: string;  // bytes32 commitment hash (unique, indexed)
+  sourceType: 'user' | 'credits';  // Where this commitment came from
+  createdAt: Date;
+};
+
+export type ISandboxPaymentCommitment = IPaymentCommitment;
+
+export type IHumanIDCreditsUser = {
+  _id?: Types.ObjectId;
+  walletAddress: string;  // Wallet that signs SIWE messages (indexed)
+  name?: string;  // Optional organization name
+  createdAt: Date;
+};
+
+export type ISandboxHumanIDCreditsUser = IHumanIDCreditsUser;
+
+export type IHumanIDCreditsPaymentSecret = {
+  _id?: Types.ObjectId;
+  userId: Types.ObjectId;  // Reference to HumanIDCreditsUsers
+  commitmentId: Types.ObjectId;  // Reference to PaymentCommitments (not commitment string)
+  secret: string;  // Plaintext secret
+  chainId: number;
+  price: string;  // Price in wei
+  createdAt: Date;
+};
+
+export type ISandboxHumanIDCreditsPaymentSecret = IHumanIDCreditsPaymentSecret;
 
 // ---------------- MongoDB schemas for direct verification service ----------------
 
@@ -588,6 +621,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>
+  PaymentCommitmentModel: Model<IPaymentCommitment | ISandboxPaymentCommitment>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
 }
