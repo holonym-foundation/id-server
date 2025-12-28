@@ -11,7 +11,7 @@ import {
   IHumanIDCreditsPaymentSecret,
 } from '../../../types.js';
 import { deriveCommitmentFromSecret, generatePaymentSignature, calculatePriceInToken } from '../functions.js';
-import { idvSessionUSDPrice } from '../../../constants/misc.js';
+import { idvSessionUSDPrice, PAYMENT_SERVICE_SBT_MINT } from '../../../constants/misc.js';
 import { logger } from '../../../utils/logger.js';
 
 const creditsLogger = logger.child({ feature: 'holonym', subFeature: 'human-id-credits' });
@@ -305,6 +305,11 @@ export async function generatePaymentSecretsBatch(
     throw new Error('Batch size cannot exceed 1000 secrets');
   }
 
+  const validServices = [PAYMENT_SERVICE_SBT_MINT];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid service: ${service}`);
+  }
+
   const timestamp = Math.floor(Date.now() / 1000);
   const price = await calculatePriceInToken(idvSessionUSDPrice, chainId);
 
@@ -318,9 +323,9 @@ export async function generatePaymentSecretsBatch(
 
   // Generate secrets and commitments
   for (let i = 0; i < count; i++) {
-    // Generate a random 32-byte secret as hex string (0x...)
+    // Generate a random 32-byte secret as hex string (sans 0x prefix)
     const secretBytes = randomBytes(32);
-    const secret = ethers.utils.hexlify(secretBytes);
+    const secret = ethers.utils.hexlify(secretBytes).slice(2);
     const commitment = deriveCommitmentFromSecret(secret);
 
     // Create commitment record
