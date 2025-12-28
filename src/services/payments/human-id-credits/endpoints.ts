@@ -86,10 +86,10 @@ export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
         config.HumanIDCreditsUserModel
       );
 
-      // Generate session token
-      const sessionToken = generateSessionToken();
+      // Generate JWT session token
+      const sessionToken = generateSessionToken(userId.toString(), verification.address);
 
-      // Store session in Valkey
+      // Store session in Valkey for potential revocation
       await storeSession(sessionToken, userId.toString(), verification.address);
 
       const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour from now
