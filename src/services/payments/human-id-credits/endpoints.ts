@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { Model, Types } from 'mongoose';
+import { SiweMessage } from 'siwe';
+import { ethers } from 'ethers';
 import {
   verifySIWEMessage,
   generateNonce,
@@ -29,23 +31,62 @@ interface CreditsRouteHandlerConfig {
   PaymentRedemptionModel: Model<IPaymentRedemption>;
 }
 
+if (!process.env.HUMAN_ID_CREDITS_SIWE_DOMAIN) {
+  throw new Error('HUMAN_ID_CREDITS_SIWE_DOMAIN is not set');
+}
+
 /**
- * GET /payments/human-id-credits/auth/nonce
- * Generate a nonce for SIWE authentication
- * Prevents replay attacks by requiring a server-issued nonce
+ * GET /payments/human-id-credits/auth/challenge
+ * Generate a complete SIWE message challenge for the client to sign
+ * Requires address query parameter. Returns the prepared message string.
  */
-export function createNonceEndpoint(config: CreditsRouteHandlerConfig) {
+export function createChallengeEndpoint(config: CreditsRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
+      const address = req.query.address as string;
+
+      if (!address || typeof address !== 'string') {
+        return res.status(400).json({ error: 'address query parameter is required' });
+      }
+
+      // Convert address to checksum format (EIP-55)
+      let checksumAddress: string;
+      try {
+        checksumAddress = ethers.utils.getAddress(address);
+      } catch (error) {
+        return res.status(400).json({ error: 'Invalid Ethereum address' });
+      }
+
+      // Generate nonce
       const nonce = await generateNonce();
 
-      creditsLogger.info({ nonce }, 'Generated SIWE nonce');
+      // Get SIWE configuration from environment or use defaults
+      const domain = process.env.HUMAN_ID_CREDITS_SIWE_DOMAIN;
+      const uri = `https://${domain}`;
+      const statement = 'Sign in with Ethereum to Human ID.';
+      const chainId = 1;
 
-      return res.status(200).json({
+      // Construct SIWE message
+      const siweMessage = new SiweMessage({
+        domain,
+        address: checksumAddress, // Use checksum format (EIP-55)
+        statement,
+        uri,
+        version: '1',
+        chainId,
         nonce,
       });
+
+      // Prepare the message string for signing
+      const messageToSign = siweMessage.prepareMessage();
+
+      creditsLogger.info({ address, nonce, domain, chainId }, 'Generated SIWE challenge');
+
+      return res.status(200).json({
+        message: messageToSign,
+      });
     } catch (error: any) {
-      creditsLogger.error({ error: error.message }, 'Error generating nonce');
+      creditsLogger.error({ error: error.message }, 'Error generating SIWE challenge');
       return res.status(500).json({ error: error.message || 'An unknown error occurred' });
     }
   };
@@ -54,7 +95,7 @@ export function createNonceEndpoint(config: CreditsRouteHandlerConfig) {
 /**
  * POST /payments/human-id-credits/auth/siwe
  * Authenticate with SIWE to get a session token
- * Requires a nonce from the /auth/nonce endpoint to prevent replay attacks
+ * Requires a challenge from the /auth/challenge endpoint to prevent replay attacks
  */
 export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
@@ -370,9 +411,9 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
 }
 
 // Production endpoint wrappers
-export async function nonceProd(req: Request, res: Response) {
+export async function challengeProd(req: Request, res: Response) {
   const config = getCreditsRouteHandlerConfig("live");
-  return createNonceEndpoint(config)(req, res);
+  return createChallengeEndpoint(config)(req, res);
 }
 
 export async function siweAuthProd(req: Request, res: Response) {
@@ -391,9 +432,9 @@ export async function getSecretsProd(req: Request, res: Response) {
 }
 
 // Sandbox endpoint wrappers
-export async function nonceSandbox(req: Request, res: Response) {
+export async function challengeSandbox(req: Request, res: Response) {
   const config = getCreditsRouteHandlerConfig("sandbox");
-  return createNonceEndpoint(config)(req, res);
+  return createChallengeEndpoint(config)(req, res);
 }
 
 export async function siweAuthSandbox(req: Request, res: Response) {

@@ -14,11 +14,11 @@ import {
   paymentStatusSandbox,
 } from "../services/payments/endpoints.js";
 import {
-  nonceProd,
+  challengeProd,
   siweAuthProd,
   generateSecretsProd,
   getSecretsProd,
-  nonceSandbox,
+  challengeSandbox,
   siweAuthSandbox,
   generateSecretsSandbox,
   getSecretsSandbox,
@@ -45,8 +45,8 @@ prodRouter.get("/status", paymentStatusProd);
 
 // --------------------- Human ID Credits routes ---------------------
 
-// GET /payments/human-id-credits/auth/nonce - Get nonce for SIWE authentication
-prodRouter.get("/human-id-credits/auth/nonce", nonceProd);
+// GET /payments/human-id-credits/auth/challenge - Get SIWE challenge message to sign
+prodRouter.get("/human-id-credits/auth/challenge", challengeProd);
 
 // POST /payments/human-id-credits/auth/siwe - Authenticate with SIWE
 prodRouter.post("/human-id-credits/auth/siwe", siweAuthProd);
@@ -87,8 +87,8 @@ sandboxRouter.get("/status", paymentStatusSandbox);
 
 // --------------------- Human ID Credits routes ---------------------
 
-// GET /payments/human-id-credits/auth/nonce - Get nonce for SIWE authentication
-sandboxRouter.get("/human-id-credits/auth/nonce", nonceSandbox);
+// GET /payments/human-id-credits/auth/challenge - Get SIWE challenge message to sign
+sandboxRouter.get("/human-id-credits/auth/challenge", challengeSandbox);
 
 // POST /payments/human-id-credits/auth/siwe - Authenticate with SIWE
 sandboxRouter.post("/human-id-credits/auth/siwe", siweAuthSandbox);
