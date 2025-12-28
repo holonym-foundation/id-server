@@ -409,37 +409,31 @@ async function requestRefundSandbox(req: Request, res: Response) {
 function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { commitment, chainId, disableOnchainCheck } = req.query;
-
-      // By default, require chainId and check the smart contract for the payment. However,
-      // if disableOnchainCheck is true, skip the smart contract check.
-      const _disableOnchainCheck = disableOnchainCheck === 'true';
+      const { commitment, chainId } = req.query;
 
       if (!commitment || typeof commitment !== "string") {
         return res.status(400).json({ error: "commitment is required" });
       }
-      if (!_disableOnchainCheck && (chainId === undefined || chainId === null)) {
-        return res.status(400).json({ error: "chainId is required unless disableOnchainCheck is false" });
+      if (chainId === undefined || chainId === null) {
+        return res.status(400).json({ error: "chainId is required" });
       }
 
       const chainIdNum = typeof chainId === "number" ? chainId : Number(chainId);
-      if (!_disableOnchainCheck && isNaN(chainIdNum)) {
+      if (isNaN(chainIdNum)) {
         return res.status(400).json({ error: "chainId must be a number" });
       }
 
-      if (!_disableOnchainCheck) {
-        // Validate chainId and get contract address
-        const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
-        if (!contractAddress) {
-          return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
-        }
-  
-        // Check if payment exists onchain
-        const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
-  
-        if (!payment) {
-          return res.status(404).json({ error: "Payment not found onchain" });
-        }
+      // Validate chainId and get contract address
+      const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
+      if (!contractAddress) {
+        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+      }
+
+      // Check if payment exists onchain
+      const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
+
+      if (!payment) {
+        return res.status(404).json({ error: "Payment not found onchain" });
       }
 
       // Check if already redeemed
@@ -457,14 +451,8 @@ function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(200).json({ status: "pending-refund" });
       }
 
-      // If we disabled the smart contract check, return unknown. It's possible that the payment
-      // doesn't even exist.
-      if (_disableOnchainCheck) {
-        return res.status(200).json({ status: "unknown" });
-      } else {
-        // Payment exists but no redemption or pending operations
-        return res.status(200).json({ status: "unredeemed" });
-      }
+      // Payment exists but no redemption or pending operations
+      return res.status(200).json({ status: "unredeemed" });
     } catch (error: any) {
       paymentsLogger.error({ error: error.message }, "Error checking payment status");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });
