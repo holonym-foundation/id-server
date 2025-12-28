@@ -14,7 +14,7 @@ export interface CreditsAuthenticatedRequest extends Request {
 }
 
 /**
- * Middleware to validate session token
+ * Middleware to validate session token from Authorization header
  * Adds userId and walletAddress to req object
  */
 export async function validateSessionMiddleware(
@@ -22,11 +22,28 @@ export async function validateSessionMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const sessionToken = req.headers['x-session-token'] as string;
+  // Extract token from Authorization: Bearer <token> header
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    creditsLogger.warn('Missing Authorization header');
+    res.status(401).json({ error: 'Missing Authorization header. Use "Authorization: Bearer <token>" format.' });
+    return;
+  }
+
+  // Check if header starts with "Bearer "
+  if (!authHeader.startsWith('Bearer ')) {
+    creditsLogger.warn('Invalid Authorization header format');
+    res.status(401).json({ error: 'Invalid Authorization header format. Use "Bearer <token>" format.' });
+    return;
+  }
+
+  // Extract the token (everything after "Bearer ")
+  const sessionToken = authHeader.substring(7);
 
   if (!sessionToken) {
-    creditsLogger.warn('Missing session token in request');
-    res.status(401).json({ error: 'Missing session token. Include X-Session-Token header.' });
+    creditsLogger.warn('Missing token in Authorization header');
+    res.status(401).json({ error: 'Missing token in Authorization header.' });
     return;
   }
 
