@@ -201,12 +201,12 @@ export async function validateSessionToken(sessionToken: string): Promise<{
     }
 
     // Check if token has been revoked in Valkey (optional blacklist check)
-    const session = await getSession(sessionToken);
-    if (!session) {
-      // Token might be valid but not in Valkey (could be expired from Valkey's perspective)
-      // Since JWT has its own expiration, we'll still accept it if JWT verification passed
-      // This allows for graceful handling of Valkey TTL vs JWT expiration mismatch
-    }
+    // const session = await getSession(sessionToken);
+    // if (!session) {
+    //   // Token might be valid but not in Valkey (could be expired from Valkey's perspective)
+    //   // Since JWT has its own expiration, we'll still accept it if JWT verification passed
+    //   // This allows for graceful handling of Valkey TTL vs JWT expiration mismatch
+    // }
 
     return {
       userId,
@@ -298,14 +298,13 @@ export async function createCommitmentRecord(
 /**
  * Rate limit secret generation by userId
  */
-export async function rateLimitSecretGeneration(
-  userId: string,
-  maxPerHour: number = 1000,
-  maxPerDay: number = 10000
-): Promise<{ allowed: boolean; error?: string }> {
+export async function rateLimitSecretGeneration(userId: string,): Promise<{ allowed: boolean; error?: string }> {
   if (!valkeyClient) {
     throw new Error('Valkey client not initialized');
   }
+
+  const maxPerHour = 10_000;
+  const maxPerDay = 100_000;
 
   const now = Math.floor(Date.now() / 1000);
   const hourKey = `human-id-credits:rate-limit:hour:${userId}`;
