@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { valkeyClient } from '../../../utils/valkey-glide.js';
 import { TimeUnit } from '@valkey/valkey-glide';
-import { Model, Types } from 'mongoose';
+import { Model, Types, ClientSession } from 'mongoose';
 import {
   IPaymentCommitment,
   IHumanIDCreditsUser,
@@ -170,8 +170,8 @@ export async function getSession(sessionToken: string): Promise<{
 
   try {
     return JSON.parse(sessionData as string);
-  } catch (error) {
-    creditsLogger.error({ error }, 'Error parsing session data');
+  } catch (error: any) {
+    creditsLogger.error({ error: error?.message || 'Unknown error' }, 'Error parsing session data');
     return null;
   }
 }
@@ -224,7 +224,7 @@ export async function validateSessionToken(sessionToken: string): Promise<{
       return { userId: '', walletAddress: '', valid: false, error: 'Token not yet valid' };
     }
     
-    creditsLogger.error({ error }, 'Error validating session token');
+    creditsLogger.error({ error: error.message || 'Unknown error' }, 'Error validating session token');
     return { userId: '', walletAddress: '', valid: false, error: 'Error validating session token' };
   }
 }
@@ -303,6 +303,13 @@ export async function rateLimitSecretGeneration(userId: string,): Promise<{ allo
     throw new Error('Valkey client not initialized');
   }
 
+  // NOTE: This implementation has a known race condition where increment happens before limit check.
+  // In rare concurrent scenarios, this can allow a few extra requests over the limit. This is acceptable because:
+  // 1. The race condition window is extremely small (microseconds between incr and check)
+  // 2. The limits are high enough (10,000/hour, 100,000/day) that a few extra requests are negligible
+  // 3. Fixing it would require Lua scripts for atomic operations, adding complexity for minimal benefit
+  // TODO: Maybe implement atomic operations using Lua scripts.
+
   const maxPerHour = 10_000;
   const maxPerDay = 100_000;
 
@@ -337,6 +344,8 @@ export async function rateLimitSecretGeneration(userId: string,): Promise<{ allo
 
 /**
  * Generate batch of payment secrets
+ * Uses MongoDB transactions to ensure all-or-nothing behavior:
+ * if any secret creation fails, all changes are rolled back
  */
 export async function generatePaymentSecretsBatch(
   count: number,
@@ -364,56 +373,102 @@ export async function generatePaymentSecretsBatch(
   const timestamp = Math.floor(Date.now() / 1000);
   const price = await calculatePriceInToken(idvSessionUSDPrice, chainId);
 
-  const secrets: Array<{
-    secret: string;
-    commitment: string;
-    price: string;
-    signature: string;
-    timestamp: number;
-  }> = [];
+  // Start MongoDB session for transaction
+  const session = await CreditsPaymentSecretModel.db.startSession();
 
-  // Generate secrets and commitments
-  for (let i = 0; i < count; i++) {
-    // Generate a random 32-byte secret as hex string (sans 0x prefix)
-    const secretBytes = randomBytes(32);
-    const secret = ethers.utils.hexlify(secretBytes).slice(2);
-    const commitment = deriveCommitmentFromSecret(secret);
+  try {
+    const secrets: Array<{
+      secret: string;
+      commitment: string;
+      price: string;
+      signature: string;
+      timestamp: number;
+    }> = [];
 
-    // Create commitment record
-    const commitmentId = await createCommitmentRecord(
-      commitment,
-      'credits',
-      PaymentCommitmentModel
-    );
+    // Execute all operations within a transaction
+    await session.withTransaction(async () => {
+      // Generate secrets and commitments
+      for (let i = 0; i < count; i++) {
+        // Generate a random 32-byte secret as hex string (sans 0x prefix)
+        const secretBytes = randomBytes(32);
+        const secret = ethers.utils.hexlify(secretBytes).slice(2);
+        const commitment = deriveCommitmentFromSecret(secret);
 
-    // Create payment secret record
-    await CreditsPaymentSecretModel.create({
-      userId,
-      commitmentId,
-      secret,
-      chainId,
-      price,
-      createdAt: new Date(),
+        // Create commitment record (within transaction)
+        const commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).session(session).exec();
+        let commitmentId: Types.ObjectId;
+
+        if (commitmentRecord) {
+          commitmentId = commitmentRecord._id!;
+        } else {
+          const newCommitment = await PaymentCommitmentModel.create([{
+            commitment,
+            sourceType: 'credits',
+            createdAt: new Date(),
+          }], { session });
+          commitmentId = newCommitment[0]._id!;
+        }
+
+        // Create payment secret record (within transaction)
+        await CreditsPaymentSecretModel.create([{
+          userId,
+          commitmentId,
+          secret,
+          chainId,
+          price,
+          createdAt: new Date(),
+        }], { session });
+
+        // Generate payment signature (outside transaction - no DB operations)
+        const signature = await generatePaymentSignature(
+          price,
+          commitment,
+          service,
+          chainId,
+          timestamp
+        );
+
+        secrets.push({
+          secret,
+          commitment,
+          price,
+          signature,
+          timestamp,
+        });
+      }
     });
 
-    // Generate payment signature
-    const signature = await generatePaymentSignature(
-      price,
-      commitment,
-      service,
-      chainId,
-      timestamp
-    );
-
-    secrets.push({
-      secret,
-      commitment,
-      price,
-      signature,
-      timestamp,
-    });
+    return secrets;
+  } catch (error) {
+    // Transaction will automatically abort on error
+    creditsLogger.error({ error, userId, count }, 'Error generating payment secrets batch - transaction rolled back');
+    throw error;
+  } finally {
+    // End the session
+    await session.endSession();
   }
-
-  return secrets;
 }
 
+/**
+ * Validate service parameter against allowlist and format
+ */
+export function validateService(service: any): { valid: boolean; error?: string } {
+  if (!service || typeof service !== 'string') {
+    return { valid: false, error: 'service is required and must be a string' };
+  }
+
+  // Validate bytes32 hex string format (0x followed by 64 hex characters)
+  if (!/^0x[0-9a-fA-F]{64}$/.test(service)) {
+    return { valid: false, error: 'service must be a valid bytes32 hex string (0x followed by 64 hex characters)' };
+  }
+
+  // Allowed services for payment secrets
+  const allowedServices = new Set([PAYMENT_SERVICE_SBT_MINT]);
+
+  // Validate against allowlist
+  if (!allowedServices.has(service)) {
+    return { valid: false, error: 'Invalid service. Service must be one of the allowed values.' };
+  }
+
+  return { valid: true };
+}

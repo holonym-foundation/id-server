@@ -10,6 +10,7 @@ import {
   getOrCreateCreditsUser,
   rateLimitSecretGeneration,
   generatePaymentSecretsBatch,
+  validateService,
 } from './functions.js';
 import { generatePaymentSignature } from '../functions.js';
 import {
@@ -75,12 +76,13 @@ export function createChallengeEndpoint(config: CreditsRouteHandlerConfig) {
         version: '1',
         chainId,
         nonce,
+        expirationTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes
       });
 
       // Prepare the message string for signing
       const messageToSign = siweMessage.prepareMessage();
 
-      creditsLogger.info({ address, nonce, domain, chainId }, 'Generated SIWE challenge');
+      creditsLogger.info({ address: checksumAddress }, 'Generated SIWE challenge');
 
       return res.status(200).json({
         message: messageToSign,
@@ -115,7 +117,7 @@ export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
 
       if (!verification.success) {
         creditsLogger.warn(
-          { error: verification.error, address: verification.address },
+          { error: verification.error?.type || 'Verification failed' },
           'SIWE verification failed'
         );
         return res.status(401).json({ error: verification.error || 'Invalid SIWE message or signature' });
@@ -145,7 +147,7 @@ export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
         expiresAt: expiresAt.toISOString(),
       });
     } catch (error: any) {
-      creditsLogger.error({ error: error.message }, 'Error in SIWE authentication');
+      creditsLogger.error({ error: error.message || 'Unknown error' }, 'Error in SIWE authentication');
       return res.status(500).json({ error: error.message || 'An unknown error occurred' });
     }
   };
@@ -170,8 +172,10 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
         return res.status(400).json({ error: 'count cannot exceed 1000' });
       }
 
-      if (!service || typeof service !== 'string') {
-        return res.status(400).json({ error: 'service is required and must be a string' });
+      // Validate service parameter
+      const serviceValidation = validateService(service);
+      if (!serviceValidation.valid) {
+        return res.status(400).json({ error: serviceValidation.error });
       }
 
       if (chainId === undefined || chainId === null) {
@@ -235,9 +239,13 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         return res.status(400).json({ error: 'limit must be a number between 1 and 1000' });
       }
 
-      if (!service || typeof service !== 'string') {
-        return res.status(400).json({ error: 'service is required and must be a string' });
+      // Validate service parameter
+      const serviceValidation = validateService(service);
+      if (!serviceValidation.valid) {
+        return res.status(400).json({ error: serviceValidation.error });
       }
+      // After validation, service is guaranteed to be a string
+      const validatedService = service as string;
 
       // Validate status if provided
       if (status && status !== 'redeemed' && status !== 'unredeemed') {
@@ -377,7 +385,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
           const signature = await generatePaymentSignature(
             secret.price,
             commitment,
-            service,
+            validatedService,
             secret.chainId,
             timestamp
           );

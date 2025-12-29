@@ -1228,6 +1228,8 @@ const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecre
 HumanIDCreditsPaymentSecretSchema.index({ userId: 1 });
 HumanIDCreditsPaymentSecretSchema.index({ commitmentId: 1 });
 HumanIDCreditsPaymentSecretSchema.index({ chainId: 1 });
+// Compound index for getSecrets query: filters by userId (and optionally chainId), sorts by createdAt desc, _id desc
+HumanIDCreditsPaymentSecretSchema.index({ userId: 1, chainId: 1, createdAt: -1, _id: -1 });
 
 const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCreditsPaymentSecret>({
   userId: {
