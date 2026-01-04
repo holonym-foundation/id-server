@@ -316,8 +316,8 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
       pipeline.push({
         $lookup: {
           from: config.PaymentRedemptionModel.collection.name,
-          localField: 'commitmentDoc.commitment',
-          foreignField: 'commitment',
+          localField: 'commitmentId',
+          foreignField: 'commitmentId',
           as: 'redemptionDoc',
         },
       });

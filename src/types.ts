@@ -513,7 +513,6 @@ export type ISessionRetryWhitelist = {
 
 export type IPaymentRedemption = {
   _id?: Types.ObjectId;
-  commitment?: string;  // bytes32 commitment hash (KEEP for backward compatibility)
   commitmentId?: Types.ObjectId;  // NEW: Reference to PaymentCommitments (optional during migration)
   redeemedAt?: Date;   // When the payment was redeemed
   service?: string;    // Service identifier (bytes32)
@@ -528,8 +527,7 @@ export type IPaymentSecret = {
     ciphertext: string;
     iv: string;
   };  // Encrypted payment secret
-  commitment?: string;  // bytes32 commitment hash (KEEP for backward compatibility)
-  commitmentId?: Types.ObjectId;  // NEW: Reference to PaymentCommitments (optional during migration)
+  commitmentId?: Types.ObjectId;  // Reference to PaymentCommitment document
   holoUserId: string;  // Holonym user ID
   createdAt?: Date;  // When the secret was created/stored
 };

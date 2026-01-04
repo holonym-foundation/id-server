@@ -395,7 +395,8 @@ export async function generatePaymentSecretsBatch(
         const commitment = deriveCommitmentFromSecret(secret);
 
         // Create commitment record (within transaction)
-        const commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).session(session).exec();
+        // Explicitly use primary read preference as required for transactions
+        const commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).read('primary').session(session).exec();
         let commitmentId: Types.ObjectId;
 
         if (commitmentRecord) {

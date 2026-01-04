@@ -77,14 +77,10 @@ async function storeOrUpdatePaymentSecret(
   }
 
   // Check if document exists to determine if this is a new insertion (for limit checking)
-  // Check by commitmentId first (new way), then fall back to commitment (backward compatibility)
   let existingDoc;
   try {
     existingDoc = await PaymentSecretModel.findOne({
-      $or: [
-        { commitmentId: commitmentId },
-        { commitment: commitment }
-      ]
+      commitmentId: commitmentId
     }).exec();
   } catch (err) {
     logger.error({ error: err }, "An error occurred while checking for existing payment secret");
@@ -112,23 +108,18 @@ async function storeOrUpdatePaymentSecret(
     }
   }
 
-  // Build update object with commitmentId (and keep commitment for backward compatibility)
+  // Build update object with commitmentId
   const updateData = {
     holoUserId,
     commitmentId,
-    commitment, // Keep for backward compatibility during migration
     encryptedSecret,
   };
 
   // Use findOneAndUpdate with upsert for atomic update/create
-  // Match by commitmentId if it exists, otherwise by commitment
   try {
     await PaymentSecretModel.findOneAndUpdate(
       {
-        $or: [
-          { commitmentId: commitmentId },
-          { commitment: commitment }
-        ]
+        commitmentId: commitmentId
       },
       updateData,
       { upsert: true, new: true }
@@ -170,19 +161,14 @@ function createGetPaymentSecrets(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (checkRedemption) {
         const paymentSecretsWithRedemption = await Promise.all(
           paymentSecrets.map(async (secret) => {
-            let commitment = secret.commitment;
-            if (!commitment) {
-              if (!secret.commitmentId) {
-                throw new Error("Payment secret has neither 'commitment' nor 'commitmentId'.");
-              }
-              const paymentCommitmentDoc = await config.PaymentCommitmentModel.findOne({
-                _id: secret.commitmentId,
-              }).exec();
-              if (!paymentCommitmentDoc) {
-                throw new Error("No PaymentCommitment found for given commitmentId.");
-              }
-              commitment = paymentCommitmentDoc.commitment;
+            const paymentCommitmentDoc = await config.PaymentCommitmentModel.findOne({
+              _id: secret.commitmentId,
+            }).exec();
+            if (!paymentCommitmentDoc) {
+              throw new Error("No PaymentCommitment found for given commitmentId.");
             }
+            const commitment = paymentCommitmentDoc.commitment;
+            
             const redemption = await getRedemptionRecord(
               commitment,
               config.PaymentRedemptionModel,

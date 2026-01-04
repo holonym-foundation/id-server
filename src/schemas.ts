@@ -1002,11 +1002,6 @@ const SilkPeanutCampaignsMetadataSchema = new Schema<ISilkPeanutCampaignsMetadat
 });
 
 const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
-  commitment: {
-    type: String,
-    required: true,
-    unique: true,
-  },
   commitmentId: {
     type: Schema.Types.ObjectId,
     required: false,
@@ -1028,11 +1023,6 @@ const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
 PaymentRedemptionSchema.index({ commitmentId: 1 });
 
 const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
-  commitment: {
-    type: String,
-    required: true,
-    unique: true,
-  },
   commitmentId: {
     type: Schema.Types.ObjectId,
     required: false,
@@ -1062,11 +1052,6 @@ const PaymentSecretSchema = new Schema<IPaymentSecret>({
     },
     required: true,
   },
-  commitment: {
-    type: String,
-    required: true,
-    unique: true,
-  },
   commitmentId: {
     type: Schema.Types.ObjectId,
     required: false,
@@ -1092,11 +1077,6 @@ const SandboxPaymentSecretSchema = new Schema<ISandboxPaymentSecret>({
       iv: String,
     },
     required: true,
-  },
-  commitment: {
-    type: String,
-    required: true,
-    unique: true,
   },
   commitmentId: {
     type: Schema.Types.ObjectId,
