@@ -1135,7 +1135,6 @@ const PaymentCommitmentSchema = new Schema<IPaymentCommitment>({
   },
 });
 PaymentCommitmentSchema.index({ commitment: 1 });
-PaymentCommitmentSchema.index({ sourceType: 1 });
 
 const SandboxPaymentCommitmentSchema = new Schema<ISandboxPaymentCommitment>({
   commitment: {
