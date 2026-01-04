@@ -1025,7 +1025,6 @@ const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
     required: false,
   },
 });
-PaymentRedemptionSchema.index({ commitment: 1 });
 PaymentRedemptionSchema.index({ commitmentId: 1 });
 
 const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
@@ -1053,7 +1052,7 @@ const SandboxPaymentRedemptionSchema = new Schema<ISandboxPaymentRedemption>({
   },
 });
 // Indexes are probably not needed for sandbox mode.
-// SandboxPaymentRedemptionSchema.index({ commitment: 1 });
+// SandboxPaymentRedemptionSchema.index({ commitmentId: 1 });
 
 const PaymentSecretSchema = new Schema<IPaymentSecret>({
   encryptedSecret: {
