@@ -102,10 +102,10 @@ export function createChallengeEndpoint(config: CreditsRouteHandlerConfig) {
 export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { siweMessage, signature } = req.body;
+      const { message, signature } = req.body;
 
-      if (!siweMessage || typeof siweMessage !== 'string') {
-        return res.status(400).json({ error: 'siweMessage is required and must be a string' });
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: 'message is required and must be a string' });
       }
 
       if (!signature || typeof signature !== 'string') {
@@ -113,7 +113,7 @@ export function createSIWEAuthEndpoint(config: CreditsRouteHandlerConfig) {
       }
 
       // Verify SIWE message
-      const verification = await verifySIWEMessage(siweMessage, signature);
+      const verification = await verifySIWEMessage(message, signature);
 
       if (!verification.success) {
         creditsLogger.warn(
