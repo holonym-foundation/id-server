@@ -153,32 +153,66 @@ function createGetPaymentSecrets(config: SandboxVsLiveKYCRouteHandlerConfig) {
     }
 
     try {
-      const paymentSecrets = await config.PaymentSecretModel.find({
-        holoUserId: holoUserId,
-      }).exec();
+      // Get the collection name for the PaymentCommitment model
+      const commitmentCollectionName = config.PaymentCommitmentModel.collection.name;
+
+      // Build aggregation pipeline
+      const pipeline: any[] = [
+        // Match payment secrets by holoUserId
+        {
+          $match: {
+            holoUserId: holoUserId,
+          },
+        },
+        // Lookup the commitment from PaymentCommitment collection
+        {
+          $lookup: {
+            from: commitmentCollectionName,
+            localField: "commitmentId",
+            foreignField: "_id",
+            as: "commitmentDoc",
+          },
+        },
+        // Unwind the commitment document (should be one-to-one)
+        {
+          $unwind: {
+            path: "$commitmentDoc",
+            preserveNullAndEmptyArrays: true, // Keep documents even if commitment not found
+          },
+        },
+        // Project fields including the commitment string
+        {
+          $project: {
+            _id: 1,
+            holoUserId: 1,
+            commitmentId: 1,
+            encryptedSecret: 1,
+            createdAt: 1,
+            commitment: "$commitmentDoc.commitment", // Include commitment string
+          },
+        },
+      ];
+
+      // Execute aggregation
+      const paymentSecrets = await config.PaymentSecretModel.aggregate(pipeline).exec();
 
       // If checkRedemption is requested, add redemption info to each payment secret
       if (checkRedemption) {
         const paymentSecretsWithRedemption = await Promise.all(
           paymentSecrets.map(async (secret) => {
-            const paymentCommitmentDoc = await config.PaymentCommitmentModel.findOne({
-              _id: secret.commitmentId,
-            }).exec();
-            if (!paymentCommitmentDoc) {
-              throw new Error("No PaymentCommitment found for given commitmentId.");
+            if (!secret.commitment) {
+              throw new Error("No commitment found for given commitmentId.");
             }
-            const commitment = paymentCommitmentDoc.commitment;
             
             const redemption = await getRedemptionRecord(
-              commitment,
+              secret.commitment,
               config.PaymentRedemptionModel,
               config.PaymentCommitmentModel
             );
-            const secretObj: any = secret.toObject();
             if (redemption) {
-              secretObj.redemption = redemption;
+              secret.redemption = redemption;
             }
-            return secretObj;
+            return secret;
           })
         );
         return res.status(200).json(paymentSecretsWithRedemption);
