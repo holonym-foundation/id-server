@@ -382,6 +382,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
           commitment: '$commitmentDoc.commitment',
           chainId: 1,
           price: 1,
+          priceOverrideId: 1,
           createdAt: 1,
         },
       });
@@ -421,6 +422,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
             commitment,
             chainId: secret.chainId,
             price: secret.price,
+            priceOverrideId: secret.priceOverrideId?.toString() ?? undefined,
             signature,
             timestamp,
             createdAt: new Date(secret.createdAt).toISOString(),
