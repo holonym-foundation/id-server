@@ -17,6 +17,13 @@ import { issueVeraxAttestation } from "../services/admin/issue-verax-attestation
 import { getUserHasBackedupCredentials } from "../services/admin/user-has-backedup-credentials.js";
 import { whitelistCleanHandsSession } from "../services/admin/whitelist-clean-hands-session.js";
 import { refundPayment } from "../services/admin/refund-payment.js";
+import {
+  createPriceOverrideProd,
+  listPriceOverridesProd,
+  getPriceOverrideProd,
+  updatePriceOverrideProd,
+  deletePriceOverrideProd,
+} from "../services/admin/human-id-credits.js";
 
 const router = express.Router();
 
@@ -42,5 +49,28 @@ router.post("/fail-clean-hands-session", failCleanHandsSession);
 // router.post("/refund-failed-clean-hands-session", refundFailedCleanHandsSession);
 // router.post("/whitelist-clean-hands-session", whitelistCleanHandsSession);
 router.post("/payments/refund", refundPayment);
+
+// --------------------- Human ID Credits Price Override Admin Routes ---------------------
+
+router.post(
+  "/payments/human-id-credits/price-overrides",
+  createPriceOverrideProd
+);
+router.get(
+  "/payments/human-id-credits/price-overrides",
+  listPriceOverridesProd
+);
+router.get(
+  "/payments/human-id-credits/price-overrides/:id",
+  getPriceOverrideProd
+);
+router.patch(
+  "/payments/human-id-credits/price-overrides/:id",
+  updatePriceOverrideProd
+);
+router.delete(
+  "/payments/human-id-credits/price-overrides/:id",
+  deletePriceOverrideProd
+);
 
 export default router;

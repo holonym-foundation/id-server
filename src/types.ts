@@ -560,10 +560,27 @@ export type IHumanIDCreditsPaymentSecret = {
   secret: string;  // Plaintext secret
   chainId: number;
   price: string;  // Price in wei
+  priceOverrideId?: Types.ObjectId;  // Optional reference to price override
   createdAt: Date;
 };
 
 export type ISandboxHumanIDCreditsPaymentSecret = IHumanIDCreditsPaymentSecret;
+
+export type IHumanIDCreditsPriceOverride = {
+  _id?: Types.ObjectId;
+  userId: Types.ObjectId;  // User this override applies to
+  priceUSD: number;  // Fixed price in USD
+  maxCredits: number;  // Maximum credits allowed
+  usedCredits: number;  // Credits consumed so far
+  services: string[];  // Array of bytes32 service identifiers
+  isActive: boolean;  // Can be disabled without deletion
+  expiresAt?: Date;  // Optional expiration timestamp
+  description?: string;  // Optional internal note
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type ISandboxHumanIDCreditsPriceOverride = IHumanIDCreditsPriceOverride;
 
 // ---------------- MongoDB schemas for direct verification service ----------------
 

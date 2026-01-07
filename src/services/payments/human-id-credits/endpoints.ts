@@ -11,6 +11,7 @@ import {
   rateLimitSecretGeneration,
   generatePaymentSecretsBatch,
   validateService,
+  validatePriceOverride,
 } from './functions.js';
 import { generatePaymentSignature } from '../functions.js';
 import {
@@ -18,6 +19,7 @@ import {
   IHumanIDCreditsUser,
   IHumanIDCreditsPaymentSecret,
   IPaymentRedemption,
+  IHumanIDCreditsPriceOverride,
 } from '../../../types.js';
 import { logger } from '../../../utils/logger.js';
 import { CreditsAuthenticatedRequest } from './middleware.js';
@@ -30,6 +32,7 @@ interface CreditsRouteHandlerConfig {
   PaymentCommitmentModel: Model<IPaymentCommitment>;
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret>;
   PaymentRedemptionModel: Model<IPaymentRedemption>;
+  HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride>;
 }
 
 if (!process.env.HUMAN_ID_CREDITS_SIWE_DOMAIN) {
@@ -162,7 +165,7 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
     try {
       const authenticatedReq = req as CreditsAuthenticatedRequest;
       const userId = authenticatedReq.creditsUserId;
-      const { count, service, chainId } = req.body;
+      const { count, service, chainId, priceOverrideId } = req.body;
 
       if (!count || typeof count !== 'number' || count < 1) {
         return res.status(400).json({ error: 'count is required and must be a positive number' });
@@ -170,12 +173,6 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
 
       if (count > 1000) {
         return res.status(400).json({ error: 'count cannot exceed 1000' });
-      }
-
-      // Validate service parameter
-      const serviceValidation = validateService(service);
-      if (!serviceValidation.valid) {
-        return res.status(400).json({ error: serviceValidation.error });
       }
 
       if (chainId === undefined || chainId === null) {
@@ -187,25 +184,40 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
         return res.status(400).json({ error: 'chainId must be a number' });
       }
 
+      // Validate priceOverrideId if provided
+      let priceOverrideObjectId: Types.ObjectId | undefined;
+      if (priceOverrideId) {
+        if (typeof priceOverrideId !== 'string') {
+          return res.status(400).json({ error: 'priceOverrideId must be a string' });
+        }
+        
+        try {
+          priceOverrideObjectId = new Types.ObjectId(priceOverrideId);
+        } catch (error) {
+          return res.status(400).json({ error: 'Invalid priceOverrideId format. Must be a valid ObjectId.' });
+        }
+      }
+
       // Rate limit check
       const rateLimitResult = await rateLimitSecretGeneration(userId);
       if (!rateLimitResult.allowed) {
-        creditsLogger.warn({ userId, error: rateLimitResult.error }, 'Rate limit exceeded');
         return res.status(429).json({ error: rateLimitResult.error || 'Rate limit exceeded' });
       }
 
       // Generate secrets
-      const secrets = await generatePaymentSecretsBatch(
+      const secrets = await generatePaymentSecretsBatch({
         count,
         service,
-        chainIdNum,
-        new Types.ObjectId(userId),
-        config.PaymentCommitmentModel,
-        config.HumanIDCreditsPaymentSecretModel
-      );
+        chainId: chainIdNum,
+        userId: new Types.ObjectId(userId),
+        PaymentCommitmentModel: config.PaymentCommitmentModel,
+        CreditsPaymentSecretModel: config.HumanIDCreditsPaymentSecretModel,
+        priceOverrideId: priceOverrideObjectId,
+        PriceOverrideModel: config.HumanIDCreditsPriceOverrideModel,
+      });
 
       creditsLogger.info(
-        { userId, count, service, chainId: chainIdNum },
+        { userId, count, service, chainId: chainIdNum, priceOverrideId: priceOverrideObjectId?.toString() },
         'Generated payment secrets batch'
       );
 
@@ -214,7 +226,7 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
       });
     } catch (error: any) {
       creditsLogger.error({ error: error.message }, 'Error generating payment secrets');
-      return res.status(500).json({ error: error.message || 'An unknown error occurred' });
+      return res.status(500).json({ error: error.message ?? 'An unknown error occurred' });
     }
   };
 }
@@ -239,7 +251,6 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         return res.status(400).json({ error: 'limit must be a number between 1 and 1000' });
       }
 
-      // Validate service parameter
       const serviceValidation = validateService(service);
       if (!serviceValidation.valid) {
         return res.status(400).json({ error: serviceValidation.error });

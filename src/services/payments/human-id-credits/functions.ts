@@ -10,6 +10,7 @@ import {
   IPaymentCommitment,
   IHumanIDCreditsUser,
   IHumanIDCreditsPaymentSecret,
+  IHumanIDCreditsPriceOverride,
 } from '../../../types.js';
 import { deriveCommitmentFromSecret, generatePaymentSignature, calculatePriceInToken } from '../functions.js';
 import { idvSessionUSDPrice, PAYMENT_SERVICE_SBT_MINT } from '../../../constants/misc.js';
@@ -343,17 +344,79 @@ export async function rateLimitSecretGeneration(userId: string,): Promise<{ allo
 }
 
 /**
+ * Validate and fetch active price override for user
+ * Returns validation result with override if valid, or error message if invalid
+ */
+export async function validatePriceOverride(
+  priceOverrideId: Types.ObjectId,
+  userId: Types.ObjectId,
+  service: string,
+  requestedCount: number,
+  PriceOverrideModel: Model<IHumanIDCreditsPriceOverride>
+): Promise<{ valid: boolean; override?: IHumanIDCreditsPriceOverride; error?: string }> {
+  try {
+    // Fetch the price override
+    const override = await PriceOverrideModel.findById(priceOverrideId).exec();
+
+    if (!override) {
+      return { valid: false, error: 'Price override not found' };
+    }
+
+    // Validate user matches
+    if (!override.userId.equals(userId)) {
+      return { valid: false, error: 'Price override does not belong to this user' };
+    }
+
+    // Validate service is in services array
+    if (!override.services.includes(service)) {
+      return { valid: false, error: 'Price override is not valid for this service' };
+    }
+
+    // Validate is active
+    if (!override.isActive) {
+      return { valid: false, error: 'Price override is inactive' };
+    }
+
+    // Validate not expired
+    if (override.expiresAt && override.expiresAt < new Date()) {
+      return { valid: false, error: 'Price override has expired' };
+    }
+
+    // Validate sufficient credits available
+    const remainingCredits = override.maxCredits - override.usedCredits;
+    if (remainingCredits < requestedCount) {
+      return { 
+        valid: false, 
+        error: `Insufficient credits in price override. Remaining: ${remainingCredits}, Requested: ${requestedCount}`,
+        override // Include override so caller can see remaining credits
+      };
+    }
+
+    return { valid: true, override };
+  } catch (error: any) {
+    creditsLogger.error({ error: error?.message || 'Unknown error', priceOverrideId, userId }, 'Error validating price override');
+    return { valid: false, error: 'Error validating price override' };
+  }
+}
+
+interface GeneratePaymentSecretsBatchParams {
+  count: number;
+  service: string;
+  chainId: number;
+  userId: Types.ObjectId;
+  PaymentCommitmentModel: Model<IPaymentCommitment>;
+  CreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret>;
+  priceOverrideId?: Types.ObjectId;
+  PriceOverrideModel?: Model<IHumanIDCreditsPriceOverride>;
+}
+
+/**
  * Generate batch of payment secrets
  * Uses MongoDB transactions to ensure all-or-nothing behavior:
  * if any secret creation fails, all changes are rolled back
  */
 export async function generatePaymentSecretsBatch(
-  count: number,
-  service: string,
-  chainId: number,
-  userId: Types.ObjectId,
-  PaymentCommitmentModel: Model<IPaymentCommitment>,
-  CreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret>
+  params: GeneratePaymentSecretsBatchParams
 ): Promise<Array<{
   secret: string;
   commitment: string;
@@ -361,17 +424,59 @@ export async function generatePaymentSecretsBatch(
   signature: string;
   timestamp: number;
 }>> {
+  const {
+    count,
+    service,
+    chainId,
+    userId,
+    PaymentCommitmentModel,
+    CreditsPaymentSecretModel,
+    priceOverrideId,
+    PriceOverrideModel,
+  } = params;
+
   if (count > 1000) {
     throw new Error('Batch size cannot exceed 1000 secrets');
   }
 
-  const validServices = [PAYMENT_SERVICE_SBT_MINT];
-  if (!validServices.includes(service)) {
-    throw new Error(`Invalid service: ${service}`);
+  const serviceValidation = validateService(service);
+  if (!serviceValidation.valid) {
+    throw new Error(serviceValidation.error ?? 'Invalid service');
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const price = await calculatePriceInToken(idvSessionUSDPrice, chainId);
+  
+  // Determine price based on whether price override is provided
+  let priceInUSD: number;
+  let priceOverride: IHumanIDCreditsPriceOverride | undefined;
+  
+  if (priceOverrideId && PriceOverrideModel) {
+    // Validate price override before starting transaction
+    const validation = await validatePriceOverride(
+      priceOverrideId,
+      userId,
+      service,
+      count,
+      PriceOverrideModel
+    );
+    
+    if (!validation.valid) {
+      throw new Error(validation.error ?? 'Price override validation failed');
+    }
+    
+    priceOverride = validation.override;
+    if (!priceOverride) {
+      throw new Error('Price override not found after validation');
+    }
+    
+    // Set price in USD from override
+    priceInUSD = priceOverride.priceUSD;
+  } else {
+    // Use default market price
+    priceInUSD = idvSessionUSDPrice;
+  }
+
+  const price = await calculatePriceInToken(priceInUSD, chainId);
 
   // Start MongoDB session for transaction
   const session = await CreditsPaymentSecretModel.db.startSession();
@@ -387,6 +492,16 @@ export async function generatePaymentSecretsBatch(
 
     // Execute all operations within a transaction
     await session.withTransaction(async () => {
+      // If using price override, increment usedCredits atomically within transaction
+      if (priceOverrideId && PriceOverrideModel && priceOverride) {
+        // Use findOneAndUpdate with $inc for atomic increment
+        await PriceOverrideModel.findOneAndUpdate(
+          { _id: priceOverrideId },
+          { $inc: { usedCredits: count }, updatedAt: new Date() },
+          { session }
+        ).exec();
+      }
+      
       // Generate secrets and commitments
       for (let i = 0; i < count; i++) {
         // Generate a random 32-byte secret as hex string (sans 0x prefix)
@@ -411,14 +526,21 @@ export async function generatePaymentSecretsBatch(
         }
 
         // Create payment secret record (within transaction)
-        await CreditsPaymentSecretModel.create([{
+        const secretData: any = {
           userId,
           commitmentId,
           secret,
           chainId,
           price,
           createdAt: new Date(),
-        }], { session });
+        };
+        
+        // Add priceOverrideId if using price override
+        if (priceOverrideId) {
+          secretData.priceOverrideId = priceOverrideId;
+        }
+        
+        await CreditsPaymentSecretModel.create([secretData], { session });
 
         // Generate payment signature (outside transaction - no DB operations)
         const signature = await generatePaymentSignature(

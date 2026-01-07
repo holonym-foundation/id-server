@@ -44,7 +44,9 @@ import {
   IHumanIDCreditsUser,
   ISandboxHumanIDCreditsUser,
   IHumanIDCreditsPaymentSecret,
-  ISandboxHumanIDCreditsPaymentSecret
+  ISandboxHumanIDCreditsPaymentSecret,
+  IHumanIDCreditsPriceOverride,
+  ISandboxHumanIDCreditsPriceOverride
 } from "./types.js"
 dotenv.config();
 
@@ -1197,6 +1199,11 @@ const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecre
     type: String,
     required: true,
   },
+  priceOverrideId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'HumanIDCreditsPriceOverride',
+  },
   createdAt: {
     type: Date,
     required: true,
@@ -1206,6 +1213,7 @@ const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecre
 HumanIDCreditsPaymentSecretSchema.index({ userId: 1 });
 HumanIDCreditsPaymentSecretSchema.index({ commitmentId: 1 });
 HumanIDCreditsPaymentSecretSchema.index({ chainId: 1 });
+HumanIDCreditsPaymentSecretSchema.index({ priceOverrideId: 1 });
 // Compound index for getSecrets query: filters by userId (and optionally chainId), sorts by createdAt desc, _id desc
 HumanIDCreditsPaymentSecretSchema.index({ userId: 1, chainId: 1, createdAt: -1, _id: -1 });
 
@@ -1232,6 +1240,11 @@ const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCredi
     type: String,
     required: true,
   },
+  priceOverrideId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+    ref: 'SandboxHumanIDCreditsPriceOverride',
+  },
   createdAt: {
     type: Date,
     required: true,
@@ -1242,6 +1255,110 @@ const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCredi
 // SandboxHumanIDCreditsPaymentSecretSchema.index({ userId: 1 });
 // SandboxHumanIDCreditsPaymentSecretSchema.index({ commitmentId: 1 });
 // SandboxHumanIDCreditsPaymentSecretSchema.index({ chainId: 1 });
+// SandboxHumanIDCreditsPaymentSecretSchema.index({ priceOverrideId: 1 });
+
+// Human ID Credits Price Override schemas
+const HumanIDCreditsPriceOverrideSchema = new Schema<IHumanIDCreditsPriceOverride>({
+  userId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'HumanIDCreditsUser',
+  },
+  priceUSD: {
+    type: Number,
+    required: true,
+  },
+  maxCredits: {
+    type: Number,
+    required: true,
+  },
+  usedCredits: {
+    type: Number,
+    required: true,
+    default: 0,
+  },
+  // Services that the price override is valid for
+  services: {
+    type: [String],
+    required: true,
+  },
+  isActive: {
+    type: Boolean,
+    required: true,
+    default: true,
+  },
+  expiresAt: {
+    type: Date,
+    required: false,
+  },
+  description: {
+    type: String,
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+// Compound index for efficient lookup during secret generation
+// Index for admin queries
+HumanIDCreditsPriceOverrideSchema.index({ userId: 1 });
+
+const SandboxHumanIDCreditsPriceOverrideSchema = new Schema<ISandboxHumanIDCreditsPriceOverride>({
+  userId: {
+    type: Schema.Types.ObjectId,
+    required: true,
+    ref: 'SandboxHumanIDCreditsUser',
+  },
+  priceUSD: {
+    type: Number,
+    required: true,
+  },
+  maxCredits: {
+    type: Number,
+    required: true,
+  },
+  usedCredits: {
+    type: Number,
+    required: true,
+    default: 0,
+  },
+  services: {
+    type: [String],
+    required: true,
+  },
+  isActive: {
+    type: Boolean,
+    required: true,
+    default: true,
+  },
+  expiresAt: {
+    type: Date,
+    required: false,
+  },
+  description: {
+    type: String,
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+});
+// Indexes are probably not needed for sandbox mode.
+// SandboxHumanIDCreditsPriceOverrideSchema.index({ userId: 1 });
 
 export {
   userVerificationsSchema,
@@ -1286,4 +1403,6 @@ export {
   SandboxHumanIDCreditsUserSchema,
   HumanIDCreditsPaymentSecretSchema,
   SandboxHumanIDCreditsPaymentSecretSchema,
+  HumanIDCreditsPriceOverrideSchema,
+  SandboxHumanIDCreditsPriceOverrideSchema,
 };

@@ -49,7 +49,9 @@ import {
   HumanIDCreditsUserSchema,
   SandboxHumanIDCreditsUserSchema,
   HumanIDCreditsPaymentSecretSchema,
-  SandboxHumanIDCreditsPaymentSecretSchema
+  SandboxHumanIDCreditsPaymentSecretSchema,
+  HumanIDCreditsPriceOverrideSchema,
+  SandboxHumanIDCreditsPriceOverrideSchema
 } from "./schemas.js";
 import dotenv from "dotenv";
 import {
@@ -95,7 +97,9 @@ import {
   IHumanIDCreditsUser,
   ISandboxHumanIDCreditsUser,
   IHumanIDCreditsPaymentSecret,
-  ISandboxHumanIDCreditsPaymentSecret
+  ISandboxHumanIDCreditsPaymentSecret,
+  IHumanIDCreditsPriceOverride,
+  ISandboxHumanIDCreditsPriceOverride
 } from "./types.js";
 dotenv.config();
 
@@ -456,6 +460,16 @@ async function initializeMongoDb() {
     SandboxHumanIDCreditsPaymentSecretSchema
   );
 
+  const HumanIDCreditsPriceOverride = mongoose.model(
+    "HumanIDCreditsPriceOverride",
+    HumanIDCreditsPriceOverrideSchema
+  );
+
+  const SandboxHumanIDCreditsPriceOverride = mongoose.model(
+    "SandboxHumanIDCreditsPriceOverride",
+    SandboxHumanIDCreditsPriceOverrideSchema
+  );
+
   return {
     UserVerifications,
     IDVSessions,
@@ -502,7 +516,9 @@ async function initializeMongoDb() {
     HumanIDCreditsUser,
     SandboxHumanIDCreditsUser,
     HumanIDCreditsPaymentSecret,
-    SandboxHumanIDCreditsPaymentSecret
+    SandboxHumanIDCreditsPaymentSecret,
+    HumanIDCreditsPriceOverride,
+    SandboxHumanIDCreditsPriceOverride
   };
 }
 
@@ -553,7 +569,9 @@ let UserVerifications: Model<IUserVerifications>,
   HumanIDCreditsUser: Model<IHumanIDCreditsUser>,
   SandboxHumanIDCreditsUser: Model<ISandboxHumanIDCreditsUser>,
   HumanIDCreditsPaymentSecret: Model<IHumanIDCreditsPaymentSecret>,
-  SandboxHumanIDCreditsPaymentSecret: Model<ISandboxHumanIDCreditsPaymentSecret>;
+  SandboxHumanIDCreditsPaymentSecret: Model<ISandboxHumanIDCreditsPaymentSecret>,
+  HumanIDCreditsPriceOverride: Model<IHumanIDCreditsPriceOverride>,
+  SandboxHumanIDCreditsPriceOverride: Model<ISandboxHumanIDCreditsPriceOverride>;
 initializeMongoDb().then((result) => {
   if (result) {
     logger.info("Initialized MongoDB connection");
@@ -603,6 +621,8 @@ initializeMongoDb().then((result) => {
     SandboxHumanIDCreditsUser = result.SandboxHumanIDCreditsUser;
     HumanIDCreditsPaymentSecret = result.HumanIDCreditsPaymentSecret;
     SandboxHumanIDCreditsPaymentSecret = result.SandboxHumanIDCreditsPaymentSecret;
+    HumanIDCreditsPriceOverride = result.HumanIDCreditsPriceOverride;
+    SandboxHumanIDCreditsPriceOverride = result.SandboxHumanIDCreditsPriceOverride;
   } else {
     logger.error("MongoDB initialization failed");
     throw new Error("MongoDB initialization failed");
@@ -669,6 +689,7 @@ function getCreditsRouteHandlerConfig(environment: "sandbox" | "live") {
       PaymentCommitmentModel: SandboxPaymentCommitment,
       HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
       PaymentRedemptionModel: SandboxPaymentRedemption,
+      HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
     };
   }
   return {
@@ -676,6 +697,7 @@ function getCreditsRouteHandlerConfig(environment: "sandbox" | "live") {
     PaymentCommitmentModel: PaymentCommitment,
     HumanIDCreditsPaymentSecretModel: HumanIDCreditsPaymentSecret,
     PaymentRedemptionModel: PaymentRedemption,
+    HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
   };
 }
 
@@ -724,6 +746,8 @@ export {
   SandboxHumanIDCreditsUser,
   HumanIDCreditsPaymentSecret,
   SandboxHumanIDCreditsPaymentSecret,
+  HumanIDCreditsPriceOverride,
+  SandboxHumanIDCreditsPriceOverride,
   zokProvider,
   getRouteHandlerConfig,
   getCreditsRouteHandlerConfig
