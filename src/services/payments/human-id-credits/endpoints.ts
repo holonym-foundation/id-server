@@ -246,6 +246,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
       const chainId = req.query.chainId ? Number(req.query.chainId) : undefined;
       const status = req.query.status as 'redeemed' | 'unredeemed' | undefined;
       const service = req.query.service as string | undefined;
+      const priceOverrideId = req.query.priceOverrideId as string | undefined;
 
       if (isNaN(limit) || limit < 1 || limit > 1000) {
         return res.status(400).json({ error: 'limit must be a number between 1 and 1000' });
@@ -273,6 +274,16 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         }
       }
 
+      // Validate priceOverrideId if provided
+      let priceOverrideObjectId: Types.ObjectId | undefined;
+      if (priceOverrideId) {
+        try {
+          priceOverrideObjectId = new Types.ObjectId(priceOverrideId);
+        } catch (error) {
+          return res.status(400).json({ error: 'Invalid priceOverrideId format. Must be a valid ObjectId.' });
+        }
+      }
+
       // - Get the user's payment secrets.
       // - Filter by chainId
       // - If user passed the `status` query parameter, filter payment secrets by status:
@@ -289,12 +300,15 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
       // Build aggregation pipeline for efficient database-level filtering
       const pipeline: any[] = [];
 
-      // Stage 1: Match by userId, chainId, and cursor
+      // Stage 1: Match by userId, chainId, priceOverrideId, and cursor
       const matchStage: any = {
         userId: new Types.ObjectId(userId),
       };
       if (chainId !== undefined && !isNaN(chainId)) {
         matchStage.chainId = chainId;
+      }
+      if (priceOverrideObjectId) {
+        matchStage.priceOverrideId = priceOverrideObjectId;
       }
       if (cursorObjectId) {
         matchStage._id = { $lt: cursorObjectId };
@@ -414,7 +428,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         })
       );
 
-      creditsLogger.info({ userId, limit, cursor, chainId, status, hasNextPage }, 'Retrieved payment secrets');
+      creditsLogger.info({ userId, limit, cursor, chainId, status, priceOverrideId, hasNextPage }, 'Retrieved payment secrets');
 
       return res.status(200).json({
         secrets: formattedSecrets,
