@@ -83,14 +83,18 @@ async function withdrawFromPaymentContracts(
       const minBalance = chainId === 250
         ? ethers.utils.parseEther("1000") // Fantom: 1000 FTM
         : chainId === 43114
-        ? ethers.utils.parseEther("20") // Avalanche: 20 AVAX
-        : ethers.utils.parseEther("0.1"); // Other chains: 0.1 ETH
+        ? ethers.utils.parseEther("10") // Avalanche: 20 AVAX
+        : ethers.utils.parseEther("0.05"); // Other chains: 0.1 ETH
+      const expectedAdminBalance = chainId === 43114
+        ? ethers.utils.parseEther("0.5") // Avalanche: 0.5 AVAX
+        : ethers.utils.parseEther("0.002") // Other chains: 0.002 ETH
 
-      if (balance.gte(minBalance)) {
+      // If balance is greater than 2x the minimum balance, withdraw funds. Checking that the balance
+      // is gt 2x the minimum ensures that we don't waste gas by withdrawing measly amounts (e.g., $5).
+      if (balance.gte(minBalance.mul(ethers.BigNumber.from(2)))) {
         // First, if admin wallet is running low on funds (which it needs for gas), withdraw
         // from the contract to the admin wallet.
         const adminBalance = await connectedWallet.getBalance();
-        const expectedAdminBalance = minBalance.div(ethers.utils.parseEther("50"));
         if (adminBalance.lt(expectedAdminBalance)) {
           const tx = await contract.withdrawTo(expectedAdminBalance, connectedWallet.address);
           const receipt = await tx.wait();
