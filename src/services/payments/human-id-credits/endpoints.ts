@@ -23,7 +23,7 @@ import {
 } from '../../../types.js';
 import { logger } from '../../../utils/logger.js';
 import { CreditsAuthenticatedRequest } from './middleware.js';
-import { getCreditsRouteHandlerConfig } from '../../../init.js';
+import { getRouteHandlerConfig } from '../../../init.js';
 
 const creditsLogger = logger.child({ feature: 'holonym', subFeature: 'human-id-credits' });
 
@@ -452,43 +452,43 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
 
 // Production endpoint wrappers
 export async function challengeProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return createChallengeEndpoint(config)(req, res);
 }
 
 export async function siweAuthProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return createSIWEAuthEndpoint(config)(req, res);
 }
 
 export async function generateSecretsProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return createGenerateSecretsEndpoint(config)(req, res);
 }
 
 export async function getSecretsProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return createGetSecretsEndpoint(config)(req, res);
 }
 
 // Sandbox endpoint wrappers
 export async function challengeSandbox(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("sandbox");
+  const config = getRouteHandlerConfig("sandbox");
   return createChallengeEndpoint(config)(req, res);
 }
 
 export async function siweAuthSandbox(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("sandbox");
+  const config = getRouteHandlerConfig("sandbox");
   return createSIWEAuthEndpoint(config)(req, res);
 }
 
 export async function generateSecretsSandbox(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("sandbox");
+  const config = getRouteHandlerConfig("sandbox");
   return createGenerateSecretsEndpoint(config)(req, res);
 }
 
 export async function getSecretsSandbox(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("sandbox");
+  const config = getRouteHandlerConfig("sandbox");
   return createGetSecretsEndpoint(config)(req, res);
 }
 

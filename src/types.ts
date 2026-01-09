@@ -639,4 +639,8 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   PaymentCommitmentModel: Model<IPaymentCommitment | ISandboxPaymentCommitment>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
+  // Credits-specific models
+  HumanIDCreditsUserModel: Model<IHumanIDCreditsUser | ISandboxHumanIDCreditsUser>
+  HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>
+  HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride | ISandboxHumanIDCreditsPriceOverride>
 }

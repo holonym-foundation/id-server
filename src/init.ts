@@ -655,6 +655,10 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       PaymentCommitmentModel: SandboxPaymentCommitment,
       issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
       cleanHandsIssuerPrivateKey: process.env.HOLONYM_SANDBOX_CLEAN_HANDS_ISSUER_PRIVKEY!,
+      // Credits-specific models
+      HumanIDCreditsUserModel: SandboxHumanIDCreditsUser,
+      HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
+      HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
     }
   }
 
@@ -676,29 +680,11 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     SanctionsResultModel: SanctionsResult,
     issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
     cleanHandsIssuerPrivateKey: process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
-  }
-}
-
-/**
- * Get route handler config for Human ID Credits endpoints
- */
-function getCreditsRouteHandlerConfig(environment: "sandbox" | "live") {
-  if (environment === "sandbox") {
-    return {
-      HumanIDCreditsUserModel: SandboxHumanIDCreditsUser,
-      PaymentCommitmentModel: SandboxPaymentCommitment,
-      HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
-      PaymentRedemptionModel: SandboxPaymentRedemption,
-      HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
-    };
-  }
-  return {
+    // Credits-specific models
     HumanIDCreditsUserModel: HumanIDCreditsUser,
-    PaymentCommitmentModel: PaymentCommitment,
     HumanIDCreditsPaymentSecretModel: HumanIDCreditsPaymentSecret,
-    PaymentRedemptionModel: PaymentRedemption,
     HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
-  };
+  }
 }
 
 export {
@@ -749,6 +735,5 @@ export {
   HumanIDCreditsPriceOverride,
   SandboxHumanIDCreditsPriceOverride,
   zokProvider,
-  getRouteHandlerConfig,
-  getCreditsRouteHandlerConfig
+  getRouteHandlerConfig
 };

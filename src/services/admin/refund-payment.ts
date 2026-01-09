@@ -66,8 +66,10 @@ export async function refundPayment(req: Request, res: Response) {
       return res.status(400).json({ error: "Payment has already been refunded" });
     }
 
+    const commitmentRecord = await liveConfig.PaymentCommitmentModel.findOne({ commitment }).exec();
+
     // Check if payment is redeemed (offchain)
-    if (await isPaymentRedeemed(commitment, liveConfig.PaymentRedemptionModel, liveConfig.PaymentCommitmentModel)) {
+    if (await isPaymentRedeemed(commitmentRecord, liveConfig.PaymentRedemptionModel)) {
       return res.status(400).json({ error: "Payment has already been redeemed" });
     }
 

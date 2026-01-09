@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { v4 as uuidV4 } from "uuid";
-import { Model, Types } from "mongoose";
+import { HydratedDocument, Model, Types } from "mongoose";
 import { valkeyClient } from "../../utils/valkey-glide.js";
 import { TimeUnit } from "@valkey/valkey-glide";
 import {
@@ -332,13 +332,9 @@ export async function getRedemptionRecord(
  * Uses PaymentCommitment collection to look up commitmentId, then queries PaymentRedemption
  */
 export async function isPaymentRedeemed(
-  commitment: string,
-  PaymentRedemptionModel: any,
-  PaymentCommitmentModel: Model<IPaymentCommitment>
+  commitmentRecord: HydratedDocument<IPaymentCommitment> | null,
+  PaymentRedemptionModel: any
 ): Promise<boolean> {
-  // First, look up the PaymentCommitment to get the commitmentId
-  const commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).exec();
-  
   if (!commitmentRecord || !commitmentRecord._id) {
     return false;
   }
@@ -357,26 +353,13 @@ export async function isPaymentRedeemed(
  * Uses PaymentCommitment collection to look up or create commitmentId, then creates/updates PaymentRedemption
  */
 export async function markPaymentAsRedeemed(
-  commitment: string,
+  commitmentRecord: HydratedDocument<IPaymentCommitment> | null,
   PaymentRedemptionModel: any,
-  PaymentCommitmentModel: Model<IPaymentCommitment>,
   service?: string,
   fulfillmentReceipt?: string
 ): Promise<void> {
-  // First, get or create the PaymentCommitment to get the commitmentId
-  let commitmentRecord = await PaymentCommitmentModel.findOne({ commitment }).exec();
-  
-  if (!commitmentRecord) {
-    // Create PaymentCommitment if it doesn't exist (for backward compatibility during migration)
-    commitmentRecord = await PaymentCommitmentModel.create({
-      commitment,
-      sourceType: 'user', // Default to 'user' for existing payments
-      createdAt: new Date(),
-    });
-  }
-
-  if (!commitmentRecord._id) {
-    throw new Error('Failed to get or create PaymentCommitment');
+  if (!commitmentRecord || !commitmentRecord._id) {
+    throw new Error('Commitment record not found');
   }
 
   // Create or update PaymentRedemption using commitmentId

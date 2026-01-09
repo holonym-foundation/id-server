@@ -8,7 +8,7 @@ import {
 } from '../../types.js';
 import { validateService } from '../payments/human-id-credits/functions.js';
 import { logger } from '../../utils/logger.js';
-import { getCreditsRouteHandlerConfig } from '../../init.js';
+import { getRouteHandlerConfig } from '../../init.js';
 
 const creditsLogger = logger.child({ feature: 'holonym', subFeature: 'human-id-credits-admin' });
 
@@ -506,7 +506,7 @@ export function deletePriceOverrideEndpoint(config: AdminCreditsRouteHandlerConf
 
 // Production endpoint wrappers
 export async function createPriceOverrideProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return createPriceOverrideEndpoint({
     HumanIDCreditsUserModel: config.HumanIDCreditsUserModel,
     PaymentCommitmentModel: config.PaymentCommitmentModel,
@@ -516,7 +516,7 @@ export async function createPriceOverrideProd(req: Request, res: Response) {
 }
 
 export async function listPriceOverridesProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return listPriceOverridesEndpoint({
     HumanIDCreditsUserModel: config.HumanIDCreditsUserModel,
     PaymentCommitmentModel: config.PaymentCommitmentModel,
@@ -526,7 +526,7 @@ export async function listPriceOverridesProd(req: Request, res: Response) {
 }
 
 export async function getPriceOverrideProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return getPriceOverrideEndpoint({
     HumanIDCreditsUserModel: config.HumanIDCreditsUserModel,
     PaymentCommitmentModel: config.PaymentCommitmentModel,
@@ -536,7 +536,7 @@ export async function getPriceOverrideProd(req: Request, res: Response) {
 }
 
 export async function updatePriceOverrideProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return updatePriceOverrideEndpoint({
     HumanIDCreditsUserModel: config.HumanIDCreditsUserModel,
     PaymentCommitmentModel: config.PaymentCommitmentModel,
@@ -546,7 +546,7 @@ export async function updatePriceOverrideProd(req: Request, res: Response) {
 }
 
 export async function deletePriceOverrideProd(req: Request, res: Response) {
-  const config = getCreditsRouteHandlerConfig("live");
+  const config = getRouteHandlerConfig("live");
   return deletePriceOverrideEndpoint({
     HumanIDCreditsUserModel: config.HumanIDCreditsUserModel,
     PaymentCommitmentModel: config.PaymentCommitmentModel,
