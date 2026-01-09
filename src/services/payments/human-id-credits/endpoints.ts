@@ -222,7 +222,14 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
       });
 
       creditsLogger.info(
-        { userId, count, service, chainId: chainIdNum, priceOverrideId: priceOverrideObjectId?.toString() },
+        {
+          userId,
+          count,
+          // We use "serviceId" here instead of "service" to avoid overwriting the datadog "service" tag.
+          serviceId: service,
+          chainId: chainIdNum,
+          priceOverrideId: priceOverrideObjectId?.toString()
+        },
         'Generated payment secrets batch'
       );
 

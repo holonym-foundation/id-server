@@ -69,7 +69,15 @@ function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHand
       );
 
       paymentsLogger.info(
-        { commitment, service, chainId: chainIdNum, amount, timestamp, environment: config.environment },
+        {
+          commitment,
+          // We use "serviceId" here instead of "service" to avoid overwriting the datadog "service" tag.
+          serviceId: service,
+          chainId: chainIdNum,
+          amount,
+          timestamp,
+          environment: config.environment
+        },
         "Generated payment signature"
       );
 
@@ -262,7 +270,8 @@ function createCompleteRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandl
       paymentsLogger.info(
         {
           commitment,
-          service,
+          // We use "serviceId" here instead of "service" to avoid overwriting the datadog "service" tag.
+          serviceId: service,
           fulfillmentReceipt,
           environment: config.environment,
           creditsPartnerUserId

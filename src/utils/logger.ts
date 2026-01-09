@@ -2,7 +2,7 @@ import pino, { LoggerOptions, TransportMultiOptions } from "pino";
 
 const pinoOptions: LoggerOptions = {
   base: {
-    src: "id-server",
+    service: "id-server",
   },
 };
 
