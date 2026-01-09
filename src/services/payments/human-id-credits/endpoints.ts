@@ -203,6 +203,11 @@ export function createGenerateSecretsEndpoint(config: CreditsRouteHandlerConfig)
       if (!rateLimitResult.allowed) {
         return res.status(429).json({ error: rateLimitResult.error || 'Rate limit exceeded' });
       }
+      // Enforce a global maximum of 50,000 secrets per user
+      const secretCount = await config.HumanIDCreditsPaymentSecretModel.countDocuments({ userId: new Types.ObjectId(userId) });
+      if (secretCount + count > 50000) {
+        return res.status(400).json({ error: 'You cannot have more than 50,000 payment secrets. Please redeem or delete existing secrets before generating more.' });
+      }
 
       // Generate secrets
       const secrets = await generatePaymentSecretsBatch({
