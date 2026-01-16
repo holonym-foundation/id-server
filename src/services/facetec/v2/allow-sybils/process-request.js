@@ -201,6 +201,12 @@ export async function processRequest(req, res) {
     return res.status(200).json(data);
   } catch (err) {
     if (err.response) {
+      let responseData = err.response?.data
+      // No need to log requestBlob. It is uninformative, and it can be quite large
+      // (which can result in larger datadog costs), so if it's present, we remove it.
+      if (responseData?.requestBlob) {
+        delete responseData.requestBlob
+      }
       endpointLogger.error({
         responseData: err.response?.data,
         status: err.response?.status
