@@ -78,9 +78,9 @@ async function postSessionV2(req, res) {
       }
     }).exec();
 
-    if (existingSessions.length >= 3) {
+    if (existingSessions.length >= 5) {
       return res.status(400).json({
-        error: "User has reached the maximum number of sessions (3)"
+        error: "User has reached the maximum number of sessions (5)"
       });
     }
 
