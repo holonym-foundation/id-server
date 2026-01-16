@@ -17,6 +17,7 @@ import { issueVeraxAttestation } from "../services/admin/issue-verax-attestation
 import { getUserHasBackedupCredentials } from "../services/admin/user-has-backedup-credentials.js";
 import { whitelistCleanHandsSession } from "../services/admin/whitelist-clean-hands-session.js";
 import { refundPayment } from "../services/admin/refund-payment.js";
+import { deleteBiometrics } from "../services/admin/delete-biometrics.js";
 import {
   createPriceOverrideProd,
   listPriceOverridesProd,
@@ -32,6 +33,7 @@ const router = express.Router();
 router.get("/user-verification", getUserVerification);
 router.delete("/user-verification", deleteUserVerification);
 router.delete("/user-idv-data", deleteUserData);
+router.delete("/biometrics", deleteBiometrics);
 router.post("/transfer-funds", transferFunds);
 router.post("/set-session-idv-provider", setSessionIdvProvider);
 router.post("/user-sessions", userSessions);
