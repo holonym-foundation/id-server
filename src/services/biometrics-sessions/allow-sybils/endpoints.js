@@ -7,12 +7,12 @@ import {
 import { pinoOptions, logger } from "../../../utils/logger.js";
 import { v4 as uuidV4 } from "uuid";
 
-// const postSessionsLogger = logger.child({
-//   msgPrefix: "[POST /sessions] ",
-//   base: {
-//     ...pinoOptions.base,
-//   },
-// });
+const postSessionsLogger = logger.child({
+  msgPrefix: "[POST /biometrics-sessions/allow-sybils/v2] ",
+  base: {
+    ...pinoOptions.base,
+  },
+});
 const createBiometricsAllowSybilsSessionLogger = logger.child({
   msgPrefix: "[POST /sessions/:_id/biometrics-session] ",
   base: {
@@ -66,7 +66,9 @@ async function postSessionV2(req, res) {
       externalDatabaseRefID: uuidV4(),
     });
 
-    // Only allow a user to create up to 3 sessions
+    // Only allow a user to create up to 5 sessions
+    const MAX_SESSIONS = 5
+
     const existingSessions = await BiometricsAllowSybilsSession.find({
       sigDigest: sigDigest,
       status: {
@@ -78,9 +80,10 @@ async function postSessionV2(req, res) {
       }
     }).exec();
 
-    if (existingSessions.length >= 5) {
+    if (existingSessions.length >= MAX_SESSIONS) {
+      postSessionsLogger.info({ existingSessions, MAX_SESSIONS }, "User has reached the maximum number of sessions")
       return res.status(400).json({
-        error: "User has reached the maximum number of sessions (5)"
+        error: `User has reached the maximum number of sessions (${MAX_SESSIONS})`
       });
     }
 
