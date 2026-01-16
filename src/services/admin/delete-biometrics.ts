@@ -245,11 +245,11 @@ export async function deleteBiometrics(req: Request, res: Response) {
     // Return success message based on selector
     let message: string;
     if (selector === "primary") {
-      message = "Biometrics externalDatabaseRefID deleted successfully from primary collection.";
+      message = "Biometrics externalDatabaseRefID deleted successfully from primary FaceTec database.";
     } else if (selector === "secondary") {
-      message = "Biometrics externalDatabaseRefID deleted successfully from secondary collection.";
+      message = "Biometrics externalDatabaseRefID deleted successfully from secondary FaceTec database.";
     } else {
-      message = "Biometrics externalDatabaseRefID deleted successfully from all collections.";
+      message = "Biometrics externalDatabaseRefID deleted successfully from primary and secondary FaceTec databases.";
     }
 
     endpointLogger.info(
