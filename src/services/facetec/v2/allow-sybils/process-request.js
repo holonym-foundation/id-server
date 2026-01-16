@@ -200,7 +200,18 @@ export async function processRequest(req, res) {
 
     return res.status(200).json(data);
   } catch (err) {
-    endpointLogger.error(err, "POST /process-request: Error encountered");
+    if (err.response) {
+      endpointLogger.error({
+        responseData: err.response?.data,
+        status: err.response?.status
+      }, "POST /process-request: Error encountered");
+    } else if (err.request) {
+      endpointLogger.error({
+        request: err.request
+      }, "POST /process-request: Error encountered");
+    } else {
+      endpointLogger.error(err, "POST /process-request: Error encountered");
+    }
     return res.status(500).json({
       error: true,
       errorMessage: "An unknown error occurred",
