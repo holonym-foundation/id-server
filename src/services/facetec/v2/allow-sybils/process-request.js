@@ -208,12 +208,16 @@ export async function processRequest(req, res) {
         delete responseData.requestBlob
       }
       endpointLogger.error({
-        responseData: err.response?.data,
-        status: err.response?.status
+        err: {
+          responseData: err.response?.data,
+          status: err.response?.status
+        }
       }, "POST /process-request: Error encountered");
     } else if (err.request) {
       endpointLogger.error({
-        request: err.request
+        err: {
+          request: err.request
+        }
       }, "POST /process-request: Error encountered");
     } else {
       endpointLogger.error(err, "POST /process-request: Error encountered");
