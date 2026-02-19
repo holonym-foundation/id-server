@@ -13,6 +13,8 @@ import {
   refundMintFeePayPal
 } from "../../utils/paypal.js";
 import { createOnfidoSdkToken, createOnfidoCheck, createOnfidoWorkflowRun } from "../../utils/onfido.js";
+import { getSumsubAccessToken } from "../../utils/sumsub.js";
+import { SUMSUB_LEVEL_NAME } from "../../constants/sumsub.js";
 import {
   validateTxForSessionCreation,
   refundMintFeeOnChain,
@@ -83,6 +85,12 @@ const createOnfidoCheckLogger = logger.child({
     ...pinoOptions.base,
   },
 });
+const sumsubTokenLogger = logger.child({
+  msgPrefix: "[POST /sessions/:_id/idv-session/sumsub/token] ",
+  base: {
+    ...pinoOptions.base,
+  },
+});
 
 // Session object
 // - _id: created by id-server (not by an idv provider)
@@ -126,10 +134,10 @@ async function postSession(req: Request, res: Response) {
     if (!sigDigest) {
       return res.status(400).json({ error: "sigDigest is required" });
     }
-    if (!idvProvider || ["veriff", "onfido", "facetec"].indexOf(idvProvider) === -1) {
+    if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
       return res
         .status(400)
-        .json({ error: "idvProvider must be one of 'veriff' or 'onfido'" });
+        .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
     }
 
     let domain = null;
@@ -183,10 +191,10 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
-      if (!idvProvider || ["veriff", "onfido", "facetec"].indexOf(idvProvider) === -1) {
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
         return res
           .status(400)
-          .json({ error: "idvProvider must be one of 'veriff' or 'onfido' or 'facetec'" });
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
       }
 
       let domain = null;
@@ -672,9 +680,9 @@ async function setIdvProvider(req: Request, res: Response) {
     const _id = req.params._id;
     const idvProvider = req.params.idvProvider;
 
-    // check the idvProvider is either veriff or onfido
-    if (!(idvProvider === "onfido" || idvProvider === "veriff")) {
-      return res.status(400).json({ error: "IDV provider can only be either onfido or veriff" });
+    // check the idvProvider is either veriff, onfido, or sumsub
+    if (!(idvProvider === "onfido" || idvProvider === "veriff" || idvProvider === "sumsub")) {
+      return res.status(400).json({ error: "IDV provider can only be onfido, veriff, or sumsub" });
     }
 
     const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
@@ -703,6 +711,11 @@ async function setIdvProvider(req: Request, res: Response) {
     // if setting to onfido, session.onfido_sdk_token and session.applicant_id must be undefined
     if (idvProvider === "onfido" && session.onfido_sdk_token && session.applicant_id) {
       return res.status(400).json({ error: "Onfido IDV session has already been tried" });
+    }
+
+    // if setting to sumsub, session.sumsub_applicant_id must be undefined
+    if (idvProvider === "sumsub" && session.sumsub_applicant_id) {
+      return res.status(400).json({ error: "Sumsub IDV session has already been tried" });
     }
 
     // if all clear then proceed
@@ -884,6 +897,62 @@ async function createOnfidoCheckEndpointProd(req: Request, res: Response) {
 async function createOnfidoCheckEndpointSandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createCreateOnfidoCheckEndpointRouteHandler(config)(req, res);
+}
+
+function createRefreshSumsubTokenRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    const _id = req.params._id;
+
+    try {
+      let objectId = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      const session = await config.SessionModel.findOne({ _id: objectId }).exec();
+      if (!session) {
+        return res.status(400).json({ error: "Session not found" });
+      }
+
+      if (!session.sigDigest) {
+        return res.status(400).json({ error: "Session is missing sigDigest" });
+      }
+
+      if (!session.sumsub_applicant_id) {
+        return res.status(400).json({ error: "Session has no Sumsub applicant. Create a session first." });
+      }
+
+      // Generate a fresh access token for the Sumsub Web SDK
+      const tokenData = await getSumsubAccessToken(
+        config.environment,
+        session.sigDigest,
+        SUMSUB_LEVEL_NAME,
+        1200,
+      );
+
+      sumsubTokenLogger.info({ sessionId: _id }, "Generated Sumsub access token");
+
+      return res.status(200).json({ token: tokenData.token });
+    } catch (err: any) {
+      sumsubTokenLogger.error(
+        { error: makeUnknownErrorLoggable(err) },
+        "Error generating Sumsub token"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  }
+}
+
+async function refreshSumsubTokenProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createRefreshSumsubTokenRouteHandler(config)(req, res);
+}
+
+async function refreshSumsubTokenSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createRefreshSumsubTokenRouteHandler(config)(req, res);
 }
 
 /**
@@ -1083,6 +1152,8 @@ export {
   refreshOnfidoTokenSandbox,
   createOnfidoCheckEndpointProd,
   createOnfidoCheckEndpointSandbox,
+  refreshSumsubTokenProd,
+  refreshSumsubTokenSandbox,
   refund,
   refundV2,
   getSessionsProd,
@@ -1090,5 +1161,6 @@ export {
   createPostSessionV2RouteHandler,
   createRefreshOnfidoTokenRouteHandler,
   createCreateOnfidoCheckEndpointRouteHandler,
+  createRefreshSumsubTokenRouteHandler,
   createGetSessionsRouteHandler,
 };

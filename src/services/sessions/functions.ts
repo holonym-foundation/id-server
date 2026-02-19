@@ -26,6 +26,8 @@ import {
   createOnfidoCheck,
   createOnfidoWorkflowRun,
 } from "../../utils/onfido.js";
+import { createSumsubApplicant } from "../../utils/sumsub.js";
+import { SUMSUB_LEVEL_NAME } from "../../constants/sumsub.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { campaignIdToWorkflowIdMap } from "../../utils/constants.js";
 import { onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js"
@@ -137,6 +139,24 @@ async function handleIdvSessionCreation(
 
     return {
       externalDatabaseRefID: session.externalDatabaseRefID,
+    };
+  } else if (session.idvProvider === "sumsub") {
+    const applicant = await createSumsubApplicant(
+      config.environment,
+      session.sigDigest!,
+      SUMSUB_LEVEL_NAME
+    );
+
+    session.sumsub_applicant_id = applicant.id;
+    await session.save();
+
+    logger.info(
+      { applicantId: applicant.id, idvProvider: "sumsub" },
+      "Created Sumsub applicant"
+    );
+
+    return {
+      sumsub_applicant_id: applicant.id,
     };
   } else {
     throw new Error("Invalid idvProvider");
