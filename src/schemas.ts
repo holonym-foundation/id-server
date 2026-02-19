@@ -289,6 +289,23 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
+  // Sumsub fields
+  sumsub_applicant_id: {
+    type: String,
+    required: false,
+  },
+  sumsub_review_status: {
+    type: String,
+    required: false,
+  },
+  sumsub_review_answer: {
+    type: String,
+    required: false,
+  },
+  sumsub_last_updated_at: {
+    type: Date,
+    required: false,
+  },
 });
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
@@ -355,6 +372,23 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
   },
   workflowId: {
     type: String,
+    required: false,
+  },
+  // Sumsub fields
+  sumsub_applicant_id: {
+    type: String,
+    required: false,
+  },
+  sumsub_review_status: {
+    type: String,
+    required: false,
+  },
+  sumsub_review_answer: {
+    type: String,
+    required: false,
+  },
+  sumsub_last_updated_at: {
+    type: Date,
     required: false,
   },
 });
@@ -676,6 +710,12 @@ const NullifierAndCredsSchema = new Schema<INullifierAndCreds>({
         },
         required: false,
       },
+      sumsub: {
+        type: {
+          applicantId: String,
+        },
+        required: false,
+      },
     },
     required: false,
   },
@@ -693,6 +733,12 @@ const SandboxNullifierAndCredsSchema = new Schema<ISandboxNullifierAndCreds>({
       onfido: {
         type: {
           check_id: String,
+        },
+        required: false,
+      },
+      sumsub: {
+        type: {
+          applicantId: String,
         },
         required: false,
       },
@@ -923,6 +969,15 @@ const DailyVerificationCountSchema = new Schema<IDailyVerificationCount>({
     },
     required: false,
   },
+  sumsub: {
+    type: {
+      applicantCount: {
+        type: Number,
+        required: false,
+      },
+    },
+    required: false,
+  },
 });
 
 // TODO: Use redis for this
@@ -950,6 +1005,10 @@ const VerificationCollisionMetadataSchema = new Schema<IVerificationCollisionMet
     required: false,
   },
   check_id: {
+    type: String,
+    required: false,
+  },
+  sumsub_applicant_id: {
     type: String,
     required: false,
   },

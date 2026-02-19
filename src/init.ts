@@ -659,6 +659,11 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       HumanIDCreditsUserModel: SandboxHumanIDCreditsUser,
       HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
       HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
+      // Sumsub config
+      sumsubAppToken: process.env.SUMSUB_SANDBOX_APP_TOKEN!,
+      sumsubSecretKey: process.env.SUMSUB_SANDBOX_SECRET_KEY!,
+      sumsubWebhookSecret: process.env.SUMSUB_SANDBOX_WEBHOOK_SECRET!,
+      sumsubBaseUrl: "https://test-api.sumsub.com",
     }
   }
 
@@ -684,6 +689,11 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     HumanIDCreditsUserModel: HumanIDCreditsUser,
     HumanIDCreditsPaymentSecretModel: HumanIDCreditsPaymentSecret,
     HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
+    // Sumsub config
+    sumsubAppToken: process.env.SUMSUB_APP_TOKEN!,
+    sumsubSecretKey: process.env.SUMSUB_SECRET_KEY!,
+    sumsubWebhookSecret: process.env.SUMSUB_WEBHOOK_SECRET!,
+    sumsubBaseUrl: "https://api.sumsub.com",
   }
 }
 

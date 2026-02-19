@@ -12,6 +12,8 @@ import {
   refreshOnfidoTokenSandbox,
   createOnfidoCheckEndpointProd,
   createOnfidoCheckEndpointSandbox,
+  refreshSumsubTokenProd,
+  refreshSumsubTokenSandbox,
   refund,
   refundV2,
   getSessionsProd,
@@ -32,6 +34,7 @@ prodRouter.get("/:_id/set-idv-provider/:idvProvider", setIdvProvider);
 // prodRouter.post("/:_id/idv-session/refund/v2", refundV2);
 prodRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenProd);
 prodRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointProd);
+prodRouter.post("/:_id/idv-session/sumsub/token", refreshSumsubTokenProd);
 prodRouter.get("/", getSessionsProd);
 
 const sandboxRouter = express.Router();
@@ -39,6 +42,7 @@ const sandboxRouter = express.Router();
 sandboxRouter.post("/v2", postSessionV2Sandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenSandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointSandbox);
+sandboxRouter.post("/:_id/idv-session/sumsub/token", refreshSumsubTokenSandbox);
 sandboxRouter.get("/", getSessionsSandbox);
 
 export default prodRouter;

@@ -160,6 +160,11 @@ export type ISession = {
   ipCountry?: string;
   campaignId?: string;
   workflowId?: string;
+  // Sumsub fields
+  sumsub_applicant_id?: string;
+  sumsub_review_status?: string;      // 'init' | 'pending' | 'completed' | 'onHold'
+  sumsub_review_answer?: string;      // 'GREEN' | 'RED' | 'RETRY'
+  sumsub_last_updated_at?: Date;
 };
 
 export type ISandboxSession = {
@@ -182,6 +187,11 @@ export type ISandboxSession = {
   ipCountry?: string;
   campaignId?: string;
   workflowId?: string;
+  // Sumsub fields
+  sumsub_applicant_id?: string;
+  sumsub_review_status?: string;
+  sumsub_review_answer?: string;
+  sumsub_last_updated_at?: Date;
 };
 
 export type IAmlChecksSession = {
@@ -284,6 +294,9 @@ export type INullifierAndCreds = {
     facetec?: {
       externalDatabaseRefID?: string;
     };
+    sumsub?: {
+      applicantId?: string;
+    };
   };
   uuidV2?: string;
 };
@@ -295,6 +308,9 @@ export type ISandboxNullifierAndCreds = {
   idvSessionIds?: {
     onfido?: {
       check_id?: string;
+    };
+    sumsub?: {
+      applicantId?: string;
     };
   };
   uuidV2?: string;
@@ -407,6 +423,9 @@ export type IDailyVerificationCount = {
     applicantCount?: number;
     checkCount?: number;
   };
+  sumsub?: {
+    applicantCount?: number;
+  };
 };
 
 export type IDailyVerificationDeletions = {
@@ -423,6 +442,7 @@ export type IVerificationCollisionMetadata = {
   sessionId?: string;
   scanRef?: string;
   check_id?: string;
+  sumsub_applicant_id?: string;
   uuidConstituents?: {
     firstName?: {
       populated?: boolean;
@@ -643,4 +663,9 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   HumanIDCreditsUserModel: Model<IHumanIDCreditsUser | ISandboxHumanIDCreditsUser>
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>
   HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride | ISandboxHumanIDCreditsPriceOverride>
+  // Sumsub config
+  sumsubAppToken: string;
+  sumsubSecretKey: string;
+  sumsubWebhookSecret: string;
+  sumsubBaseUrl: string;
 }

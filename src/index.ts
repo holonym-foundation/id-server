@@ -25,6 +25,7 @@ import directVerification from "./routes/direct-verification.js"
 import phone, { phoneRouterSandbox } from "./routes/phone.js";
 import payments, { sandboxRouter as sandboxPayments } from "./routes/payments.js";
 import paymentSecrets, { sandboxRouter as sandboxPaymentSecrets } from "./routes/payment-secrets.js";
+import sumsub, { sandboxRouter as sandboxSumsub } from "./routes/sumsub.js";
 
 const app = express();
 
@@ -36,6 +37,8 @@ app.use(cors(corsOptions));
 
 // Middleware to capture raw body for webhook signature verification
 app.use('/onfido/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
+app.use('/sumsub/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
+app.use('/sandbox/sumsub/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
 
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
@@ -100,6 +103,7 @@ app.use("/direct-verification", directVerification)
 app.use("/phone", phone);
 app.use("/payments", payments);
 app.use("/payment-secrets", paymentSecrets);
+app.use("/sumsub", sumsub);
 
 // ---------- Sandbox routes ----------
 app.use("/sandbox/sessions", sandboxSessions);
@@ -112,6 +116,7 @@ app.use("/sandbox/orders", sandboxOrders);
 app.use("/sandbox/phone", phoneRouterSandbox);
 app.use("/sandbox/payments", sandboxPayments);
 app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
+app.use("/sandbox/sumsub", sandboxSumsub);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

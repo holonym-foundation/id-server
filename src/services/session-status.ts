@@ -7,6 +7,7 @@ import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
 import { getOnfidoReports } from "../utils/onfido.js";
+import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 
@@ -419,6 +420,47 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           facetec: { // to-do: not actually needed, but check again
             sid: ambiguousSession._id,
             status: null,
+          },
+        });
+      } else if (ambiguousSession.idvProvider === "sumsub") {
+        // Fallback: if webhook hasn't updated the session yet, poll Sumsub API directly
+        if (ambiguousSession.sumsub_applicant_id && !ambiguousSession.sumsub_review_status) {
+          endpointLoggerV2.warn(
+            { sid, applicantId: ambiguousSession.sumsub_applicant_id },
+            "Sumsub session missing review status — falling back to API poll"
+          );
+
+          const applicantData = await getSumsubApplicantData(
+            config.sumsubAppToken,
+            config.sumsubSecretKey,
+            ambiguousSession.sumsub_applicant_id,
+            config.sumsubBaseUrl
+          );
+
+          const reviewAnswer = applicantData?.review?.reviewResult?.reviewAnswer;
+          if (reviewAnswer) {
+            ambiguousSession.sumsub_review_status = "completed";
+            ambiguousSession.sumsub_review_answer = reviewAnswer;
+            ambiguousSession.sumsub_last_updated_at = new Date();
+
+            if (reviewAnswer === "RED") {
+              const rejectLabels = applicantData?.review?.reviewResult?.rejectLabels || [];
+              const moderationComment = applicantData?.review?.reviewResult?.moderationComment || "";
+              ambiguousSession.verificationFailureReason =
+                moderationComment || rejectLabels.join(", ") || "Verification rejected";
+            }
+
+            await ambiguousSession.save();
+          }
+        }
+
+        return res.status(200).json({
+          sumsub: {
+            sid: ambiguousSession._id,
+            status: ambiguousSession.sumsub_review_status || null,
+            reviewAnswer: ambiguousSession.sumsub_review_answer || null,
+            applicantId: ambiguousSession.sumsub_applicant_id || null,
+            failureReason: ambiguousSession.verificationFailureReason || undefined,
           },
         });
       } else {
