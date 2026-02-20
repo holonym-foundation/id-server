@@ -423,8 +423,12 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           },
         });
       } else if (ambiguousSession.idvProvider === "sumsub") {
-        // Fallback: if webhook hasn't updated the session yet, poll Sumsub API directly
-        if (ambiguousSession.sumsub_applicant_id && !ambiguousSession.sumsub_review_status) {
+        // Fallback: We request the applicant data from the SumSub API until the review
+        // is complete
+        if (
+          ambiguousSession.sumsub_applicant_id &&
+          (ambiguousSession.sumsub_review_status !== "completed")
+        ) {
           endpointLoggerV2.warn(
             { sid, applicantId: ambiguousSession.sumsub_applicant_id },
             "Sumsub session missing review status — falling back to API poll"
@@ -436,8 +440,15 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           );
 
           const reviewAnswer = applicantData?.review?.reviewResult?.reviewAnswer;
-          if (reviewAnswer) {
-            ambiguousSession.sumsub_review_status = "completed";
+          const reviewStatus = applicantData?.review?.reviewStatus;
+          if (
+            reviewAnswer &&
+            // SumSub will sometimes set "reviewAnswer" to "RED" during precheck and then later update it to "GREEN",
+            // even though the user passes the check a second or two later.
+            // We only want to store the review status when the review is complete.
+            reviewStatus === "completed"
+          ) {
+            ambiguousSession.sumsub_review_status = reviewStatus;
             ambiguousSession.sumsub_review_answer = reviewAnswer;
             ambiguousSession.sumsub_last_updated_at = new Date();
 

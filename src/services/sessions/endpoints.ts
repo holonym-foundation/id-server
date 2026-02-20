@@ -289,6 +289,14 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       return res.status(201).json({ session });
     } catch (err: any) {
       console.log("POST /sessions: Error encountered", makeUnknownErrorLoggable(err).message);
+
+      // Sumsub 409 means an applicant with this sigDigest already exists
+      if (axios.isAxiosError(err) && err.response?.status === 409 && err.response?.data?.description?.includes("already exists")) {
+        return res.status(409).json({
+          error: "An applicant already exists for this account."
+        });
+      }
+
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   }

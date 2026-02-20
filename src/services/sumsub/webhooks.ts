@@ -56,7 +56,7 @@ async function handleApplicantReviewed(
   payload: SumsubWebhookPayload,
   config: SandboxVsLiveKYCRouteHandlerConfig
 ) {
-  const { applicantId, externalUserId, reviewResult } = payload;
+  const { applicantId, externalUserId, reviewResult, reviewStatus } = payload;
 
   if (!applicantId) {
     webhookLogger.warn({ payload }, "applicantReviewed missing applicantId");
@@ -89,11 +89,16 @@ async function handleApplicantReviewed(
       return;
     }
 
-    session.sumsub_review_status = "completed";
+    session.sumsub_review_status = reviewStatus;
     session.sumsub_review_answer = reviewAnswer;
     session.sumsub_last_updated_at = new Date();
 
-    if (reviewAnswer === "RED") {
+    if (
+      reviewAnswer === "RED" &&
+      // IMPORTANT: Do not update the session status until the review is complete.
+      // SumSub will sometimes set "reviewAnswer" to "RED" during precheck and then later update it to "GREEN".
+      reviewStatus === "completed"
+    ) {
       session.status = sessionStatusEnum.VERIFICATION_FAILED;
 
       const rejectLabels = reviewResult?.rejectLabels || [];
@@ -129,7 +134,7 @@ async function handleApplicantPending(
   payload: SumsubWebhookPayload,
   config: SandboxVsLiveKYCRouteHandlerConfig
 ) {
-  const { applicantId } = payload;
+  const { applicantId, reviewStatus } = payload;
 
   if (!applicantId) {
     webhookLogger.warn({ payload }, "applicantPending missing applicantId");
@@ -150,7 +155,7 @@ async function handleApplicantPending(
       return;
     }
 
-    session.sumsub_review_status = "pending";
+    session.sumsub_review_status = reviewStatus;
     session.sumsub_last_updated_at = new Date();
     await session.save();
 
