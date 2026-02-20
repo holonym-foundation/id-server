@@ -664,5 +664,5 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>
   HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride | ISandboxHumanIDCreditsPriceOverride>
   // Sumsub config
-  sumsubWebhookSecret: string;
+  sumsubWebhookSecret?: string;
 }

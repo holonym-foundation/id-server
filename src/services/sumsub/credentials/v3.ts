@@ -189,32 +189,36 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // Sumsub-native duplicate check (defense-in-depth on top of govIdUUID)
       // See: https://docs.sumsub.com/reference/get-duplicate-applicants-check-result
-      if (config.environment === "live") {
-        try {
-          const duplicateCheck = await getSumsubDuplicateCheck(
-            config.environment,
-            applicantId,
-          );
-          if (duplicateCheck?.answer === "RED") {
-            const duplicateApplicants = duplicateCheck.similarSearchInfo?.duplicateApplicantHits || [];
-            endpointLoggerV3.error(
-              { applicantId, duplicateApplicants },
-              "Sumsub duplicate check failed — applicant is a duplicate"
-            );
-            await failSession(session, "Duplicate applicant detected by Sumsub");
-            return res.status(400).json({
-              error: "Verification failed: duplicate applicant detected.",
-            });
-          }
-        } catch (err) {
-          // Log but don't block issuance if the duplicate check API fails.
-          // Our own govIdUUID check below still provides Sybil resistance.
-          endpointLoggerV3.warn(
-            { applicantId, error: makeUnknownErrorLoggable(err) },
-            "Sumsub duplicate check API call failed — proceeding with govIdUUID check only"
-          );
-        }
-      }
+      // NOTE: We have disabled this check for now. It is redundant. Also, for returning users,
+      // we will need to check _when_ the user last verified, and to do that, we would need to
+      // make an extra API call for each duplicate applicant. We leave this code here for now
+      // in case we want to re-enable it later.
+      // if (config.environment === "live") {
+      //   try {
+      //     const duplicateCheck = await getSumsubDuplicateCheck(
+      //       config.environment,
+      //       applicantId,
+      //     );
+      //     if (duplicateCheck?.answer === "RED") {
+      //       const duplicateApplicants = duplicateCheck.similarSearchInfo?.duplicateApplicantHits || [];
+      //       endpointLoggerV3.error(
+      //         { applicantId, duplicateApplicants },
+      //         "Sumsub duplicate check failed — applicant is a duplicate"
+      //       );
+      //       await failSession(session, "Duplicate applicant detected by Sumsub");
+      //       return res.status(400).json({
+      //         error: "Verification failed: duplicate applicant detected.",
+      //       });
+      //     }
+      //   } catch (err) {
+      //     // Log but don't block issuance if the duplicate check API fails.
+      //     // Our own govIdUUID check below still provides Sybil resistance.
+      //     endpointLoggerV3.warn(
+      //       { applicantId, error: makeUnknownErrorLoggable(err) },
+      //       "Sumsub duplicate check API call failed — proceeding with govIdUUID check only"
+      //     );
+      //   }
+      // }
 
       const creds = extractCreds(applicantData);
       const uuidOld = uuidOldFromSumsubApplicant(applicantData);

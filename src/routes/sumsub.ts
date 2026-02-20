@@ -1,9 +1,6 @@
 import express from "express";
 import { getCredentialsV3Prod, getCredentialsV3Sandbox } from "../services/sumsub/credentials/v3.js";
-import {
-  handleSumsubWebhookLive,
-  handleSumsubWebhookSandbox,
-} from "../services/sumsub/webhooks.js";
+import { handleSumsubWebhookLive } from "../services/sumsub/webhooks.js";
 
 const prodRouter = express.Router();
 
@@ -13,7 +10,8 @@ prodRouter.post("/webhooks", handleSumsubWebhookLive);
 const sandboxRouter = express.Router();
 
 sandboxRouter.get("/credentials/v3/:_id/:nullifier", getCredentialsV3Sandbox);
-sandboxRouter.post("/webhooks", handleSumsubWebhookSandbox);
+// TODO: Add sandbox webhooks endpoint. Use source keys to distinguish between
+// sandbox and production: https://docs.sumsub.com/docs/source-keys
 
 export default prodRouter;
 export { sandboxRouter };

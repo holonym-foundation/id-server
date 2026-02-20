@@ -242,9 +242,7 @@ async function handleSumsubWebhookLive(req: Request, res: Response) {
   return createHandleSumsubWebhookRouteHandler(config)(req, res);
 }
 
-async function handleSumsubWebhookSandbox(req: Request, res: Response) {
-  const config = getRouteHandlerConfig("sandbox");
-  return createHandleSumsubWebhookRouteHandler(config)(req, res);
-}
+// TODO: Add sandbox webhooks endpoint. Use source keys to distinguish between
+// sandbox and production: https://docs.sumsub.com/docs/source-keys
 
-export { handleSumsubWebhookLive, handleSumsubWebhookSandbox };
+export { handleSumsubWebhookLive };
