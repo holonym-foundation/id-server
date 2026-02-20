@@ -7,6 +7,7 @@ import mongoose, { Model } from "mongoose";
 import * as AWS from "@aws-sdk/client-s3";
 import { initialize } from "zokrates-js";
 import logger from "./utils/logger.js";
+import { initSumsubClient } from "./utils/sumsub.js";
 import {
   userVerificationsSchema,
   idvSessionsSchema,
@@ -635,6 +636,10 @@ initialize().then((provider) => {
   zokProvider = provider;
 });
 
+// Initialize Sumsub API clients (one per environment)
+initSumsubClient("live", process.env.SUMSUB_APP_TOKEN!, process.env.SUMSUB_SECRET_KEY!);
+initSumsubClient("sandbox", process.env.SUMSUB_SANDBOX_APP_TOKEN!, process.env.SUMSUB_SANDBOX_SECRET_KEY!);
+
 function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKYCRouteHandlerConfig {
   if (environment === "sandbox") {
     return {
@@ -660,10 +665,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
       HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
       // Sumsub config
-      sumsubAppToken: process.env.SUMSUB_SANDBOX_APP_TOKEN!,
-      sumsubSecretKey: process.env.SUMSUB_SANDBOX_SECRET_KEY!,
       sumsubWebhookSecret: process.env.SUMSUB_SANDBOX_WEBHOOK_SECRET!,
-      sumsubBaseUrl: "https://test-api.sumsub.com",
     }
   }
 
@@ -690,10 +692,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     HumanIDCreditsPaymentSecretModel: HumanIDCreditsPaymentSecret,
     HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
     // Sumsub config
-    sumsubAppToken: process.env.SUMSUB_APP_TOKEN!,
-    sumsubSecretKey: process.env.SUMSUB_SECRET_KEY!,
     sumsubWebhookSecret: process.env.SUMSUB_WEBHOOK_SECRET!,
-    sumsubBaseUrl: "https://api.sumsub.com",
   }
 }
 

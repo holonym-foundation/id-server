@@ -1,45 +1,46 @@
 import crypto from "crypto";
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import logger from "./logger.js";
 import { SUMSUB_BASE_URL } from "../constants/sumsub.js";
 
 const sumsubLogger = logger.child({ msgPrefix: "[sumsub] " });
 
-/**
- * Create HMAC-SHA256 signature for Sumsub API authentication.
- * Signs: ts + method + urlPath + body
- * See: https://docs.sumsub.com/reference/authentication
- */
-export function createSumsubSignature(
-  method: string,
-  urlPath: string,
-  ts: number,
-  body: string,
-  secretKey: string
-): string {
-  const hmac = crypto.createHmac("sha256", secretKey);
-  hmac.update(ts.toString() + method.toUpperCase() + urlPath + body);
-  return hmac.digest("hex");
-}
+const clients = new Map<string, AxiosInstance>();
 
 /**
- * Build authenticated headers for a Sumsub API request.
+ * Register a named Sumsub axios client with a request interceptor for HMAC signing.
+ * Call once per environment (e.g. "live", "sandbox") at startup.
+ * See: https://github.com/SumSubstance/AppTokenUsageExamples/tree/master/JS
  */
-export function getSumsubHeaders(
-  method: string,
-  urlPath: string,
-  body: string = "",
-  appToken: string,
-  secretKey: string
-): Record<string, string> {
-  const ts = Math.floor(Date.now() / 1000);
-  const sig = createSumsubSignature(method, urlPath, ts, body, secretKey);
-  return {
-    "Content-Type": "application/json",
-    "X-App-Token": appToken,
-    "X-App-Access-Sig": sig,
-    "X-App-Access-Ts": ts.toString(),
-  };
+export function initSumsubClient(name: string, appToken: string, secretKey: string) {
+  const client = axios.create({
+    baseURL: SUMSUB_BASE_URL,
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-App-Token': appToken,
+    },
+  });
+
+  client.interceptors.request.use((config) => {
+    const ts = Math.floor(Date.now() / 1000);
+    const sig = crypto.createHmac('sha256', secretKey);
+    sig.update(ts + config.method!.toUpperCase() + config.url!);
+    if (config.data) {
+      sig.update(config.data);
+    }
+    config.headers['X-App-Access-Ts'] = ts;
+    config.headers['X-App-Access-Sig'] = sig.digest('hex');
+    return config;
+  });
+
+  clients.set(name, client);
+}
+
+function getClient(environment: string): AxiosInstance {
+  const client = clients.get(environment);
+  if (!client) throw new Error(`Sumsub client "${environment}" not initialized. Call initSumsubClient() first.`);
+  return client;
 }
 
 /**
@@ -47,18 +48,15 @@ export function getSumsubHeaders(
  * See: https://docs.sumsub.com/reference/create-an-applicant
  */
 export async function createSumsubApplicant(
-  appToken: string,
-  secretKey: string,
+  environment: string,
   externalUserId: string,
-  levelName: string,
-  baseUrl: string = SUMSUB_BASE_URL
+  levelName: string
 ) {
-  const urlPath = `/resources/applicants?levelName=${encodeURIComponent(levelName)}`;
+  const url = `/resources/applicants?levelName=${encodeURIComponent(levelName)}`;
   const body = JSON.stringify({ externalUserId });
-  const headers = getSumsubHeaders("POST", urlPath, body, appToken, secretKey);
 
   try {
-    const resp = await axios.post(`${baseUrl}${urlPath}`, body, { headers });
+    const resp = await getClient(environment).post(url, body);
     return resp.data;
   } catch (err: any) {
     sumsubLogger.error(
@@ -74,19 +72,15 @@ export async function createSumsubApplicant(
  * See: https://docs.sumsub.com/reference/generate-access-token
  */
 export async function getSumsubAccessToken(
-  appToken: string,
-  secretKey: string,
+  environment: string,
   externalUserId: string,
   levelName: string,
   ttlInSecs: number = 1200,
-  baseUrl: string = SUMSUB_BASE_URL
 ) {
-  const urlPath = `/resources/accessTokens?userId=${encodeURIComponent(externalUserId)}&levelName=${encodeURIComponent(levelName)}&ttlInSecs=${ttlInSecs}`;
-  const body = "";
-  const headers = getSumsubHeaders("POST", urlPath, body, appToken, secretKey);
+  const url = `/resources/accessTokens?userId=${encodeURIComponent(externalUserId)}&levelName=${encodeURIComponent(levelName)}&ttlInSecs=${ttlInSecs}`;
 
   try {
-    const resp = await axios.post(`${baseUrl}${urlPath}`, body, { headers });
+    const resp = await getClient(environment).post(url);
     return resp.data as { token: string; userId: string };
   } catch (err: any) {
     sumsubLogger.error(
@@ -102,16 +96,13 @@ export async function getSumsubAccessToken(
  * See: https://docs.sumsub.com/reference/get-applicant-data
  */
 export async function getSumsubApplicantData(
-  appToken: string,
-  secretKey: string,
+  environment: string,
   applicantId: string,
-  baseUrl: string = SUMSUB_BASE_URL
 ) {
-  const urlPath = `/resources/applicants/${applicantId}/one`;
-  const headers = getSumsubHeaders("GET", urlPath, "", appToken, secretKey);
+  const url = `/resources/applicants/${applicantId}/one`;
 
   try {
-    const resp = await axios.get(`${baseUrl}${urlPath}`, { headers });
+    const resp = await getClient(environment).get(url);
     return resp.data;
   } catch (err: any) {
     sumsubLogger.error(
@@ -126,16 +117,13 @@ export async function getSumsubApplicantData(
  * See: https://docs.sumsub.com/reference/get-id-verification-results
  */
 export async function getSumsubIdDocs(
-  appToken: string,
-  secretKey: string,
+  environment: string,
   applicantId: string,
-  baseUrl: string = SUMSUB_BASE_URL
 ) {
-  const urlPath = `/resources/applicants/${applicantId}/info/idDoc`;
-  const headers = getSumsubHeaders("GET", urlPath, "", appToken, secretKey);
+  const url = `/resources/applicants/${applicantId}/info/idDoc`;
 
   try {
-    const resp = await axios.get(`${baseUrl}${urlPath}`, { headers });
+    const resp = await getClient(environment).get(url);
     return resp.data;
   } catch (err: any) {
     sumsubLogger.error(
@@ -184,16 +172,13 @@ export function verifySumsubWebhookSignature(
  * See: https://docs.sumsub.com/reference/get-duplicate-applicants-check-result
  */
 export async function getSumsubDuplicateCheck(
-  appToken: string,
-  secretKey: string,
+  environment: string,
   applicantId: string,
-  baseUrl: string = SUMSUB_BASE_URL
 ) {
-  const urlPath = `/resources/checks/latest?type=SIMILAR_SEARCH&applicantId=${applicantId}`;
-  const headers = getSumsubHeaders("GET", urlPath, "", appToken, secretKey);
+  const url = `/resources/checks/latest?type=SIMILAR_SEARCH&applicantId=${applicantId}`;
 
   try {
-    const resp = await axios.get(`${baseUrl}${urlPath}`, { headers });
+    const resp = await getClient(environment).get(url);
     return resp.data as {
       answer: "GREEN" | "RED";
       checkType: string;

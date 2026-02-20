@@ -142,11 +142,9 @@ async function handleIdvSessionCreation(
     };
   } else if (session.idvProvider === "sumsub") {
     const applicant = await createSumsubApplicant(
-      config.sumsubAppToken,
-      config.sumsubSecretKey,
+      config.environment,
       session.sigDigest!,
-      SUMSUB_LEVEL_NAME,
-      config.sumsubBaseUrl
+      SUMSUB_LEVEL_NAME
     );
 
     session.sumsub_applicant_id = applicant.id;

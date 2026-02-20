@@ -431,10 +431,8 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           );
 
           const applicantData = await getSumsubApplicantData(
-            config.sumsubAppToken,
-            config.sumsubSecretKey,
+            config.environment,
             ambiguousSession.sumsub_applicant_id,
-            config.sumsubBaseUrl
           );
 
           const reviewAnswer = applicantData?.review?.reviewResult?.reviewAnswer;

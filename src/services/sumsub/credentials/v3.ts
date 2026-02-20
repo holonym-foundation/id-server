@@ -94,10 +94,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const applicantIdFromNullifier = nullifierAndCreds?.idvSessionIds?.sumsub?.applicantId;
       if (applicantIdFromNullifier) {
         const applicantData = await getSumsubApplicantData(
-          config.sumsubAppToken,
-          config.sumsubSecretKey,
+          config.environment,
           applicantIdFromNullifier,
-          config.sumsubBaseUrl
         );
 
         if (!applicantData) {
@@ -164,10 +162,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       }
 
       const applicantData = await getSumsubApplicantData(
-        config.sumsubAppToken,
-        config.sumsubSecretKey,
+        config.environment,
         applicantId,
-        config.sumsubBaseUrl
       );
 
       if (!applicantData) {
@@ -196,10 +192,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (config.environment === "live") {
         try {
           const duplicateCheck = await getSumsubDuplicateCheck(
-            config.sumsubAppToken,
-            config.sumsubSecretKey,
+            config.environment,
             applicantId,
-            config.sumsubBaseUrl
           );
           if (duplicateCheck?.answer === "RED") {
             const duplicateApplicants = duplicateCheck.similarSearchInfo?.duplicateApplicantHits || [];

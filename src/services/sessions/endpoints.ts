@@ -926,12 +926,10 @@ function createRefreshSumsubTokenRouteHandler(config: SandboxVsLiveKYCRouteHandl
 
       // Generate a fresh access token for the Sumsub Web SDK
       const tokenData = await getSumsubAccessToken(
-        config.sumsubAppToken,
-        config.sumsubSecretKey,
+        config.environment,
         session.sigDigest,
         SUMSUB_LEVEL_NAME,
         1200,
-        config.sumsubBaseUrl
       );
 
       sumsubTokenLogger.info({ sessionId: _id }, "Generated Sumsub access token");
