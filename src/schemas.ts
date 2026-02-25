@@ -85,6 +85,8 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
     required: false,
   },
 });
+userVerificationsSchema.index({ "govId.uuidV2": 1 })
+userVerificationsSchema.index({ "govId.uuid": 1 })
 // By keeping track of a user's sessions, we can let them start verification
 // and finish issuance in separate browsing sessions, which is useful for
 // handling the delay between when a user submits their documents to the
@@ -307,6 +309,7 @@ const sessionSchema = new Schema<ISession>({
 });
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
+sessionSchema.index({ sumsub_applicant_id: 1 })
 
 const sandboxSessionSchema = new Schema<ISandboxSession>({
   sigDigest: String,
@@ -878,6 +881,7 @@ const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
     required: false,
   },      
 });
+EncryptedNullifiersSchema.index({ holoUserId: 1 })
 
 const sandboxEncryptedNullifiersSchema = new Schema<ISandboxEncryptedNullifiers>({
   holoUserId: String,
