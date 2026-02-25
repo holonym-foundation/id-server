@@ -462,21 +462,6 @@ export type IVerificationCollisionMetadata = {
   };
 };
 
-export type IGalxeCampaignZeroUser = {
-  _id?: Types.ObjectId;
-  generatedLink?: string;
-  peanutLink?: string;
-  email?: string;
-};
-
-export type ISilkPeanutCampaignsMetadata = {
-  _id?: Types.ObjectId;
-  generatedLink?: string;
-  peanutLink?: string;
-  email?: string;
-  campaignId?: string;
-};
-
 export type IOrder = {
   _id?: Types.ObjectId;
   holoUserId: string;

@@ -15,7 +15,6 @@ import prices from "./routes/prices.js";
 import sessions, { sandboxRouter as sandboxSessions } from "./routes/sessions.js";
 import amlSessions, { sandboxRouter as sandboxAmlSessions } from "./routes/aml-sessions.js";
 import biometricsSessions from "./routes/biometrics-sessions.js";
-import silk from "./routes/silk.js";
 import facetec from "./routes/facetec.js";
 import nullifiers, { sandboxRouter as sandboxNullifiers } from "./routes/nullifiers.js";
 import orders, { sandboxRouter as sandboxOrders } from "./routes/orders.js";
@@ -92,7 +91,6 @@ app.use("/sessions", sessions);
 app.use("/aml-sessions", amlSessions);
 app.use("/biometrics-sessions", biometricsSessions);
 app.use("/prices", prices);
-app.use("/silk", silk); // temporary
 app.use("/facetec", facetec);
 app.use("/nullifiers", nullifiers);
 app.use("/orders", orders);

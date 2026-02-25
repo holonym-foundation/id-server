@@ -32,8 +32,6 @@ import {
   IDailyVerificationCount,
   IDailyVerificationDeletions,
   IVerificationCollisionMetadata,
-  IGalxeCampaignZeroUser,
-  ISilkPeanutCampaignsMetadata,
   ISessionRetryWhitelist,
   IPaymentRedemption,
   ISandboxPaymentRedemption,
@@ -1049,19 +1047,6 @@ const VerificationCollisionMetadataSchema = new Schema<IVerificationCollisionMet
   },
 });
 
-const GalxeCampaignZeroUserSchema = new Schema<IGalxeCampaignZeroUser>({
-  generatedLink: String,
-  peanutLink: String,
-  email: String,
-});
-
-const SilkPeanutCampaignsMetadataSchema = new Schema<ISilkPeanutCampaignsMetadata>({
-  generatedLink: String,
-  peanutLink: String,
-  email: String,
-  campaignId: String,
-});
-
 const PaymentRedemptionSchema = new Schema<IPaymentRedemption>({
   commitmentId: {
     type: Schema.Types.ObjectId,
@@ -1443,8 +1428,6 @@ export {
   amlChecksSessionSchema,
   sandboxAmlChecksSessionSchema,
   biometricsSessionSchema,
-  GalxeCampaignZeroUserSchema,
-  SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
   SandboxOrderSchema,
   HumanIDPaymentGateWhitelistSchema,

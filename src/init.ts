@@ -32,8 +32,6 @@ import {
   amlChecksSessionSchema,
   sandboxAmlChecksSessionSchema,
   biometricsSessionSchema,
-  GalxeCampaignZeroUserSchema,
-  SilkPeanutCampaignsMetadataSchema,
   OrderSchema,
   SandboxOrderSchema,
   HumanIDPaymentGateWhitelistSchema,
@@ -79,8 +77,6 @@ import {
   IAmlChecksSession,
   ISandboxAmlChecksSession,
   IBiometricsSession,
-  IGalxeCampaignZeroUser,
-  ISilkPeanutCampaignsMetadata,
   IOrder,
   ISandboxOrder,
   IHumanIDPaymentGateWhitelist,
@@ -349,15 +345,6 @@ async function initializeMongoDb() {
   // a separate collection. This makes sybil resistance management easier.
   const BiometricsAllowSybilsSession = mongoose.model("BiometricsAllowSybilsSession", biometricsSessionSchema);
 
-  const GalxeCampaignZeroUser = mongoose.model(
-    "GalxeCampaignZeroUser",
-    GalxeCampaignZeroUserSchema
-  );
-
-  const SilkPeanutCampaignsMetadata = mongoose.model(
-    "SilkPeanutCampaignsMetadata",
-    SilkPeanutCampaignsMetadataSchema
-  );
   await initializeDailyVerificationCount(DailyVerificationCount);
   await initializeDailyVerificationDeletions(DailyVerificationDeletions);
 
@@ -496,8 +483,6 @@ async function initializeMongoDb() {
     SandboxAMLChecksSession,
     BiometricsSession,
     BiometricsAllowSybilsSession,
-    GalxeCampaignZeroUser,
-    SilkPeanutCampaignsMetadata,
     Order,
     SandboxOrder,
     HumanIDPaymentGateWhitelist,
@@ -549,8 +534,6 @@ let UserVerifications: Model<IUserVerifications>,
   SandboxAMLChecksSession: Model<ISandboxAmlChecksSession>,
   BiometricsSession: Model<IBiometricsSession>,
   BiometricsAllowSybilsSession: Model<IBiometricsSession>,
-  GalxeCampaignZeroUser: Model<IGalxeCampaignZeroUser>,
-  SilkPeanutCampaignsMetadata: Model<ISilkPeanutCampaignsMetadata>,
   Order: Model<IOrder>,
   SandboxOrder: Model<ISandboxOrder>,
   HumanIDPaymentGateWhitelist: Model<IHumanIDPaymentGateWhitelist>,
@@ -600,8 +583,6 @@ initializeMongoDb().then((result) => {
     SandboxAMLChecksSession = result.SandboxAMLChecksSession;
     BiometricsSession = result.BiometricsSession;
     BiometricsAllowSybilsSession = result.BiometricsAllowSybilsSession;
-    GalxeCampaignZeroUser = result.GalxeCampaignZeroUser;
-    SilkPeanutCampaignsMetadata = result.SilkPeanutCampaignsMetadata;
     Order = result.Order;
     SandboxOrder = result.SandboxOrder;
     HumanIDPaymentGateWhitelist = result.HumanIDPaymentGateWhitelist;
@@ -721,8 +702,6 @@ export {
   SandboxAMLChecksSession,
   BiometricsSession,
   BiometricsAllowSybilsSession,
-  GalxeCampaignZeroUser,
-  SilkPeanutCampaignsMetadata,
   Order,
   SandboxOrder,
   HumanIDPaymentGateWhitelist,

@@ -405,19 +405,6 @@ const VerificationCollisionMetadataSchema = new Schema({
   },
 });
 
-const GalxeCampaignZeroUserSchema = new Schema({
-  generatedLink: String,
-  peanutLink: String,
-  email: String,
-});
-
-const SilkPeanutCampaignsMetadataSchema = new Schema({
-  generatedLink: String,
-  peanutLink: String,
-  email: String,
-  campaignId: String,
-});
-
 export {
   userVerificationsSchema,
   idvSessionsSchema,
@@ -430,6 +417,4 @@ export {
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
   amlChecksSessionSchema,
-  GalxeCampaignZeroUserSchema,
-  SilkPeanutCampaignsMetadataSchema,
 };
