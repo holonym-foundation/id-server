@@ -25,6 +25,7 @@ import phone, { phoneRouterSandbox } from "./routes/phone.js";
 import payments, { sandboxRouter as sandboxPayments } from "./routes/payments.js";
 import paymentSecrets, { sandboxRouter as sandboxPaymentSecrets } from "./routes/payment-secrets.js";
 import sumsub, { sandboxRouter as sandboxSumsub } from "./routes/sumsub.js";
+import zkPassport, { sandboxRouter as sandboxZkPassport } from "./routes/zk-passport.js";
 
 const app = express();
 
@@ -101,6 +102,7 @@ app.use("/phone", phone);
 app.use("/payments", payments);
 app.use("/payment-secrets", paymentSecrets);
 app.use("/sumsub", sumsub);
+app.use("/zk-passport", zkPassport);
 
 // ---------- Sandbox routes ----------
 app.use("/sandbox/sessions", sandboxSessions);
@@ -114,6 +116,7 @@ app.use("/sandbox/phone", phoneRouterSandbox);
 app.use("/sandbox/payments", sandboxPayments);
 app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
 app.use("/sandbox/sumsub", sandboxSumsub);
+app.use("/sandbox/zk-passport", sandboxZkPassport);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);
