@@ -625,6 +625,13 @@ const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
     },
     required: false,
   },
+  encryptedZkPassportCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
 });
 userCredentialsV2Schema.index({ holoUserId: 1 })
 
@@ -659,6 +666,13 @@ const sandboxUserCredentialsV2Schema = new Schema<ISandboxUserCredentialsV2>({
     required: false,
   },
   encryptedBiometricsAllowSybilsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedZkPassportCreds: {
     type: {
       ciphertext: String,
       iv: String,
@@ -879,7 +893,19 @@ const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
       createdAt: Date,
     },
     required: false,
-  },      
+  },
+  zkPassport: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
 });
 EncryptedNullifiersSchema.index({ holoUserId: 1 })
 
@@ -935,7 +961,19 @@ const sandboxEncryptedNullifiersSchema = new Schema<ISandboxEncryptedNullifiers>
       createdAt: Date,
     },
     required: false,
-  },      
+  },
+  zkPassport: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
 });
 
 const DailyVerificationCountSchema = new Schema<IDailyVerificationCount>({

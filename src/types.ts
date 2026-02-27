@@ -268,6 +268,10 @@ export type IUserCredentialsV2 = {
     ciphertext?: string;
     iv?: string;
   };
+  encryptedZkPassportCreds?: {
+    ciphertext?: string;
+    iv?: string;
+  };
 };
 
 export type ISandboxUserCredentialsV2 = IUserCredentialsV2
@@ -375,6 +379,13 @@ export type IEncryptedNullifiers = {
     };
     createdAt?: Date;
   };
+  zkPassport?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
 };
 
 export type ISandboxEncryptedNullifiers = {
@@ -402,6 +413,13 @@ export type ISandboxEncryptedNullifiers = {
     createdAt?: Date;
   };
   biometrics?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  zkPassport?: {
     encryptedNullifier?: {
       ciphertext?: string;
       iv?: string;
@@ -644,6 +662,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   PaymentCommitmentModel: Model<IPaymentCommitment | ISandboxPaymentCommitment>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
+  zkPassportIssuerPrivateKey: string
   // Credits-specific models
   HumanIDCreditsUserModel: Model<IHumanIDCreditsUser | ISandboxHumanIDCreditsUser>
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>

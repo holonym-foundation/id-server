@@ -13,6 +13,8 @@ import {
   putBiometricsCredentialsSandbox,
   putBiometricsAllowSybilsCredentialsProd,
   putBiometricsAllowSybilsCredentialsSandbox,
+  putZkPassportCredentialsProd,
+  putZkPassportCredentialsSandbox,
 } from "../services/credentials-v2.js";
 
 const router = express.Router();
@@ -26,6 +28,7 @@ router.put("/v2/gov-id", putGovIdCredentialsProd);
 router.put("/v2/clean-hands", putCleanHandsCredentialsProd);
 router.put("/v2/biometrics", putBiometricsCredentialsProd);
 router.put("/v2/biometrics-allow-sybils", putBiometricsAllowSybilsCredentialsProd);
+router.put("/v2/zk-passport", putZkPassportCredentialsProd);
 
 const sandboxRouter = express.Router();
 sandboxRouter.get("/v2", getCredentialsV2Sandbox);
@@ -34,6 +37,7 @@ sandboxRouter.put("/v2/gov-id", putGovIdCredentialsSandbox);
 sandboxRouter.put("/v2/clean-hands", putCleanHandsCredentialsSandbox);
 sandboxRouter.put("/v2/biometrics", putBiometricsCredentialsSandbox);
 sandboxRouter.put("/v2/biometrics-allow-sybils", putBiometricsAllowSybilsCredentialsSandbox);
+sandboxRouter.put("/v2/zk-passport", putZkPassportCredentialsSandbox);
 
 export default router;
 export { sandboxRouter };
