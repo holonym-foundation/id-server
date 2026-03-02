@@ -37,7 +37,7 @@ const endpointLogger = logger.child({
 // Initialize ZK Passport SDK with the frontend's domain.
 // The domain scopes proof validation and the uniqueIdentifier to the application.
 // We use the frontend domain (id.human.tech), NOT the server's own hostname.
-const zkPassportDomain = process.env.ZK_PASSPORT_DOMAIN || "id.human.tech";
+const zkPassportDomain = process.env.NODE_ENV === 'development' ? 'localhost' : "id.human.tech";
 const zkPassport = new ZKPassport(zkPassportDomain);
 
 /**
@@ -254,7 +254,7 @@ function formatDateOfBirth(dob: Date | string): string {
  * POST /zk-passport/verify-and-issue
  *
  * Single request/response endpoint for ZK Passport verification and credential issuance.
- * No sessions — a valid ZK Passport proof is sufficient for authentication.
+ * No sessions — only a valid ZK Passport proof is needed.
  *
  * Request body: { proofs, queryResult, nullifier }
  * - proofs: Array of ZK Passport proof results
@@ -348,7 +348,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         );
       }
 
-      const nationalityStr = nationality || "";
+      const nationalityStr = nationality ?? "";
 
       if (nationalityStr && !countryCodeToPrime[nationalityStr as keyof typeof countryCodeToPrime]) {
         endpointLogger.warn(
@@ -359,7 +359,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // --- Sybil resistance: same logic as Onfido/Sumsub ---
       // Store name+DOB hash in UserVerifications.govId.uuidV2 to prevent the
-      // same person from verifying via both ZK Passport and KYC.
+      // same person from verifying via both ZK Passport and regular KYC.
 
       const uuidV1 = uuidOld(firstName, lastName, dob);
       const uuidV2 = govIdUUID(firstName, lastName, dob);
