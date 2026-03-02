@@ -21,8 +21,9 @@ import {
   findOneUserVerification11Months5Days,
 } from "../../utils/user-verifications.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/zk-passport-nullifier-and-creds.js";
-import { issuev2KYC } from "../../utils/issuance.js";
+import { issuev2ZKPassport } from "../../utils/issuance.js";
 import { makeUnknownErrorLoggable } from "../../utils/errors.js";
+import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 
@@ -45,29 +46,30 @@ const zkPassport = new ZKPassport(zkPassportDomain);
 /**
  * Extract credentials from ZK Passport disclosed fields.
  *
- * CRITICAL: The output structure MUST match Onfido's/Sumsub's extractCreds exactly.
- * The rawCreds, derivedCreds, and fieldsInLeaf must be identical in shape
- * and field order, or ZKP circuits will break.
+ * ZK Passport discloses: firstname, lastname, birthdate, nationality, expiry_date.
+ * Middle name is not available from ZK Passport but is included (blank) in the
+ * name hash for future compatibility.
  *
- * ZK Passport discloses: firstname, lastname, dateOfBirth, nationality (alpha-3).
- * Address fields and middle name are not available from ZK Passport, so they default
- * to empty/zero (same behavior as Onfido/Sumsub when fields are missing).
+ * The two leaf fields are countryCode and nameDobExpireHash (a Poseidon hash of
+ * nameHash, birthdate, and expirationDate).
  */
 function extractCreds(
   firstName: string,
   lastName: string,
   birthdate: string,
   nationality: string,
+  expirationDate: string,
 ) {
   const countryCode =
     countryCodeToPrime[nationality as keyof typeof countryCodeToPrime];
   const birthdateNum = birthdate ? getDateAsInt(birthdate) : 0;
+  const expireDateNum = expirationDate ? getDateAsInt(expirationDate) : 0;
 
   const firstNameBuffer = firstName
     ? Buffer.from(firstName)
     : Buffer.alloc(1);
-  // ZK Passport doesn't disclose middle names
-  const middleNameStr = "";
+  // We don't currently attempt to extract the user's middle name
+  const middleNameStr = ""
   const middleNameBuffer = Buffer.alloc(1);
   const lastNameBuffer = lastName
     ? Buffer.from(lastName)
@@ -77,40 +79,14 @@ function extractCreds(
   );
   const nameHash = ethers.BigNumber.from(poseidon(nameArgs)).toString();
 
-  // ZK Passport doesn't disclose address fields
-  const cityStr = "";
-  const subdivisionStr = "";
-  const cityBuffer = Buffer.alloc(1);
-  const subdivisionBuffer = Buffer.alloc(1);
-  const streetNumber = 0;
-  const streetNameStr = "";
-  const streetNameBuffer = Buffer.alloc(1);
-  const streetUnit = 0;
-  const addrArgs = [streetNumber, streetNameBuffer, streetUnit].map((x) =>
-    ethers.BigNumber.from(x).toString()
-  );
-  const streetHash = ethers.BigNumber.from(poseidon(addrArgs)).toString();
-  const zipCode = 0;
-  const addressArgs = [cityBuffer, subdivisionBuffer, zipCode, streetHash].map(
-    (x) => ethers.BigNumber.from(x)
-  );
-  const addressHash = ethers.BigNumber.from(poseidon(addressArgs)).toString();
-
-  // Not including expiration date (matching Onfido/Sumsub behavior)
-  const expireDateStr = "";
-  const expireDateNum = 0;
-  const nameDobAddrExpireArgs = [
+  const nameDobExpireArgs = [
     nameHash,
     birthdateNum,
-    addressHash,
     expireDateNum,
   ].map((x) => ethers.BigNumber.from(x).toString());
-  const nameDobAddrExpire = ethers.BigNumber.from(
-    poseidon(nameDobAddrExpireArgs)
+  const nameDobExpire = ethers.BigNumber.from(
+    poseidon(nameDobExpireArgs)
   ).toString();
-
-  // completedAt is today's date (verification just happened)
-  const completedAt = new Date().toISOString().split("T")[0];
 
   return {
     rawCreds: {
@@ -118,44 +94,17 @@ function extractCreds(
       firstName: firstName,
       middleName: middleNameStr,
       lastName: lastName,
-      city: cityStr,
-      subdivision: subdivisionStr,
-      zipCode: 0,
-      streetNumber: streetNumber,
-      streetName: streetNameStr,
-      streetUnit: streetUnit,
-      completedAt: completedAt,
       birthdate: birthdate,
-      expirationDate: expireDateStr,
+      expirationDate: expirationDate,
     },
     derivedCreds: {
-      nameDobCitySubdivisionZipStreetExpireHash: {
-        value: nameDobAddrExpire,
+      nameDobExpireHash: {
+        value: nameDobExpire,
         derivationFunction: "poseidon",
         inputFields: [
           "derivedCreds.nameHash.value",
           "rawCreds.birthdate",
-          "derivedCreds.addressHash.value",
           "rawCreds.expirationDate",
-        ],
-      },
-      streetHash: {
-        value: streetHash,
-        derivationFunction: "poseidon",
-        inputFields: [
-          "rawCreds.streetNumber",
-          "rawCreds.streetName",
-          "rawCreds.streetUnit",
-        ],
-      },
-      addressHash: {
-        value: addressHash,
-        derivationFunction: "poseidon",
-        inputFields: [
-          "rawCreds.city",
-          "rawCreds.subdivision",
-          "rawCreds.zipCode",
-          "derivedCreds.streetHash.value",
         ],
       },
       nameHash: {
@@ -172,8 +121,7 @@ function extractCreds(
       "issuer",
       "secret",
       "rawCreds.countryCode",
-      "derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value",
-      "rawCreds.completedAt",
+      "derivedCreds.nameDobExpireHash.value",
       "scope",
     ],
   };
@@ -292,6 +240,21 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
+      // --- Rate limiting ---
+
+      const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress) as string;
+      const { limitExceeded } = await rateLimitOccurrencesPerSecs(
+        `NUM_REQUESTS_BY_IP:zk-passport-verify:${ip}`,
+        10,
+        60 * 60 * 24, // 1 day
+      );
+      if (limitExceeded) {
+        endpointLogger.warn({ ip }, "Rate limit exceeded");
+        return res.status(429).json({
+          error: "Too many ZK Passport verification attempts. Please try again tomorrow.",
+        });
+      }
+
       // --- Lookup nullifier in NullifierAndCreds (5-day recovery window) ---
 
       const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(
@@ -364,6 +327,10 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           { nationality: nationalityStr },
           "ZK Passport nationality not found in countryCodeToPrime"
         );
+
+        return res.status(400).json({
+          error: `Unsupported country (${nationalityStr}) from ZK Passport proof`,
+        });
       }
 
       // --- Sybil resistance: same logic as Onfido/Sumsub ---
@@ -394,8 +361,8 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           }
         }
 
-        const creds = extractCreds(firstName, lastName, dob, nationalityStr);
-        const response = issuev2KYC(config.zkPassportIssuerPrivateKey, issuanceNullifier, creds);
+        const creds = extractCreds(firstName, lastName, dob, nationalityStr, "");
+        const response = issuev2ZKPassport(config.zkPassportIssuerPrivateKey, issuanceNullifier, creds);
         response.metadata = creds;
 
         endpointLogger.info(
@@ -428,10 +395,10 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // --- Extract credentials and issue ---
 
-      const creds = extractCreds(firstName, lastName, dob, nationalityStr);
+      const creds = extractCreds(firstName, lastName, dob, nationalityStr, "");
 
       // Sign with the ZK Passport–specific issuer key (NOT the KYC issuer key)
-      const response = issuev2KYC(
+      const response = issuev2ZKPassport(
         config.zkPassportIssuerPrivateKey,
         issuanceNullifier,
         creds,

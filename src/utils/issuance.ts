@@ -11,6 +11,17 @@ type Creds = {
   } & any
 }
 
+type ZkPassportCreds = {
+  rawCreds: {
+    countryCode: number
+  } & any
+  derivedCreds: {
+    nameDobExpireHash: {
+      value: string
+    }
+  } & any
+}
+
 export function issuev2KYC(holonymIssuerPrivkey: string, issuanceNullifier: string, creds: Creds) {
   return JSON.parse(
     holonymIssueV2(
@@ -18,6 +29,17 @@ export function issuev2KYC(holonymIssuerPrivkey: string, issuanceNullifier: stri
       issuanceNullifier,
       creds.rawCreds.countryCode.toString(),
       creds.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
+    )
+  );
+}
+
+export function issuev2ZKPassport(holonymIssuerPrivkey: string, issuanceNullifier: string, creds: ZkPassportCreds) {
+  return JSON.parse(
+    holonymIssueV2(
+      holonymIssuerPrivkey,
+      issuanceNullifier,
+      creds.rawCreds.countryCode.toString(),
+      creds.derivedCreds.nameDobExpireHash.value
     )
   );
 }
