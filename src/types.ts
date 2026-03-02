@@ -303,6 +303,7 @@ export type INullifierAndCreds = {
     };
   };
   uuidV2?: string;
+  zkPassportUniqueIdentifier?: string;
 };
 
 export type ISandboxNullifierAndCreds = {
@@ -318,6 +319,7 @@ export type ISandboxNullifierAndCreds = {
     };
   };
   uuidV2?: string;
+  zkPassportUniqueIdentifier?: string;
 };
 
 export type ICleanHandsNullifierAndCreds = {

@@ -18,7 +18,9 @@ import {
 } from "../../utils/constants.js";
 import {
   findOneUserVerificationLast11Months,
+  findOneUserVerification11Months5Days,
 } from "../../utils/user-verifications.js";
+import { findOneNullifierAndCredsLast5Days } from "../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../utils/issuance.js";
 import { makeUnknownErrorLoggable } from "../../utils/errors.js";
 import { getRouteHandlerConfig } from "../../init.js";
@@ -290,6 +292,13 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
+      // --- Lookup nullifier in NullifierAndCreds (5-day recovery window) ---
+
+      const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(
+        config.NullifierAndCredsModel,
+        issuanceNullifier,
+      );
+
       // --- Verify ZK Passport proofs server-side ---
 
       endpointLogger.info("Verifying ZK Passport proofs");
@@ -364,6 +373,41 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const uuidV1 = uuidOld(firstName, lastName, dob);
       const uuidV2 = govIdUUID(firstName, lastName, dob);
 
+      // --- Recovery branch: re-issue credentials if same nullifier seen within 5 days ---
+
+      if (nullifierAndCreds?.zkPassportUniqueIdentifier) {
+        if (nullifierAndCreds.zkPassportUniqueIdentifier !== verificationResult.uniqueIdentifier) {
+          return res.status(400).json({
+            error: "The passport used does not match the one from the original issuance.",
+          });
+        }
+
+        // Recovery: same passport, same nullifier. Re-issue credentials.
+        // Extra safety: check 11mo-5day window (same as Onfido/Sumsub recovery).
+        if (config.environment === "live") {
+          const existingUser = await findOneUserVerification11Months5Days(uuidV1, uuidV2);
+          if (existingUser) {
+            await saveCollisionMetadata(uuidV1, uuidV2);
+            return res.status(400).json({
+              error: `User has already registered. User ID: ${existingUser._id}`,
+            });
+          }
+        }
+
+        const creds = extractCreds(firstName, lastName, dob, nationalityStr);
+        const response = issuev2KYC(config.zkPassportIssuerPrivateKey, issuanceNullifier, creds);
+        response.metadata = creds;
+
+        endpointLogger.info(
+          { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier },
+          "Re-issuing ZK Passport credentials (recovery branch)"
+        );
+
+        return res.status(200).json(response);
+      }
+
+      // --- Normal first-time flow ---
+
       if (config.environment === "live") {
         const existingUser = await findOneUserVerificationLast11Months(uuidV1, uuidV2);
         if (existingUser) {
@@ -393,6 +437,14 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         creds,
       );
       response.metadata = creds;
+
+      // Store nullifier + uniqueIdentifier for 5-day recovery window
+      const newNullifierAndCreds = new config.NullifierAndCredsModel({
+        issuanceNullifier,
+        uuidV2,
+        zkPassportUniqueIdentifier: verificationResult.uniqueIdentifier,
+      });
+      await newNullifierAndCreds.save();
 
       endpointLogger.info(
         { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier },
