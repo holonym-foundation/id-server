@@ -303,7 +303,6 @@ export type INullifierAndCreds = {
     };
   };
   uuidV2?: string;
-  zkPassportUniqueIdentifier?: string;
 };
 
 export type ISandboxNullifierAndCreds = {
@@ -319,7 +318,6 @@ export type ISandboxNullifierAndCreds = {
     };
   };
   uuidV2?: string;
-  zkPassportUniqueIdentifier?: string;
 };
 
 export type ICleanHandsNullifierAndCreds = {
@@ -349,6 +347,16 @@ export type IBiometricsNullifierAndCreds = {
   };
   uuidV2?: string;
 };
+
+export type IZkPassportNullifierAndCreds = {
+  _id?: Types.ObjectId;
+  holoUserId?: string;
+  issuanceNullifier?: string;
+  uuidV2?: string;
+  zkPassportUniqueIdentifier?: string;
+};
+
+export type ISandboxZkPassportNullifierAndCreds = IZkPassportNullifierAndCreds;
 
 export type IEncryptedNullifiers = {
   _id?: Types.ObjectId;
@@ -658,6 +666,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   OrderModel: Model<IOrder | ISandboxOrder>
   AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
+  ZkPassportNullifierAndCredsModel: Model<IZkPassportNullifierAndCreds | ISandboxZkPassportNullifierAndCreds>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>

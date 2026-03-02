@@ -20,7 +20,7 @@ import {
   findOneUserVerificationLast11Months,
   findOneUserVerification11Months5Days,
 } from "../../utils/user-verifications.js";
-import { findOneNullifierAndCredsLast5Days } from "../../utils/nullifier-and-creds.js";
+import { findOneNullifierAndCredsLast5Days } from "../../utils/zk-passport-nullifier-and-creds.js";
 import { issuev2KYC } from "../../utils/issuance.js";
 import { makeUnknownErrorLoggable } from "../../utils/errors.js";
 import { getRouteHandlerConfig } from "../../init.js";
@@ -295,7 +295,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       // --- Lookup nullifier in NullifierAndCreds (5-day recovery window) ---
 
       const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(
-        config.NullifierAndCredsModel,
+        config.ZkPassportNullifierAndCredsModel,
         issuanceNullifier,
       );
 
@@ -439,7 +439,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       response.metadata = creds;
 
       // Store nullifier + uniqueIdentifier for 5-day recovery window
-      const newNullifierAndCreds = new config.NullifierAndCredsModel({
+      const newNullifierAndCreds = new config.ZkPassportNullifierAndCredsModel({
         issuanceNullifier,
         uuidV2,
         zkPassportUniqueIdentifier: verificationResult.uniqueIdentifier,

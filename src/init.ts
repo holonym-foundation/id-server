@@ -26,6 +26,8 @@ import {
   CleanHandsNullifierAndCredsSchema,
   sandboxCleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
+  ZkPassportNullifierAndCredsSchema,
+  SandboxZkPassportNullifierAndCredsSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
@@ -73,6 +75,8 @@ import {
   ICleanHandsNullifierAndCreds,
   ISandboxCleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
+  IZkPassportNullifierAndCreds,
+  ISandboxZkPassportNullifierAndCreds,
   IVerificationCollisionMetadata,
   IAmlChecksSession,
   ISandboxAmlChecksSession,
@@ -320,6 +324,16 @@ async function initializeMongoDb() {
     BiometricsNullifierAndCredsSchema
   );
 
+  const ZkPassportNullifierAndCreds = mongoose.model(
+    "ZkPassportNullifierAndCreds",
+    ZkPassportNullifierAndCredsSchema
+  );
+
+  const SandboxZkPassportNullifierAndCreds = mongoose.model(
+    "SandboxZkPassportNullifierAndCreds",
+    SandboxZkPassportNullifierAndCredsSchema
+  );
+
   const DailyVerificationCount = mongoose.model(
     "DailyVerificationCount",
     DailyVerificationCountSchema
@@ -476,6 +490,8 @@ async function initializeMongoDb() {
     CleanHandsNullifierAndCreds,
     SandboxCleanHandsNullifierAndCreds,
     BiometricsNullifierAndCreds,
+    ZkPassportNullifierAndCreds,
+    SandboxZkPassportNullifierAndCreds,
     DailyVerificationCount,
     DailyVerificationDeletions,
     VerificationCollisionMetadata,
@@ -527,6 +543,8 @@ let UserVerifications: Model<IUserVerifications>,
   CleanHandsNullifierAndCreds: Model<ICleanHandsNullifierAndCreds>,
   SandboxCleanHandsNullifierAndCreds: Model<ISandboxCleanHandsNullifierAndCreds>,
   BiometricsNullifierAndCreds: Model<IBiometricsNullifierAndCreds>,
+  ZkPassportNullifierAndCreds: Model<IZkPassportNullifierAndCreds>,
+  SandboxZkPassportNullifierAndCreds: Model<ISandboxZkPassportNullifierAndCreds>,
   DailyVerificationCount: Model<IDailyVerificationCount>,
   DailyVerificationDeletions: Model<IDailyVerificationDeletions>,
   VerificationCollisionMetadata: Model<IVerificationCollisionMetadata>,
@@ -576,6 +594,8 @@ initializeMongoDb().then((result) => {
     CleanHandsNullifierAndCreds = result.CleanHandsNullifierAndCreds;
     SandboxCleanHandsNullifierAndCreds = result.SandboxCleanHandsNullifierAndCreds;
     BiometricsNullifierAndCreds = result.BiometricsNullifierAndCreds;
+    ZkPassportNullifierAndCreds = result.ZkPassportNullifierAndCreds;
+    SandboxZkPassportNullifierAndCreds = result.SandboxZkPassportNullifierAndCreds;
     DailyVerificationCount = result.DailyVerificationCount;
     DailyVerificationDeletions = result.DailyVerificationDeletions;
     VerificationCollisionMetadata = result.VerificationCollisionMetadata;
@@ -635,6 +655,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       OrderModel: SandboxOrder,
       AMLChecksSessionModel: SandboxAMLChecksSession,
       CleanHandsNullifierAndCredsModel: SandboxCleanHandsNullifierAndCreds,
+      ZkPassportNullifierAndCredsModel: SandboxZkPassportNullifierAndCreds,
       SanctionsResultModel: SanctionsResult,
       PaymentRedemptionModel: SandboxPaymentRedemption,
       PaymentSecretModel: SandboxPaymentSecret,
@@ -666,6 +687,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     PaymentCommitmentModel: PaymentCommitment,
     AMLChecksSessionModel: AMLChecksSession,
     CleanHandsNullifierAndCredsModel: CleanHandsNullifierAndCreds,
+    ZkPassportNullifierAndCredsModel: ZkPassportNullifierAndCreds,
     SanctionsResultModel: SanctionsResult,
     issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
     cleanHandsIssuerPrivateKey: process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
@@ -697,6 +719,8 @@ export {
   SandboxNullifierAndCreds,
   CleanHandsNullifierAndCreds,
   BiometricsNullifierAndCreds,
+  ZkPassportNullifierAndCreds,
+  SandboxZkPassportNullifierAndCreds,
   DailyVerificationCount,
   DailyVerificationDeletions,
   VerificationCollisionMetadata,

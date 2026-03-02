@@ -27,6 +27,8 @@ import {
   ICleanHandsNullifierAndCreds,
   ISandboxCleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
+  IZkPassportNullifierAndCreds,
+  ISandboxZkPassportNullifierAndCreds,
   IEncryptedNullifiers,
   ISandboxEncryptedNullifiers,
   IDailyVerificationCount,
@@ -738,16 +740,6 @@ const NullifierAndCredsSchema = new Schema<INullifierAndCreds>({
     type: String,
     required: false,
   },
-  // The zkPassportUniqueIdentifier is a deterministic Poseidon2 hash derived by the
-  // ZK Passport SDK from the passport's chip data + our domain. Unlike IDV provider
-  // session IDs (e.g., Onfido check_id, Sumsub applicantId), it is not a reference
-  // to an external session — ZK Passport verification is session-less. Instead, it
-  // serves as a stable identifier for the same passport across multiple verification
-  // attempts, enabling the 5-day credential recovery window.
-  zkPassportUniqueIdentifier: {
-    type: String,
-    required: false,
-  },
 });
 
 const SandboxNullifierAndCredsSchema = new Schema<ISandboxNullifierAndCreds>({
@@ -771,16 +763,6 @@ const SandboxNullifierAndCredsSchema = new Schema<ISandboxNullifierAndCreds>({
     required: false,
   },
   uuidV2: {
-    type: String,
-    required: false,
-  },
-  // The zkPassportUniqueIdentifier is a deterministic Poseidon2 hash derived by the
-  // ZK Passport SDK from the passport's chip data + our domain. Unlike IDV provider
-  // session IDs (e.g., Onfido check_id, Sumsub applicantId), it is not a reference
-  // to an external session — ZK Passport verification is session-less. Instead, it
-  // serves as a stable identifier for the same passport across multiple verification
-  // attempts, enabling the 5-day credential recovery window.
-  zkPassportUniqueIdentifier: {
     type: String,
     required: false,
   },
@@ -854,6 +836,41 @@ const BiometricsNullifierAndCredsSchema = new Schema<IBiometricsNullifierAndCred
     required: false,
   },
   uuidV2: {
+    type: String,
+    required: false,
+  },
+});
+
+// A collection to associate an issuance nullifier to the user's
+// ZK Passport unique identifier so that the user can recover their
+// credentials within a 5-day window if the frontend STORE request fails.
+// The zkPassportUniqueIdentifier is a deterministic Poseidon2 hash derived by the
+// ZK Passport SDK from the passport's chip data + our domain. Unlike IDV provider
+// session IDs (e.g., Onfido check_id, Sumsub applicantId), it is not a reference
+// to an external session — ZK Passport verification is session-less. Instead, it
+// serves as a stable identifier for the same passport across multiple verification
+// attempts, enabling the 5-day credential recovery window.
+const ZkPassportNullifierAndCredsSchema = new Schema<IZkPassportNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  uuidV2: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
+});
+
+const SandboxZkPassportNullifierAndCredsSchema = new Schema<ISandboxZkPassportNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  uuidV2: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
     type: String,
     required: false,
   },
@@ -1484,6 +1501,8 @@ export {
   CleanHandsNullifierAndCredsSchema,
   sandboxCleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
+  ZkPassportNullifierAndCredsSchema,
+  SandboxZkPassportNullifierAndCredsSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
