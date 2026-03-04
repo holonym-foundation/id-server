@@ -268,6 +268,10 @@ export type IUserCredentialsV2 = {
     ciphertext?: string;
     iv?: string;
   };
+  encryptedZkPassportCreds?: {
+    ciphertext?: string;
+    iv?: string;
+  };
 };
 
 export type ISandboxUserCredentialsV2 = IUserCredentialsV2
@@ -344,6 +348,16 @@ export type IBiometricsNullifierAndCreds = {
   uuidV2?: string;
 };
 
+export type IZkPassportNullifierAndCreds = {
+  _id?: Types.ObjectId;
+  holoUserId?: string;
+  issuanceNullifier?: string;
+  uuidV2?: string;
+  zkPassportUniqueIdentifier?: string;
+};
+
+export type ISandboxZkPassportNullifierAndCreds = IZkPassportNullifierAndCreds;
+
 export type IEncryptedNullifiers = {
   _id?: Types.ObjectId;
   holoUserId?: string;
@@ -369,6 +383,13 @@ export type IEncryptedNullifiers = {
     createdAt?: Date;
   };
   biometrics?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  zkPassport?: {
     encryptedNullifier?: {
       ciphertext?: string;
       iv?: string;
@@ -402,6 +423,13 @@ export type ISandboxEncryptedNullifiers = {
     createdAt?: Date;
   };
   biometrics?: {
+    encryptedNullifier?: {
+      ciphertext?: string;
+      iv?: string;
+    };
+    createdAt?: Date;
+  };
+  zkPassport?: {
     encryptedNullifier?: {
       ciphertext?: string;
       iv?: string;
@@ -638,12 +666,14 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   OrderModel: Model<IOrder | ISandboxOrder>
   AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
+  ZkPassportNullifierAndCredsModel: Model<IZkPassportNullifierAndCreds | ISandboxZkPassportNullifierAndCreds>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>
   PaymentCommitmentModel: Model<IPaymentCommitment | ISandboxPaymentCommitment>
   issuerPrivateKey: string
   cleanHandsIssuerPrivateKey: string
+  zkPassportIssuerPrivateKey: string
   // Credits-specific models
   HumanIDCreditsUserModel: Model<IHumanIDCreditsUser | ISandboxHumanIDCreditsUser>
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>

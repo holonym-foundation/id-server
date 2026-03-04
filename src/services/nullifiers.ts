@@ -374,7 +374,82 @@ async function putBiometricsNullifierSandbox(req: Request, res: Response) {
   return createPutBiometricsNullifierRouteHandler(config)(req, res);
 }
 
-export { 
+// ZK Passport nullifier — same logic as gov-id nullifier, different field name
+function createPutZkPassportNullifierRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    const holoUserId = req?.body?.holoUserId;
+    const encryptedNullifier = req?.body?.encryptedNullifier;
+
+    const validationResult = await validatePutNullifierArgs(
+      holoUserId,
+      encryptedNullifier
+    );
+    if (validationResult.error) {
+      logger.error({ error: validationResult.error }, "Invalid request body");
+      return res.status(400).json({ error: validationResult.error });
+    }
+
+    let encryptedNullifiersDoc;
+    try {
+      encryptedNullifiersDoc = await config.EncryptedNullifiersModel.findOne({
+        holoUserId: holoUserId,
+      }).exec();
+    } catch (err) {
+      logger.error(
+        { error: err },
+        "An error occurred while retrieving encrypted nullifiers"
+      );
+      return res.status(500).json({ error: "An error occurred while retrieving encrypted nullifiers." });
+    }
+
+    if (encryptedNullifiersDoc) {
+      if ((encryptedNullifiersDoc.zkPassport?.createdAt ?? 0) > new Date(Date.now() - (335 * 24 * 60 * 60 * 1000))) {
+        return res.status(200).json({ success: true, message: "User already has a valid nullifier" });
+      }
+
+      encryptedNullifiersDoc.zkPassport = {
+        encryptedNullifier,
+        createdAt: new Date(),
+      };
+    } else {
+      encryptedNullifiersDoc = new config.EncryptedNullifiersModel({
+        holoUserId,
+        zkPassport: {
+          encryptedNullifier,
+          createdAt: new Date(),
+        },
+      });
+    }
+
+    if (!encryptedNullifiersDoc) {
+      return res.status(500).json({ error: "Failed to create encrypted nullifiers document" });
+    }
+
+    try {
+      await encryptedNullifiersDoc.save();
+    } catch (err) {
+      logger.error(
+        { error: err },
+        "An error occurred while saving user encrypted nullifier to database"
+      );
+      return res.status(500).json({ error: "An error occurred while trying to save object to database." });
+    }
+
+    return res.status(200).json({ success: true });
+  }
+}
+
+async function putZkPassportNullifierProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPutZkPassportNullifierRouteHandler(config)(req, res);
+}
+
+async function putZkPassportNullifierSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPutZkPassportNullifierRouteHandler(config)(req, res);
+}
+
+export {
   getNullifiersProd,
   getNullifiersSandbox,
   putGovIdNullifierProd,
@@ -385,4 +460,6 @@ export {
   putCleanHandsNullifierSandbox,
   putBiometricsNullifierProd,
   putBiometricsNullifierSandbox,
+  putZkPassportNullifierProd,
+  putZkPassportNullifierSandbox,
 };
