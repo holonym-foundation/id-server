@@ -662,7 +662,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       PaymentCommitmentModel: SandboxPaymentCommitment,
       issuerPrivateKey: process.env.HOLONYM_SANDBOX_KYC_ISSUER_PRIVKEY!,
       cleanHandsIssuerPrivateKey: process.env.HOLONYM_SANDBOX_CLEAN_HANDS_ISSUER_PRIVKEY!,
-      zkPassportIssuerPrivateKey: process.env.HOLONYM_SANDBOX_ZK_PASSPORT_ISSUER_PRIVKEY!,
+      zkPassportIssuerPrivateKey: process.env.HOLONYM_SANDBOX_ISSUER_ZK_PASSPORT_PRIVKEY!,
       // Credits-specific models
       HumanIDCreditsUserModel: SandboxHumanIDCreditsUser,
       HumanIDCreditsPaymentSecretModel: SandboxHumanIDCreditsPaymentSecret,
