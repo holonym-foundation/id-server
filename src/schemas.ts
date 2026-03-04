@@ -27,6 +27,8 @@ import {
   ICleanHandsNullifierAndCreds,
   ISandboxCleanHandsNullifierAndCreds,
   IBiometricsNullifierAndCreds,
+  IZkPassportNullifierAndCreds,
+  ISandboxZkPassportNullifierAndCreds,
   IEncryptedNullifiers,
   ISandboxEncryptedNullifiers,
   IDailyVerificationCount,
@@ -625,6 +627,13 @@ const userCredentialsV2Schema = new Schema<IUserCredentialsV2>({
     },
     required: false,
   },
+  encryptedZkPassportCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
 });
 userCredentialsV2Schema.index({ holoUserId: 1 })
 
@@ -659,6 +668,13 @@ const sandboxUserCredentialsV2Schema = new Schema<ISandboxUserCredentialsV2>({
     required: false,
   },
   encryptedBiometricsAllowSybilsCreds: {
+    type: {
+      ciphertext: String,
+      iv: String,
+    },
+    required: false,
+  },
+  encryptedZkPassportCreds: {
     type: {
       ciphertext: String,
       iv: String,
@@ -825,6 +841,41 @@ const BiometricsNullifierAndCredsSchema = new Schema<IBiometricsNullifierAndCred
   },
 });
 
+// A collection to associate an issuance nullifier to the user's
+// ZK Passport unique identifier so that the user can recover their
+// credentials within a 5-day window if the frontend STORE request fails.
+// The zkPassportUniqueIdentifier is a deterministic Poseidon2 hash derived by the
+// ZK Passport SDK from the passport's chip data + our domain. Unlike IDV provider
+// session IDs (e.g., Onfido check_id, Sumsub applicantId), it is not a reference
+// to an external session — ZK Passport verification is session-less. Instead, it
+// serves as a stable identifier for the same passport across multiple verification
+// attempts, enabling the 5-day credential recovery window.
+const ZkPassportNullifierAndCredsSchema = new Schema<IZkPassportNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  uuidV2: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
+});
+
+const SandboxZkPassportNullifierAndCredsSchema = new Schema<ISandboxZkPassportNullifierAndCreds>({
+  holoUserId: String,
+  issuanceNullifier: String,
+  uuidV2: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
+});
+
 // To allow the user to persist a nullifier so that they can request their
 // signed credentials in more than one browser session.
 const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
@@ -879,7 +930,19 @@ const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
       createdAt: Date,
     },
     required: false,
-  },      
+  },
+  zkPassport: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
 });
 EncryptedNullifiersSchema.index({ holoUserId: 1 })
 
@@ -935,7 +998,19 @@ const sandboxEncryptedNullifiersSchema = new Schema<ISandboxEncryptedNullifiers>
       createdAt: Date,
     },
     required: false,
-  },      
+  },
+  zkPassport: {
+    type: {
+      encryptedNullifier: {
+        type: {
+          ciphertext: String,
+          iv: String,
+        },
+      },
+      createdAt: Date,
+    },
+    required: false,
+  },
 });
 
 const DailyVerificationCountSchema = new Schema<IDailyVerificationCount>({
@@ -1426,6 +1501,8 @@ export {
   CleanHandsNullifierAndCredsSchema,
   sandboxCleanHandsNullifierAndCredsSchema,
   BiometricsNullifierAndCredsSchema,
+  ZkPassportNullifierAndCredsSchema,
+  SandboxZkPassportNullifierAndCredsSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,

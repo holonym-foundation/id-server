@@ -454,17 +454,91 @@ async function putBiometricsAllowSybilsCredentialsSandbox(req: Request, res: Res
   return createPutBiometricsAllowSybilsCredentials(config)(req, res);
 }
 
-export { 
-  getCredentialsProd, 
-  getCredentialsSandbox, 
-  putPhoneCredentialsProd, 
-  putPhoneCredentialsSandbox, 
-  putGovIdCredentialsProd, 
-  putGovIdCredentialsSandbox, 
-  putCleanHandsCredentialsProd, 
-  putCleanHandsCredentialsSandbox, 
-  putBiometricsCredentialsProd, 
-  putBiometricsCredentialsSandbox, 
-  putBiometricsAllowSybilsCredentialsProd, 
-  putBiometricsAllowSybilsCredentialsSandbox
+async function storeOrUpdateZkPassportCredentials(
+  UserCredentialsV2Model: Model<IUserCredentialsV2 | ISandboxUserCredentialsV2>,
+  holoUserId: string,
+  encryptedCredentials: { ciphertext: string, iv: string }
+) {
+  let userCredentialsDoc;
+  try {
+    userCredentialsDoc = await UserCredentialsV2Model.findOne({
+      holoUserId: holoUserId,
+    }).exec();
+  } catch (err) {
+    logger.error({ error: err }, "An error occurred while retrieving credentials");
+    return { error: "An error occurred while retrieving credentials." };
+  }
+  if (userCredentialsDoc) {
+    userCredentialsDoc.encryptedZkPassportCreds = encryptedCredentials;
+  } else {
+    userCredentialsDoc = new UserCredentialsV2Model({
+      holoUserId,
+      encryptedZkPassportCreds: encryptedCredentials,
+    });
+  }
+  try {
+    await userCredentialsDoc.save();
+  } catch (err) {
+    logger.error(
+      { error: err },
+      "An error occurred while saving user credentials to database"
+    );
+    return { error: "An error occurred while trying to save object to database." };
+  }
+  return { success: true };
+}
+
+function createPutZkPassportCredentials(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    const holoUserId = req?.body?.holoUserId;
+    const encryptedCredentials = req?.body?.encryptedCredentials;
+
+    const validationResult = await validatePutCredentialsArgs(
+      holoUserId,
+      encryptedCredentials
+    );
+    if (validationResult.error) {
+      logger.error({ error: validationResult.error }, "Invalid request body");
+      return res.status(400).json({ error: validationResult.error });
+    }
+
+    const storeOrUpdateResult = await storeOrUpdateZkPassportCredentials(
+      config.UserCredentialsV2Model,
+      holoUserId,
+      encryptedCredentials
+    );
+    if (storeOrUpdateResult.error) {
+      logger.error({ error: storeOrUpdateResult.error, holoUserId });
+      return res.status(500).json({ error: storeOrUpdateResult.error });
+    }
+
+    return res.status(200).json({ success: true });
+  }
+}
+
+async function putZkPassportCredentialsProd(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPutZkPassportCredentials(config)(req, res);
+}
+
+async function putZkPassportCredentialsSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPutZkPassportCredentials(config)(req, res);
+}
+
+export {
+  getCredentialsProd,
+  getCredentialsSandbox,
+  putPhoneCredentialsProd,
+  putPhoneCredentialsSandbox,
+  putGovIdCredentialsProd,
+  putGovIdCredentialsSandbox,
+  putCleanHandsCredentialsProd,
+  putCleanHandsCredentialsSandbox,
+  putBiometricsCredentialsProd,
+  putBiometricsCredentialsSandbox,
+  putBiometricsAllowSybilsCredentialsProd,
+  putBiometricsAllowSybilsCredentialsSandbox,
+  putZkPassportCredentialsProd,
+  putZkPassportCredentialsSandbox
 };

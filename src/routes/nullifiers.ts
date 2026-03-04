@@ -10,6 +10,8 @@ import {
   putCleanHandsNullifierSandbox,
   putBiometricsNullifierProd,
   putBiometricsNullifierSandbox,
+  putZkPassportNullifierProd,
+  putZkPassportNullifierSandbox,
 } from "../services/nullifiers.js";
 
 const prodRouter = express.Router();
@@ -20,6 +22,7 @@ prodRouter.put("/gov-id", putGovIdNullifierProd);
 prodRouter.put("/phone", putPhoneNullifierProd);
 prodRouter.put("/clean-hands", putCleanHandsNullifierProd);
 prodRouter.put("/biometrics", putBiometricsNullifierProd);
+prodRouter.put("/zk-passport", putZkPassportNullifierProd);
 
 const sandboxRouter = express.Router();
 sandboxRouter.get("/", getNullifiersSandbox);
@@ -27,6 +30,7 @@ sandboxRouter.put("/gov-id", putGovIdNullifierSandbox);
 sandboxRouter.put("/phone", putPhoneNullifierSandbox);
 sandboxRouter.put("/clean-hands", putCleanHandsNullifierSandbox);
 sandboxRouter.put("/biometrics", putBiometricsNullifierSandbox);
+sandboxRouter.put("/zk-passport", putZkPassportNullifierSandbox);
 
 export default prodRouter;
 export { sandboxRouter };
