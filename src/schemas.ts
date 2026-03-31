@@ -9,6 +9,8 @@ import {
 import * as DirectVerification from "./schemas/direct-verification.js"
 import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 import {
+  IOnfidoSession,
+  ISandboxOnfidoSession,
   IUserVerifications,
   IIdvSessions,
   ISandboxIdvSessions,
@@ -52,6 +54,43 @@ dotenv.config();
 
 const { Schema } = mongoose;
 if (process.env.ENVIRONMENT == "dev") mongoose.set("debug", true);
+
+// ---------- Onfido Sessions ----------
+
+const onfidoSessionSchema = new Schema<IOnfidoSession>({
+  sigDigest: { type: String, required: true },
+  applicant_id: { type: String, required: true },
+  check_id: { type: String, required: false },
+  check_status: { type: String, required: false },
+  check_result: { type: String, required: false },
+  check_report_ids: { type: [String], required: false },
+  check_last_updated_at: { type: Date, required: false },
+  onfido_sdk_token: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+onfidoSessionSchema.index({ sigDigest: 1 });
+onfidoSessionSchema.index({ check_id: 1 }, { sparse: true });
+onfidoSessionSchema.index({ sigDigest: 1, status: 1, createdAt: -1 });
+
+const sandboxOnfidoSessionSchema = new Schema<ISandboxOnfidoSession>({
+  sigDigest: { type: String, required: true },
+  applicant_id: { type: String, required: true },
+  check_id: { type: String, required: false },
+  check_status: { type: String, required: false },
+  check_result: { type: String, required: false },
+  check_report_ids: { type: [String], required: false },
+  check_last_updated_at: { type: Date, required: false },
+  onfido_sdk_token: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+// ---------- User Verifications ----------
 
 const userVerificationsSchema = new Schema<IUserVerifications>({
   govId: {
@@ -1484,6 +1523,8 @@ const SandboxHumanIDCreditsPriceOverrideSchema = new Schema<ISandboxHumanIDCredi
 // SandboxHumanIDCreditsPriceOverrideSchema.index({ userId: 1 });
 
 export {
+  onfidoSessionSchema,
+  sandboxOnfidoSessionSchema,
   userVerificationsSchema,
   idvSessionsSchema,
   sandboxIdvSessionsSchema,

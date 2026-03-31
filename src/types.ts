@@ -61,6 +61,26 @@ export type OnfidoDocumentReport = OnfidoReport & {
   }
 }
 
+// ---------------- Onfido Sessions ----------------
+
+export type IOnfidoSession = {
+  _id?: Types.ObjectId;
+  sigDigest: string;
+  applicant_id: string;
+  check_id?: string;
+  check_status?: string;       // 'in_progress' | 'complete' | 'withdrawn' | 'paused' | 'reopened'
+  check_result?: string;       // 'clear' | 'consider'
+  check_report_ids?: string[];
+  check_last_updated_at?: Date;
+  onfido_sdk_token?: string;
+  status: string;              // 'in_progress' | 'complete' | 'failed'
+  createdByFlow: string;       // 'gov-id' | 'clean-hands'
+  createdBySessionId: Types.ObjectId;
+  createdAt: Date;
+};
+
+export type ISandboxOnfidoSession = IOnfidoSession;
+
 // ---------------- MongoDB schemas ----------------
 
 export type IUserVerifications = {
@@ -678,6 +698,8 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   HumanIDCreditsUserModel: Model<IHumanIDCreditsUser | ISandboxHumanIDCreditsUser>
   HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>
   HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride | ISandboxHumanIDCreditsPriceOverride>
+  // Onfido sessions
+  OnfidoSessionModel: Model<IOnfidoSession | ISandboxOnfidoSession>
   // Sumsub config
   sumsubWebhookSecret?: string;
 }
