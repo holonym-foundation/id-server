@@ -185,6 +185,8 @@ export type ISession = {
   sumsub_review_status?: string;      // 'init' | 'pending' | 'completed' | 'onHold'
   sumsub_review_answer?: string;      // 'GREEN' | 'RED' | 'RETRY'
   sumsub_last_updated_at?: Date;
+  // Reference to standalone IOnfidoSession (Phase 3 decoupling)
+  onfidoSessionId?: Types.ObjectId;
 };
 
 export type ISandboxSession = {
@@ -212,6 +214,8 @@ export type ISandboxSession = {
   sumsub_review_status?: string;
   sumsub_review_answer?: string;
   sumsub_last_updated_at?: Date;
+  // Reference to standalone IOnfidoSession (Phase 3 decoupling)
+  onfidoSessionId?: Types.ObjectId;
 };
 
 export type IAmlChecksSession = {
@@ -236,6 +240,8 @@ export type IAmlChecksSession = {
     confirmed?: boolean;
     statementGeneratedAt?: Date;
   };
+  // Reference to standalone IOnfidoSession (Phase 3 decoupling)
+  onfidoSessionId?: Types.ObjectId;
 };
 
 export type ISandboxAmlChecksSession = IAmlChecksSession;

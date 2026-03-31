@@ -347,6 +347,10 @@ const sessionSchema = new Schema<ISession>({
     type: Date,
     required: false,
   },
+  onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
 });
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
@@ -433,6 +437,10 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     type: Date,
     required: false,
   },
+  onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
 });
 // Indexes are probably not needed for sandbox mode.
 // sandboxSessionSchema.index({ sigDigest: 1 })
@@ -507,7 +515,11 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
       statementGeneratedAt: Date
     },
     required: false,
-  }
+  },
+  onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
 });
 amlChecksSessionSchema.index({ sigDigest: 1 })
 
@@ -565,7 +577,11 @@ const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
       statementGeneratedAt: Date
     },
     required: false,
-  }
+  },
+  onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
 });
 // Indexes are probably not needed for sandbox mode.
 // sandboxAmlChecksSessionSchema.index({ sigDigest: 1 })

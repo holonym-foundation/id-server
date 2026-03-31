@@ -10,6 +10,7 @@ import { getOnfidoReports } from "../utils/onfido.js";
 import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
+import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
@@ -386,6 +387,40 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           },
         });
       } else if (ambiguousSession.idvProvider === "onfido") {
+        // If session has onfidoSessionId, use the new standalone service
+        if (ambiguousSession.onfidoSessionId) {
+          const onfidoSession = await getOnfidoSessionById(config, ambiguousSession.onfidoSessionId);
+          if (onfidoSession) {
+            const onfidoSessionObj = onfidoSession.toObject();
+            if (!onfidoSessionObj.check_id) {
+              return res.status(200).json({
+                onfido: {
+                  sid: ambiguousSession._id,
+                  check_id: null,
+                },
+              });
+            }
+
+            const check = await getOnfidoCheckAsyncFromService(config, onfidoSessionObj);
+            let failureReason = undefined;
+            if (check?.status === "complete" && check?.result === "consider") {
+              const reports = (await getOnfidoReports(config.onfidoAPIKey, check?.report_ids)) ?? [];
+              failureReason = getOnfidoVerificationFailureReasons(reports);
+            }
+
+            return res.status(200).json({
+              onfido: {
+                sid: ambiguousSession._id,
+                status: check?.status,
+                result: check?.result,
+                check_id: check?.id,
+                failureReason,
+              },
+            });
+          }
+        }
+
+        // Fallback to existing behavior (reads check data from ISession)
         if (!ambiguousSession.check_id) {
           return res.status(200).json({
             onfido: {

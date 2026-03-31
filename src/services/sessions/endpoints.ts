@@ -29,6 +29,10 @@ import {
   handleIdvSessionCreation,
   campaignIdToWorkflowId,
 } from "./functions.js";
+import {
+  createOnfidoSession,
+  findReusableOnfidoSession,
+} from "../onfido-sessions/functions.js";
 import { rateLimitByTier, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
@@ -315,6 +319,188 @@ async function postSessionV2Sandbox(req: Request, res: Response) {
   return createPostSessionV2RouteHandler(config)(req, res);
 }
 
+const postSessionsV3Logger = logger.child({
+  msgPrefix: "[POST /sessions/v3] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "kyc",
+  },
+});
+
+/**
+ * Creates a session V3. Same as v2 but for onfido: uses the standalone
+ * Onfido service (findReusableOnfidoSession / createOnfidoSession) and
+ * returns onfidoSessionId in the response.
+ *
+ * Non-onfido providers delegate to the existing handleIdvSessionCreation.
+ */
+function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      const idvProvider = req.body.idvProvider;
+      const address = req.body.address || null;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+        return res
+          .status(400)
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+      }
+
+      let domain = null;
+      if (req.body.domain === "app.holonym.id") {
+        domain = "app.holonym.id";
+      } else if (req.body.domain === "silksecure.net") {
+        domain = "silksecure.net";
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Get country from IP address
+      const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      const resp = await axios.get(
+        `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
+      );
+      const ipCountry = resp?.data?.country;
+
+      if (!ipCountry && process.env.NODE_ENV != 'development') {
+        return res.status(500).json({ error: "Could not determine country from IP" });
+      }
+
+      // Rate limiting with whitelist support
+      const ip = (req.headers['x-forwarded-for'] ?? req.socket.remoteAddress) as string;
+      const rateLimitKey = 'kyc-sessions';
+      const tier = await getRateLimitTier(address);
+      const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey);
+
+      if (limitExceeded) {
+        postSessionsV3Logger.warn(
+          { ip, rateLimitKey, count, tier },
+          'Rate limit exceeded'
+        );
+        return res.status(429).json({
+          error: `This device has reached the maximum number of allowed KYC sessions (${maxForTier}). Please try again in 30 days.`
+        });
+      }
+
+      const campaignId = req.body.campaignId;
+      const workflowId = campaignIdToWorkflowId(campaignId);
+
+      const session = new config.SessionModel({
+        sigDigest: sigDigest,
+        idvProvider: idvProvider,
+        status: sessionStatusEnum.IN_PROGRESS,
+        frontendDomain: domain,
+        silkDiffWallet,
+        ipCountry: ipCountry,
+        campaignId: campaignId,
+        workflowId: workflowId,
+      });
+
+      // Only allow a user to create up to 10 sessions
+      const existingSessions = await config.SessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ]
+        }
+      }).exec();
+
+      if (existingSessions.length >= 10) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (10)"
+        });
+      }
+
+      if (idvProvider === "onfido") {
+        // Check for reusable Onfido session
+        const reusable = await findReusableOnfidoSession(config, sigDigest);
+
+        if (reusable) {
+          // Reuse existing Onfido session — populate ISession references for debugging
+          session.onfidoSessionId = reusable._id;
+          session.applicant_id = reusable.applicant_id;
+          session.onfido_sdk_token = reusable.onfido_sdk_token;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, onfidoSessionId: reusable._id },
+            "Reusing existing Onfido session"
+          );
+        } else {
+          // Create new Onfido session via standalone service
+          const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter();
+          if (rateLimitResult.limitExceeded) {
+            throw new Error('The network is busy. Please try again in 10 minutes');
+          }
+
+          // Save session first so we have an _id for createdBySessionId
+          await session.save();
+
+          const onfidoSession = await createOnfidoSession(
+            config,
+            sigDigest,
+            "gov-id",
+            session._id!,
+            campaignId && workflowId ? { campaignId, workflowId } : undefined
+          );
+
+          // Store reference and populate ISession fields for backward compat / debugging
+          session.onfidoSessionId = onfidoSession._id;
+          session.applicant_id = onfidoSession.applicant_id;
+          session.onfido_sdk_token = onfidoSession.onfido_sdk_token;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, onfidoSessionId: onfidoSession._id },
+            "Created new Onfido session"
+          );
+        }
+
+        return res.status(201).json({
+          session,
+          onfidoSessionId: session.onfidoSessionId,
+        });
+      }
+
+      // Non-onfido providers: delegate to existing handler
+      const _idvSession = await handleIdvSessionCreation(config, session, postSessionsV3Logger);
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log("POST /sessions/v3: Error encountered", makeUnknownErrorLoggable(err).message);
+
+      if (axios.isAxiosError(err) && err.response?.status === 409 && err.response?.data?.description?.includes("already exists")) {
+        return res.status(409).json({
+          error: "An applicant already exists for this account."
+        });
+      }
+
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function postSessionV3Prod(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionV3RouteHandler(config)(req, res);
+}
+
+async function postSessionV3Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionV3RouteHandler(config)(req, res);
+}
 
 async function createPayPalOrder(req: Request, res: Response) {
   try {
@@ -1151,6 +1337,8 @@ export {
   postSession,
   postSessionV2Prod,
   postSessionV2Sandbox,
+  postSessionV3Prod,
+  postSessionV3Sandbox,
   createPayPalOrder,
   createIdvSession,
   createIdvSessionV2,
