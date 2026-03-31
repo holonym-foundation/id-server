@@ -38,13 +38,14 @@ function verifyWebhookSignature(
 
 /**
  * Handle check.completed event
+ *
+ * Dual-write: Updates IOnfidoSession first (indexed lookup), then also
+ * updates ISession for backward compatibility with in-flight sessions.
  */
 async function handleCheckCompleted(payload: any, config: SandboxVsLiveKYCRouteHandlerConfig) {
   const { object } = payload;
   const checkId = object?.id;
   const status = object?.status;
-  const result = object?.result;
-  const reportIds = object?.report_ids || [];
 
   if (!checkId) {
     webhookLogger.warn({ payload }, "Received check.completed without check_id");
@@ -52,31 +53,44 @@ async function handleCheckCompleted(payload: any, config: SandboxVsLiveKYCRouteH
   }
 
   try {
-    // Find the session by check_id
-    const session = await config.SessionModel.findOne({
-      check_id: checkId
+    // 1. Look up IOnfidoSession by check_id (indexed, sparse)
+    const onfidoSession = await config.OnfidoSessionModel.findOne({
+      check_id: checkId,
     }).exec();
 
-    if (!session) {
-      webhookLogger.warn(
-        { checkId },
-        "No session found for check_id in check.completed webhook"
+    if (onfidoSession) {
+      onfidoSession.check_status = status;
+      onfidoSession.check_last_updated_at = new Date();
+      await onfidoSession.save();
+
+      webhookLogger.info(
+        { checkId, onfidoSessionId: onfidoSession._id },
+        "Updated IOnfidoSession from webhook"
       );
-      return;
     }
 
-    console.log("Found session for check_id:", checkId, "session_id:", session._id);
+    // 2. Also update ISession for backward compat (dual-write)
+    const session = await config.SessionModel.findOne({
+      check_id: checkId,
+    }).exec();
 
-    // Update the session with check status
-    session.check_status = status;
-    session.check_last_updated_at = new Date();
+    if (session) {
+      session.check_status = status;
+      session.check_last_updated_at = new Date();
+      await session.save();
 
-    await session.save();
+      webhookLogger.info(
+        { checkId, sessionId: session._id },
+        "Updated ISession from webhook (backward compat)"
+      );
+    }
 
-    webhookLogger.info(
-      { checkId, sessionId: session._id },
-      "Successfully updated check status from webhook"
-    );
+    if (!onfidoSession && !session) {
+      webhookLogger.warn(
+        { checkId },
+        "No IOnfidoSession or ISession found for check_id in webhook"
+      );
+    }
   } catch (err) {
     webhookLogger.error(
       { error: err, checkId },
