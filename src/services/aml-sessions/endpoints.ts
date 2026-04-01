@@ -1807,6 +1807,10 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         if (!onfidoSession) {
           return res.status(404).json({ error: "Onfido session not found" });
         }
+        // Verify ownership: the onfido session must belong to this AML session
+        if (session.onfidoSessionId?.toString() !== onfidoSessionObjectId.toString()) {
+          return res.status(403).json({ error: "Onfido session does not belong to this session" });
+        }
         check_id = onfidoSession.check_id;
       } else if (idvSessionId) {
         // Old frontend path: look up ISession

@@ -72,7 +72,7 @@ function createCheckHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
         { error: err.message, sessionId: req.params.id },
         "Error creating Onfido check"
       );
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "An unexpected error occurred while creating Onfido check" });
     }
   };
 }
@@ -121,7 +121,7 @@ function refreshTokenHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
         { error: err.message, sessionId: req.params.id },
         "Error refreshing Onfido token"
       );
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "An unexpected error occurred while refreshing Onfido token" });
     }
   };
 }
@@ -170,7 +170,7 @@ function getStatusHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
         { error: err.message, sessionId: req.params.id },
         "Error getting Onfido session status"
       );
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "An unexpected error occurred while getting Onfido session status" });
     }
   };
 }
@@ -203,7 +203,7 @@ function findBySignDigestHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
         { error: err.message },
         "Error finding Onfido sessions by sigDigest"
       );
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "An unexpected error occurred while finding Onfido sessions" });
     }
   };
 }

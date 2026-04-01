@@ -46,6 +46,7 @@ async function handleCheckCompleted(payload: any, config: SandboxVsLiveKYCRouteH
   const { object } = payload;
   const checkId = object?.id;
   const status = object?.status;
+  const result = object?.result;
 
   if (!checkId) {
     webhookLogger.warn({ payload }, "Received check.completed without check_id");
@@ -61,10 +62,16 @@ async function handleCheckCompleted(payload: any, config: SandboxVsLiveKYCRouteH
     if (onfidoSession) {
       onfidoSession.check_status = status;
       onfidoSession.check_last_updated_at = new Date();
+      if (result) {
+        onfidoSession.check_result = result;
+        // Update the high-level status so findReusableOnfidoSession works
+        // without depending on frontend polling
+        onfidoSession.status = result === "clear" ? "complete" : "failed";
+      }
       await onfidoSession.save();
 
       webhookLogger.info(
-        { checkId, onfidoSessionId: onfidoSession._id },
+        { checkId, onfidoSessionId: onfidoSession._id, result },
         "Updated IOnfidoSession from webhook"
       );
     }
