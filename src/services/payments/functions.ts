@@ -13,10 +13,11 @@ import {
   baseProvider,
   idvSessionUSDPrice,
   humanIDPaymentsABI,
+  humanIDPaymentsContractAddresses,
 } from "../../constants/misc.js";
 import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { getProvider } from '../../utils/misc.js';
-import { IPaymentRedemption, IPaymentCommitment } from "../../types.js";
+import { IPaymentRedemption, IPaymentCommitment, IHumanIDCreditsPaymentSecret, ISandboxHumanIDCreditsPaymentSecret } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 
 const paymentsLogger = logger.child({
@@ -250,6 +251,9 @@ export async function storeRedemptionPending(
   const prefix = environment === "sandbox" ? "sandbox:" : "";
   const key = `${prefix}payment:redemption-pending:${commitment}`;
   // TTL: 5 minutes (300 seconds)
+  // TODO: Use SET NX (set-if-not-exists) to make this atomic with the isRedemptionPending()
+  // check. Currently, two concurrent requests can both pass isRedemptionPending() before
+  // either writes, allowing double reservation. With NX, only the first SET succeeds.
   await valkeyClient.set(key, "1", { expiry: { type: TimeUnit.Seconds, count: 5 * 60 } });
 }
 
@@ -447,5 +451,219 @@ export async function createCommitmentRecord(
     sourceType,
     createdAt: new Date(),
   });
+}
+
+// ─── Extracted Redemption Business Logic ────────────────────────────────────
+// These functions encapsulate the core reserve/complete/cancel logic so it can
+// be called both from the HTTP payment endpoints and from session creation
+// endpoints (Phase 2 of payment-before-verification).
+
+/**
+ * Minimal config needed for redemption operations.
+ * A subset of SandboxVsLiveKYCRouteHandlerConfig.
+ */
+export type RedemptionConfig = {
+  environment: "sandbox" | "live";
+  PaymentCommitmentModel: Model<IPaymentCommitment>;
+  PaymentRedemptionModel: any;
+  HumanIDCreditsPaymentSecretModel: Model<IHumanIDCreditsPaymentSecret | ISandboxHumanIDCreditsPaymentSecret>;
+};
+
+export type ReserveRedemptionResult = {
+  reservationToken: string;
+  commitment: string;
+};
+
+export type CompleteRedemptionResult = {
+  commitment: string;
+  creditsPartnerUserId?: string;
+};
+
+/**
+ * Reserve a payment for redemption (two-phase commit, phase 1).
+ *
+ * Derives commitment from secret, validates the onchain payment, checks it hasn't
+ * been redeemed/refunded, and stores a reservation in Valkey with 5min TTL.
+ *
+ * @throws Error if payment not found, already redeemed/refunded, or pending
+ */
+export async function reserveRedemption({
+  secret,
+  chainId,
+  service,
+  config,
+}: {
+  secret: string;
+  chainId: number;
+  service: string;
+  config: RedemptionConfig;
+}): Promise<ReserveRedemptionResult> {
+  // Derive commitment from secret
+  const commitment = deriveCommitmentFromSecret(secret);
+
+  // Check if payment exists onchain
+  const contractAddress = humanIDPaymentsContractAddresses[chainId];
+  if (!contractAddress) {
+    throw new PaymentError(`Unsupported chain ID: ${chainId}`, 400);
+  }
+  const payment = await getPaymentFromContract(commitment, chainId, contractAddress);
+
+  if (!payment) {
+    throw new PaymentError("Payment not found onchain", 404);
+  }
+
+  // Validate payment
+  if (payment.refunded) {
+    throw new PaymentError("Payment has been refunded", 400);
+  }
+
+  if (payment.service.toLowerCase() !== service.toLowerCase()) {
+    throw new PaymentError("Payment service does not match requested service", 400);
+  }
+
+  const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
+
+  // Check if already redeemed
+  if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
+    throw new PaymentError("Payment has already been redeemed", 400);
+  }
+
+  // Check if redemption is pending
+  if (await isRedemptionPending(commitment, config.environment)) {
+    throw new PaymentError("Redemption is already pending", 400);
+  }
+
+  // Check if refund is pending
+  if (await isRefundPending(commitment, config.environment)) {
+    throw new PaymentError("Refund is pending for this payment", 400);
+  }
+
+  // Insert redemption-pending record with 5 min TTL
+  // TODO: Use SET NX (set-if-not-exists) to make this atomic with the isRedemptionPending()
+  // check. Currently, two concurrent requests can both pass isRedemptionPending() before
+  // either writes, allowing double reservation. With NX, only the first SET succeeds.
+  await storeRedemptionPending(commitment, config.environment);
+
+  // Generate reservation token
+  const reservationToken = generateReservationToken();
+  await storeReservationToken(reservationToken, commitment, config.environment);
+
+  paymentsLogger.info(
+    { commitment, reservationToken, environment: config.environment },
+    "Reserved redemption"
+  );
+
+  return { reservationToken, commitment };
+}
+
+/**
+ * Complete a reserved redemption (two-phase commit, phase 2).
+ *
+ * Retrieves commitment from reservation token, checks not already redeemed,
+ * and marks the payment as redeemed in MongoDB.
+ *
+ * @throws Error if reservation token is invalid/expired or payment already redeemed
+ */
+export async function completeRedemption({
+  reservationToken,
+  service,
+  fulfillmentReceipt,
+  config,
+}: {
+  reservationToken: string;
+  service: string;
+  fulfillmentReceipt?: string;
+  config: RedemptionConfig;
+}): Promise<CompleteRedemptionResult> {
+  // Get commitment from reservation token
+  const commitment = await getReservationToken(reservationToken, config.environment);
+
+  if (!commitment) {
+    throw new PaymentError("Invalid or expired reservation token", 400);
+  }
+
+  const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
+
+  // Check if already redeemed
+  if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
+    throw new PaymentError("Payment has already been redeemed", 400);
+  }
+
+  // Mark as redeemed
+  await markPaymentAsRedeemed(
+    commitmentRecord,
+    config.PaymentRedemptionModel,
+    service,
+    fulfillmentReceipt
+  );
+
+  // For analytics purposes, if the secret was created by a partner, log the partner userId
+  let creditsPartnerUserId: string | undefined;
+  if (commitmentRecord?.sourceType === 'credits') {
+    const creditsPaymentSecret = await config.HumanIDCreditsPaymentSecretModel.findOne({
+      commitmentId: commitmentRecord._id
+    }).exec();
+    if (creditsPaymentSecret) {
+      creditsPartnerUserId = creditsPaymentSecret.userId.toString();
+    }
+  }
+
+  paymentsLogger.info(
+    {
+      commitment,
+      serviceId: service,
+      fulfillmentReceipt,
+      environment: config.environment,
+      creditsPartnerUserId
+    },
+    "Completed redemption"
+  );
+
+  return { commitment, creditsPartnerUserId };
+}
+
+/**
+ * Cancel a reserved redemption (cleanup on error).
+ *
+ * Retrieves commitment from reservation token and deletes the redemption-pending record.
+ *
+ * @throws Error if reservation token is invalid/expired
+ */
+export async function cancelRedemption({
+  reservationToken,
+  config,
+}: {
+  reservationToken: string;
+  config: Pick<RedemptionConfig, "environment">;
+}): Promise<{ commitment: string }> {
+  // Get commitment from reservation token (this also deletes the token)
+  const commitment = await getReservationToken(reservationToken, config.environment);
+
+  if (!commitment) {
+    throw new PaymentError("Invalid or expired reservation token", 400);
+  }
+
+  // Delete the redemption-pending record
+  await deleteRedemptionPending(commitment, config.environment);
+
+  paymentsLogger.info(
+    { commitment, reservationToken, environment: config.environment },
+    "Cancelled redemption reservation"
+  );
+
+  return { commitment };
+}
+
+/**
+ * Custom error class for payment operations with HTTP status code.
+ */
+export class PaymentError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = "PaymentError";
+    this.statusCode = statusCode;
+  }
 }
 

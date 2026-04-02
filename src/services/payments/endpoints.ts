@@ -5,18 +5,15 @@ import {
   generatePaymentSignature,
   generateRefundSignature,
   getPaymentFromContract,
-  storeReservationToken,
-  getReservationToken,
   storeRefundPending,
   isRefundPending,
-  storeRedemptionPending,
   isRedemptionPending,
-  deleteRedemptionPending,
-  getRedemptionRecord,
   isPaymentRedeemed,
-  markPaymentAsRedeemed,
   deriveCommitmentFromSecret,
-  generateReservationToken,
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
 } from "./functions.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
@@ -128,7 +125,7 @@ function createReserveRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandle
       if (chainId === undefined || chainId === null) {
         return res.status(400).json({ error: "chainId is required" });
       }
-      
+
       const chainIdNum = typeof chainId === "number" ? chainId : Number(chainId);
       if (isNaN(chainIdNum)) {
         return res.status(400).json({ error: "chainId must be a number" });
@@ -137,62 +134,20 @@ function createReserveRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandle
         return res.status(400).json({ error: "service is required" });
       }
 
-      // Derive commitment from secret
-      const commitment = deriveCommitmentFromSecret(secret);
-
-      // Check if payment exists onchain
-      const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
-      if (!contractAddress) {
-        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
-      }
-      const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
-
-      if (!payment) {
-        return res.status(404).json({ error: "Payment not found onchain" });
-      }
-
-      // Validate payment
-      if (payment.refunded) {
-        return res.status(400).json({ error: "Payment has been refunded" });
-      }
-
-      if (payment.service.toLowerCase() !== service.toLowerCase()) {
-        return res.status(400).json({ error: "Payment service does not match requested service" });
-      }
-
-      const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
-
-      // Check if already redeemed
-      if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(400).json({ error: "Payment has already been redeemed" });
-      }
-
-      // Check if redemption is pending
-      if (await isRedemptionPending(commitment, config.environment)) {
-        return res.status(400).json({ error: "Redemption is already pending" });
-      }
-
-      // Check if refund is pending
-      if (await isRefundPending(commitment, config.environment)) {
-        return res.status(400).json({ error: "Refund is pending for this payment" });
-      }
-
-      // Insert redemption-pending record with 5 min TTL
-      await storeRedemptionPending(commitment, config.environment);
-
-      // Generate reservation token
-      const reservationToken = generateReservationToken();
-      await storeReservationToken(reservationToken, commitment, config.environment);
-
-      paymentsLogger.info(
-        { commitment, reservationToken, environment: config.environment },
-        "Reserved redemption"
-      );
+      const result = await reserveRedemption({
+        secret,
+        chainId: chainIdNum,
+        service,
+        config,
+      });
 
       return res.status(200).json({
-        reservationToken,
+        reservationToken: result.reservationToken,
       });
     } catch (error: any) {
+      if (error instanceof PaymentError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       paymentsLogger.error({ error: error.message }, "Error reserving redemption");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });
     }
@@ -234,56 +189,21 @@ function createCompleteRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandl
         return res.status(400).json({ error: "service is required" });
       }
 
-      // Get commitment from reservation token
-      const commitment = await getReservationToken(reservationToken, config.environment);
-
-      if (!commitment) {
-        return res.status(400).json({ error: "Invalid or expired reservation token" });
-      }
-
-      const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
-
-      // Check if already redeemed
-      if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(400).json({ error: "Payment has already been redeemed" });
-      }
-
-      // Mark as redeemed
-      await markPaymentAsRedeemed(
-        commitmentRecord,
-        config.PaymentRedemptionModel,
+      const result = await completeRedemption({
+        reservationToken,
         service,
-        fulfillmentReceipt
-      );
-
-      // For analytics purposes, if the secret was created by a partner, we log the partner userId
-      let creditsPartnerUserId = undefined;
-      if (commitmentRecord?.sourceType === 'credits') {
-        const creditsPaymentSecret = await config.HumanIDCreditsPaymentSecretModel.findOne({
-          commitmentId: commitmentRecord._id
-        }).exec();
-        if (creditsPaymentSecret) {
-          creditsPartnerUserId = creditsPaymentSecret.userId.toString();
-        }
-      }
-
-      paymentsLogger.info(
-        {
-          commitment,
-          // We use "serviceId" here instead of "service" to avoid overwriting the datadog "service" tag.
-          serviceId: service,
-          fulfillmentReceipt,
-          environment: config.environment,
-          creditsPartnerUserId
-        },
-        "Completed redemption"
-      );
+        fulfillmentReceipt,
+        config,
+      });
 
       return res.status(200).json({
         message: "Redemption completed",
-        commitment,
+        commitment: result.commitment,
       });
     } catch (error: any) {
+      if (error instanceof PaymentError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       paymentsLogger.error({ error: error.message }, "Error completing redemption");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });
     }
@@ -322,26 +242,19 @@ function createCancelRedemptionRouteHandler(config: SandboxVsLiveKYCRouteHandler
         return res.status(400).json({ error: "reservationToken is required" });
       }
 
-      // Get commitment from reservation token (this also deletes the token)
-      const commitment = await getReservationToken(reservationToken, config.environment);
-
-      if (!commitment) {
-        return res.status(400).json({ error: "Invalid or expired reservation token" });
-      }
-
-      // Delete the redemption-pending record
-      await deleteRedemptionPending(commitment, config.environment);
-
-      paymentsLogger.info(
-        { commitment, reservationToken, environment: config.environment },
-        "Cancelled redemption reservation"
-      );
+      const result = await cancelRedemption({
+        reservationToken,
+        config,
+      });
 
       return res.status(200).json({
         message: "Redemption reservation cancelled",
-        commitment,
+        commitment: result.commitment,
       });
     } catch (error: any) {
+      if (error instanceof PaymentError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
       paymentsLogger.error({ error: error.message }, "Error cancelling redemption");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });
     }

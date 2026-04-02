@@ -7,6 +7,8 @@ import {
 import {
   postSession,
   postSessionV2,
+  postSessionV3,
+  postSessionV3Sandbox,
   createPayPalOrder,
   payment,
   paymentV2,
@@ -35,6 +37,7 @@ phoneRouter.post('/admin/delete-phone-number', adminDeletePhoneNumber)
 
 phoneRouter.post('/sessions/', postSession)
 phoneRouter.post('/sessions/v2', postSessionV2)
+phoneRouter.post('/sessions/v3', postSessionV3)
 phoneRouter.post('/sessions/:id/paypal-order', createPayPalOrder)
 phoneRouter.post('/sessions/:id/payment', payment)
 phoneRouter.post('/sessions/:id/payment/v2', paymentV2)
@@ -53,6 +56,7 @@ phoneRouter.get('/getCredentials/v6/:number/:code/:country/:sessionId/:nullifier
 const phoneRouterSandbox = express.Router()
 phoneRouterSandbox.get('/sessions', getSessionsSandbox)
 phoneRouterSandbox.post('/sessions/v2', postSessionV2Sandbox)
+phoneRouterSandbox.post('/sessions/v3', postSessionV3Sandbox)
 phoneRouterSandbox.post('/send/v4', sendCodeSandbox)
 phoneRouterSandbox.get('/getCredentials/v6/:number/:code/:country/:sessionId/:nullifier', getCredentialsSandbox)
 

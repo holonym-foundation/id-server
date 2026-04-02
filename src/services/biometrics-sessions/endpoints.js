@@ -1,13 +1,20 @@
 import axios from "axios";
 import { ObjectId } from "mongodb";
-import { BiometricsSession } from "../../init.js";
+import { BiometricsSession, getRouteHandlerConfig } from "../../init.js";
 import {
   sessionStatusEnum,
+  PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { v4 as uuidV4 } from "uuid";
 import { rateLimitByTier } from "../../utils/rate-limiting.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
+import {
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
+} from "../payments/functions.js";
 
 // const postSessionsLogger = logger.child({
 //   msgPrefix: "[POST /sessions] ",
@@ -155,7 +162,162 @@ async function getSessions(req, res) {
   }
 }
 
+const postSessionsV3Logger = logger.child({
+  msgPrefix: "[POST /biometrics-sessions/v3] ",
+  base: {
+    ...pinoOptions.base,
+  },
+});
+
+/**
+ * Creates a biometrics session V3. Same as v2 but requires paymentSecret
+ * and paymentChainId. Payment is reserved before session creation and
+ * completed after (or cancelled on failure).
+ */
+function createPostSessionV3(environment) {
+  return async function postSessionV3(req, res) {
+    let reservationToken = null;
+    const routeHandlerConfig = getRouteHandlerConfig(environment);
+
+    try {
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum = typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res.status(400).json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      // Reserve payment before creating session
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+        config: routeHandlerConfig,
+      });
+      reservationToken = reservation.reservationToken;
+
+      // Rate limiting with whitelist support
+      const address = req.body.address || null;
+      const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress;
+      const rateLimitKey = 'biometrics-sessions';
+      const tier = await getRateLimitTier(address);
+      const { count, limitExceeded, maxForTier } = await rateLimitByTier(tier, ip, rateLimitKey);
+
+      if (limitExceeded) {
+        logger.warn(
+          { ip, address, rateLimitKey, count, tier },
+          'Rate limit exceeded'
+        );
+        return res.status(429).json({
+          error: `This device has reached the maximum number of allowed biometrics sessions (${maxForTier}). Please try again in 30 days.`
+        });
+      }
+
+      const sigDigest = req.body.sigDigest;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+
+      let domain = null;
+      if (req.body.domain === "app.holonym.id") {
+        domain = "app.holonym.id";
+      } else if (req.body.domain === "silksecure.net") {
+        domain = "silksecure.net";
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Get country from IP address
+      const userIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      const resp = await axios.get(
+        `https://ipapi.co/${userIp}/json?key=${process.env.IPAPI_SECRET_KEY}`
+      );
+      const ipCountry = resp?.data?.country;
+
+      if (!ipCountry && process.env.NODE_ENV != 'development') {
+        return res.status(500).json({ error: "Could not determine country from IP" });
+      }
+
+      const session = new BiometricsSession({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.IN_PROGRESS,
+        frontendDomain: domain,
+        silkDiffWallet,
+        ipCountry: ipCountry,
+        num_facetec_liveness_checks: 0,
+        externalDatabaseRefID: uuidV4(),
+      });
+
+      // Only allow a user to create up to 3 sessions
+      const existingSessions = await BiometricsSession.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ]
+        }
+      }).exec();
+
+      if (existingSessions.length >= 3) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (3)"
+        });
+      }
+
+      await session.save();
+
+      // Complete payment redemption after successful session creation
+      await completeRedemption({
+        reservationToken,
+        service: PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+        fulfillmentReceipt: `biometrics-session:${session._id}`,
+        config: routeHandlerConfig,
+      });
+
+      return res.status(201).json({ session });
+    } catch (err) {
+      // Cancel payment reservation on failure
+      if (reservationToken) {
+        try {
+          await cancelRedemption({
+            reservationToken,
+            config: routeHandlerConfig,
+          });
+        } catch (cancelErr) {
+          postSessionsV3Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation"
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
+      console.log("POST /biometrics-sessions/v3: Error encountered", err.message);
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+const postSessionV3 = createPostSessionV3("live");
+const postSessionV3Sandbox = createPostSessionV3("sandbox");
+
 export {
   postSessionV2,
+  postSessionV3,
+  postSessionV3Sandbox,
   getSessions,
 };

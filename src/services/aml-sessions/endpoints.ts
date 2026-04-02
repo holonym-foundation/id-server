@@ -43,7 +43,14 @@ import {
   payPalApiUrlBase,
   sessionStatusEnum,
   cleanHandsSessionStatusEnum,
+  PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
 } from "../../constants/misc.js";
+import {
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
+} from "../payments/functions.js";
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" with { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
@@ -204,14 +211,38 @@ const postSessionsV3Logger = logger.child({
  * Creates an AML session V3. Same as v2 but also creates an Onfido session
  * internally (or reuses an existing one). Returns onfidoSessionId so the
  * frontend can redirect to the standalone /onfido/verify page.
+ *
+ * Requires paymentSecret and paymentChainId. Payment is reserved before
+ * session creation and completed after (or cancelled on failure).
  */
 function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
+    let reservationToken: string | null = null;
+
     try {
       const sigDigest = req.body.sigDigest;
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum = typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res.status(400).json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      // Reserve payment before creating session
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
 
       let silkDiffWallet = null;
       if (req.body.silkDiffWallet === "silk") {
@@ -275,8 +306,32 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         );
       }
 
+      // Complete payment redemption after successful session creation
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+        fulfillmentReceipt: `clean-hands-session:${session._id}`,
+        config,
+      });
+
       return res.status(201).json({ session, onfidoSessionId });
     } catch (err: any) {
+      // Cancel payment reservation on failure
+      if (reservationToken) {
+        try {
+          await cancelRedemption({ reservationToken, config });
+        } catch (cancelErr: any) {
+          postSessionsV3Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation"
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
       console.log("POST /aml-sessions/v3: Error encountered", makeUnknownErrorLoggable(err));
       return res.status(500).json({ error: "An unknown error occurred" });
     }

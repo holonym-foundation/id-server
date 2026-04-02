@@ -24,7 +24,14 @@ import {
   sessionStatusEnum,
   payPalApiUrlBase,
   idvSessionUSDPrice,
+  PAYMENT_SERVICE_GOV_ID_VERIFICATION,
 } from "../../constants/misc.js";
+import {
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
+} from "../payments/functions.js";
 import {
   handleIdvSessionCreation,
   campaignIdToWorkflowId,
@@ -333,14 +340,22 @@ const postSessionsV3Logger = logger.child({
  * Onfido service (findReusableOnfidoSession / createOnfidoSession) and
  * returns onfidoSessionId in the response.
  *
+ * Requires paymentSecret and paymentChainId. Payment is reserved before
+ * session creation and completed after (or cancelled on failure).
+ *
  * Non-onfido providers delegate to the existing handleIdvSessionCreation.
  */
 function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
+    let reservationToken: string | null = null;
+
     try {
       const sigDigest = req.body.sigDigest;
       const idvProvider = req.body.idvProvider;
       const address = req.body.address || null;
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
@@ -349,6 +364,22 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
           .status(400)
           .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
       }
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum = typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res.status(400).json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      // Reserve payment before creating session
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
 
       let domain = null;
       if (req.body.domain === "app.holonym.id") {
@@ -468,6 +499,14 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
           );
         }
 
+        // Complete payment redemption after successful session creation
+        await completeRedemption({
+          reservationToken: reservationToken!,
+          service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+          fulfillmentReceipt: `gov-id-session:${session._id}`,
+          config,
+        });
+
         return res.status(201).json({
           session,
           onfidoSessionId: session.onfidoSessionId,
@@ -477,8 +516,32 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       // Non-onfido providers: delegate to existing handler
       const _idvSession = await handleIdvSessionCreation(config, session, postSessionsV3Logger);
 
+      // Complete payment redemption after successful session creation
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+        fulfillmentReceipt: `gov-id-session:${session._id}`,
+        config,
+      });
+
       return res.status(201).json({ session });
     } catch (err: any) {
+      // Cancel payment reservation on failure
+      if (reservationToken) {
+        try {
+          await cancelRedemption({ reservationToken, config });
+        } catch (cancelErr: any) {
+          postSessionsV3Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation"
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
       console.log("POST /sessions/v3: Error encountered", makeUnknownErrorLoggable(err).message);
 
       if (axios.isAxiosError(err) && err.response?.status === 409 && err.response?.data?.description?.includes("already exists")) {

@@ -1,6 +1,8 @@
 import express from "express";
 import {
   postSessionV2,
+  postSessionV3,
+  postSessionV3Sandbox,
   getSessions,
 } from "../services/biometrics-sessions/endpoints.js";
 import {
@@ -11,6 +13,7 @@ import {
 const router = express.Router();
 
 router.post("/v2", postSessionV2);
+router.post("/v3", postSessionV3);
 router.get("/", getSessions);
 
 router.post("/allow-sybils/v2", postSessionV2AllowSybils);
