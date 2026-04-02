@@ -102,9 +102,29 @@ function refreshTokenHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
           .json({ error: "Session has no applicant_id" });
       }
 
+      const referrer = req.body.referrer;
+      let actualReferrer = "";
+      if (referrer === "human-id") {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3000/*"
+            : "https://id.human.tech/*";
+      } else if (referrer === "silk") {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3000/*"
+            : "https://silksecure.net/*";
+      } else {
+        actualReferrer =
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:3002/*"
+            : "https://app.holonym.id/*";
+      }
+
       const sdkTokenData = await createOnfidoSdkToken(
         config.onfidoAPIKey,
-        onfidoSession.applicant_id
+        onfidoSession.applicant_id,
+        actualReferrer
       );
       if (!sdkTokenData) {
         return res
@@ -115,7 +135,7 @@ function refreshTokenHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
       onfidoSession.onfido_sdk_token = sdkTokenData.token;
       await onfidoSession.save();
 
-      return res.status(200).json({ token: sdkTokenData.token });
+      return res.status(200).json({ sdk_token: sdkTokenData.token });
     } catch (err: any) {
       endpointLogger.error(
         { error: err.message, sessionId: req.params.id },
