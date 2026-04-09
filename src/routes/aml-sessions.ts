@@ -4,6 +4,8 @@ import {
   postSessionSandbox,
   postSessionv2,
   postSessionv2Sandbox,
+  postSessionv3,
+  postSessionv3Sandbox,
   createPayPalOrder,
   payForSession,
   payForSessionV2,
@@ -25,6 +27,7 @@ const router = express.Router();
 
 router.post("/", postSession);
 router.post("/v2", postSessionv2);
+router.post("/v3", postSessionv3);
 router.get("/", getSessions);
 router.post("/:_id/pay", payForSession);
 router.post("/:_id/pay/v2", payForSessionV2);
@@ -43,6 +46,7 @@ const sandboxRouter = express.Router();
 
 sandboxRouter.post("/", postSessionSandbox);
 sandboxRouter.post("/v2", postSessionv2Sandbox);
+sandboxRouter.post("/v3", postSessionv3Sandbox);
 sandboxRouter.get("/", getSessionsSandbox);
 // sandboxRouter.post("/:_id/pay", payForSessionSandbox);
 // sandboxRouter.post("/:_id/pay/v2", payForSessionV2Sandbox);

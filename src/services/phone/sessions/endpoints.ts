@@ -25,8 +25,16 @@ import {
   supportedChainIds,
   idServerPaymentAddress,
   payPalApiUrlBase,
-  SessionStatus
+  SessionStatus,
+  PAYMENT_SERVICE_PHONE_VERIFICATION,
 } from '../../../constants/misc.js'
+import { getRouteHandlerConfig } from '../../../init.js'
+import {
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
+} from '../../payments/functions.js'
 import {
   getAccessToken as getPayPalAccessToken,
   getOrder as getPayPalOrder,
@@ -34,6 +42,7 @@ import {
   capturePayPalOrder
 } from '../../../utils/paypal.js'
 import { makeUnknownErrorLoggable } from '../../../utils/errors.js'
+import { pinoOptions, logger } from '../../../utils/logger.js'
 import { usdToETH, usdToFTM, usdToAVAX } from '../../../utils/cmc.js'
 import { getProvider } from '../../../utils/misc.js'
 import { getTransaction, validateTx } from '../../orders/functions.js'
@@ -497,6 +506,148 @@ export const postSessionV2 = createPostSessionV2({
 export const postSessionV2Sandbox = createPostSessionV2({
   getPhoneSessionsBySigDigest: getSandboxPhoneSessionsBySigDigest,
   putPhoneSession: putSandboxPhoneSession
+})
+
+const postSessionsV3Logger = logger.child({
+  msgPrefix: '[POST /phone/sessions/v3] ',
+  base: {
+    ...pinoOptions.base,
+  },
+})
+
+interface PostSessionV3Config extends PostSessionConfig {
+  environment: 'sandbox' | 'live'
+}
+
+/**
+ * Factory function to create postSessionV3 handler.
+ * Same as v2 but requires paymentSecret and paymentChainId.
+ * Payment is reserved before session creation and completed after
+ * (or cancelled on failure).
+ */
+function createPostSessionV3(config: PostSessionV3Config) {
+  return async function postSessionV3(
+    req: Request,
+    res: Response
+  ): Promise<Response> {
+    let reservationToken: string | null = null
+    const routeHandlerConfig = getRouteHandlerConfig(config.environment)
+
+    try {
+      const sigDigest = req.body.sigDigest as string
+      const paymentSecret = req.body.paymentSecret as string
+      const paymentChainId = req.body.paymentChainId
+
+      if (!sigDigest) {
+        return res.status(400).json({ error: 'sigDigest is required' })
+      }
+      if (!paymentSecret || typeof paymentSecret !== 'string') {
+        return res.status(400).json({ error: 'paymentSecret is required' })
+      }
+      const chainIdNum =
+        typeof paymentChainId === 'number'
+          ? paymentChainId
+          : Number(paymentChainId)
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res
+          .status(400)
+          .json({ error: 'paymentChainId is required and must be a number' })
+      }
+
+      // Only allow a user to create up to 2 sessions
+      const existingSessions =
+        await config.getPhoneSessionsBySigDigest(sigDigest)
+      const sessionsResult = await existingSessions
+      const sessions = sessionsResult?.Items ? sessionsResult.Items : []
+      const filteredSessions = sessions.filter((session) =>
+        (
+          [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ] as SessionStatus[]
+        ).includes(session.sessionStatus?.S as SessionStatus)
+      )
+
+      if (filteredSessions.length >= 2) {
+        return res.status(400).json({
+          error: 'User has reached the maximum number of sessions (2)'
+        })
+      }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_PHONE_VERIFICATION,
+        config: routeHandlerConfig,
+      })
+      reservationToken = reservation.reservationToken
+
+      // We started using ObjectId on Feb 25, 2025
+      const id = new ObjectId().toString()
+      await config.putPhoneSession(
+        id,
+        sigDigest,
+        sessionStatusEnum.IN_PROGRESS,
+        null,
+        null,
+        0,
+        null,
+        null
+      )
+
+      // Complete payment redemption after successful session creation
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service: PAYMENT_SERVICE_PHONE_VERIFICATION,
+        fulfillmentReceipt: `phone-session:${id}`,
+        config: routeHandlerConfig,
+      })
+
+      return res.status(201).json({
+        id,
+        sigDigest,
+        sessionStatus: sessionStatusEnum.IN_PROGRESS,
+        numAttempts: 0
+      })
+    } catch (err) {
+      // Cancel payment reservation on failure
+      if (reservationToken) {
+        try {
+          await cancelRedemption({
+            reservationToken,
+            config: routeHandlerConfig,
+          })
+        } catch (cancelErr: any) {
+          postSessionsV3Logger.error(
+            { error: cancelErr.message, reservationToken },
+            'Failed to cancel payment reservation'
+          )
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message })
+      }
+
+      const error = err as Error
+      console.log('postSessionV3: Error:', makeUnknownErrorLoggable(error))
+      return res.status(500).json({ error: 'An unknown error occurred' })
+    }
+  }
+}
+
+export const postSessionV3 = createPostSessionV3({
+  getPhoneSessionsBySigDigest,
+  putPhoneSession,
+  environment: 'live',
+})
+
+export const postSessionV3Sandbox = createPostSessionV3({
+  getPhoneSessionsBySigDigest: getSandboxPhoneSessionsBySigDigest,
+  putPhoneSession: putSandboxPhoneSession,
+  environment: 'sandbox',
 })
 
 /**

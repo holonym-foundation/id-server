@@ -205,3 +205,12 @@ export const humanIDPaymentsABI = [
  * Service identifier for SBT minting
  */
 export const PAYMENT_SERVICE_SBT_MINT = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('mint_zeronym_v3_sbt'))
+
+/**
+ * Per-flow service identifiers for verification payments.
+ * Used to distinguish payment attribution per verification type.
+ */
+export const PAYMENT_SERVICE_GOV_ID_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_gov_id_verification'))
+export const PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_clean_hands_verification'))
+export const PAYMENT_SERVICE_PHONE_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_phone_verification'))
+export const PAYMENT_SERVICE_BIOMETRICS_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_biometrics_verification'))

@@ -13,7 +13,14 @@ import {
   IHumanIDCreditsPriceOverride,
 } from '../../../types.js';
 import { deriveCommitmentFromSecret, generatePaymentSignature, calculatePriceInToken } from '../functions.js';
-import { idvSessionUSDPrice, PAYMENT_SERVICE_SBT_MINT } from '../../../constants/misc.js';
+import {
+  idvSessionUSDPrice,
+  PAYMENT_SERVICE_SBT_MINT,
+  PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+  PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+  PAYMENT_SERVICE_PHONE_VERIFICATION,
+  PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+} from '../../../constants/misc.js';
 import { logger } from '../../../utils/logger.js';
 
 const creditsLogger = logger.child({ feature: 'holonym', subFeature: 'human-id-credits' });
@@ -586,7 +593,13 @@ export function validateService(service: any): { valid: boolean; error?: string 
   }
 
   // Allowed services for payment secrets
-  const allowedServices = new Set([PAYMENT_SERVICE_SBT_MINT]);
+  const allowedServices = new Set([
+    PAYMENT_SERVICE_SBT_MINT,
+    PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+    PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+    PAYMENT_SERVICE_PHONE_VERIFICATION,
+    PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+  ]);
 
   // Validate against allowlist
   if (!allowedServices.has(service)) {

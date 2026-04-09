@@ -3,6 +3,8 @@ import {
   postSession,
   postSessionV2Prod,
   postSessionV2Sandbox,
+  postSessionV3Prod,
+  postSessionV3Sandbox,
   createPayPalOrder,
   createIdvSession,
   createIdvSessionV2,
@@ -24,6 +26,7 @@ const prodRouter = express.Router();
 
 prodRouter.post("/", postSession);
 prodRouter.post("/v2", postSessionV2Prod);
+prodRouter.post("/v3", postSessionV3Prod);
 prodRouter.post("/:_id/paypal-order", createPayPalOrder);
 // prodRouter.post("/:_id/idv-session", createIdvSession);
 prodRouter.post("/:_id/idv-session/v2", createIdvSessionV2);
@@ -40,6 +43,7 @@ prodRouter.get("/", getSessionsProd);
 const sandboxRouter = express.Router();
 
 sandboxRouter.post("/v2", postSessionV2Sandbox);
+sandboxRouter.post("/v3", postSessionV3Sandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenSandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointSandbox);
 sandboxRouter.post("/:_id/idv-session/sumsub/token", refreshSumsubTokenSandbox);

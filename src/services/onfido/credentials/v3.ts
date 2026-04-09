@@ -170,7 +170,12 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         return res.status(200).json(response);
       }
 
-      const check_id = session.check_id;
+      // check_id may live on the Session (legacy) or on the linked OnfidoSession (decoupled flow)
+      let check_id = session.check_id;
+      if (!check_id && session.onfidoSessionId) {
+        const onfidoSession = await config.OnfidoSessionModel.findById(session.onfidoSessionId).exec();
+        check_id = onfidoSession?.check_id ?? undefined;
+      }
       if (!check_id) {
         return res.status(400).json({ error: "Unexpected: No onfido check_id in session" });
       }

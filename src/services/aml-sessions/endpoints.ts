@@ -13,7 +13,7 @@ import {
   CleanHandsSessionWhitelist,
   getRouteHandlerConfig
 } from "../../init.js";
-import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
+import { SandboxVsLiveKYCRouteHandlerConfig, IOnfidoSession, ISandboxOnfidoSession } from "../../types.js";
 import { 
   getAccessToken as getPayPalAccessToken,
   capturePayPalOrder,
@@ -43,11 +43,22 @@ import {
   payPalApiUrlBase,
   sessionStatusEnum,
   cleanHandsSessionStatusEnum,
+  PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
 } from "../../constants/misc.js";
+import {
+  reserveRedemption,
+  completeRedemption,
+  cancelRedemption,
+  PaymentError,
+} from "../payments/functions.js";
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" with { type: "json" };
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { upgradeLogger } from "./error-logger.js";
 import { failSession } from "../../utils/sessions.js";
+import {
+  createOnfidoSession,
+  findReusableOnfidoSession,
+} from "../onfido-sessions/functions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
 import { ISanctionsResult } from "../../types.js";
@@ -185,6 +196,156 @@ async function postSessionv2Live(req: Request, res: Response) {
 async function postSessionv2Sandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createPostSessionv2RouteHandler(config)(req, res);
+}
+
+const postSessionsV3Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/v3] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
+/**
+ * Creates an AML session V3. Same as v2 but also creates an Onfido session
+ * internally (or reuses an existing one). Returns onfidoSessionId so the
+ * frontend can redirect to the standalone /onfido/verify page.
+ *
+ * Requires paymentSecret and paymentChainId. Payment is reserved before
+ * session creation and completed after (or cancelled on failure).
+ */
+function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    let reservationToken: string | null = null;
+
+    try {
+      const sigDigest = req.body.sigDigest;
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum = typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res.status(400).json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Only allow a user to create up to 15 sessions
+      const existingSessions = await config.AMLChecksSessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED
+          ]
+        }
+      }).exec();
+
+      if (existingSessions.length >= 15) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (15)"
+        });
+      }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
+
+      const session = new config.AMLChecksSessionModel({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.IN_PROGRESS,
+        silkDiffWallet,
+      });
+      await session.save();
+
+      // Check for reusable Onfido session
+      const reusable = await findReusableOnfidoSession(config, sigDigest);
+
+      let onfidoSessionId: any;
+      if (reusable) {
+        onfidoSessionId = reusable._id;
+        session.onfidoSessionId = reusable._id;
+        await session.save();
+
+        postSessionsV3Logger.info(
+          { sessionId: session._id, onfidoSessionId: reusable._id },
+          "Reusing existing Onfido session for Clean Hands"
+        );
+      } else {
+        const onfidoSession = await createOnfidoSession(
+          config,
+          sigDigest,
+          "clean-hands",
+          session._id!,
+        );
+        onfidoSessionId = onfidoSession._id;
+        session.onfidoSessionId = onfidoSession._id;
+        await session.save();
+
+        postSessionsV3Logger.info(
+          { sessionId: session._id, onfidoSessionId: onfidoSession._id },
+          "Created new Onfido session for Clean Hands"
+        );
+      }
+
+      // Complete payment redemption after successful session creation
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+        fulfillmentReceipt: `clean-hands-session:${session._id}`,
+        config,
+      });
+
+      return res.status(201).json({ session, onfidoSessionId });
+    } catch (err: any) {
+      // Cancel payment reservation on failure
+      if (reservationToken) {
+        try {
+          await cancelRedemption({ reservationToken, config });
+        } catch (cancelErr: any) {
+          postSessionsV3Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation"
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
+      console.log("POST /aml-sessions/v3: Error encountered", makeUnknownErrorLoggable(err));
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function postSessionv3Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionv3RouteHandler(config)(req, res);
+}
+
+async function postSessionv3Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionv3RouteHandler(config)(req, res);
 }
 
 /**
@@ -1591,24 +1752,35 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
       const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(config.CleanHandsNullifierAndCredsModel, issuanceNullifier);
       const nullifierIdvSessionId = nullifierAndCreds?.idvSessionId;
 
-      // as idvSessionId is already set in DB, we can directly get the creds from Onfido
-      // without stringent validation
+      // As idvSessionId is already set in DB, we can directly get the creds from Onfido
+      // without stringent validation.
+      // Dual-read: the stored ID could be an IOnfidoSession ID (new path) or an ISession
+      // ID (old path). Try IOnfidoSession first, fall back to ISession.
       if (nullifierIdvSessionId) {
-        let idvSessionObjectId = null;
+        let sessionObjectId = null;
         try {
-          idvSessionObjectId = new ObjectId(nullifierIdvSessionId);
+          sessionObjectId = new ObjectId(nullifierIdvSessionId);
         } catch (err: any) {
           return res.status(400).json({ error: "Invalid idvSessionId" });
         }
 
-        const idvSession = await config.SessionModel.findOne({ _id: idvSessionObjectId }).exec();
-        if (!idvSession) {
-          return res.status(404).json({ error: "IDV session not found" });
+        let check_id: string | undefined;
+
+        // Try IOnfidoSession first
+        const onfidoSession = await config.OnfidoSessionModel.findById(sessionObjectId).exec();
+        if (onfidoSession) {
+          check_id = onfidoSession.check_id;
+        } else {
+          // Fall back to ISession (old path)
+          const idvSession = await config.SessionModel.findOne({ _id: sessionObjectId }).exec();
+          if (!idvSession) {
+            return res.status(404).json({ error: "IDV session not found" });
+          }
+          check_id = idvSession.check_id;
         }
 
-        const check_id = idvSession.check_id;
         if (!check_id) {
-          return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+          return res.status(400).json({ error: "Unexpected: No onfido check_id in the session" });
         }
 
         const check = await getOnfidoCheck(config.onfidoAPIKey, check_id);  
@@ -1670,23 +1842,51 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         });
       }
 
-      // here instead of zkp, we get from onfido directly
+      // Dual-read: try IOnfidoSession by onfidoSessionId first, then fall
+      // back to ISession by idvSessionId (backward compat with old frontend).
+      const onfidoSessionIdParam = req.query.onfidoSessionId;
       const idvSessionId = req.query.idvSessionId;
-      let idvSessionObjectId = null;
-      try {
-        idvSessionObjectId = new ObjectId(idvSessionId as string);
-      } catch (err: any) {
-        return res.status(400).json({ error: "Invalid idvSessionId" });
+
+      let check_id: string | undefined;
+
+      if (onfidoSessionIdParam) {
+        // New frontend path: look up IOnfidoSession directly
+        let onfidoSessionObjectId = null;
+        try {
+          onfidoSessionObjectId = new ObjectId(onfidoSessionIdParam as string);
+        } catch (err: any) {
+          return res.status(400).json({ error: "Invalid onfidoSessionId" });
+        }
+
+        const onfidoSession = await config.OnfidoSessionModel.findById(onfidoSessionObjectId).exec();
+        if (!onfidoSession) {
+          return res.status(404).json({ error: "Onfido session not found" });
+        }
+        // Verify ownership: the onfido session must belong to this AML session
+        if (session.onfidoSessionId?.toString() !== onfidoSessionObjectId.toString()) {
+          return res.status(403).json({ error: "Onfido session does not belong to this session" });
+        }
+        check_id = onfidoSession.check_id;
+      } else if (idvSessionId) {
+        // Old frontend path: look up ISession
+        let idvSessionObjectId = null;
+        try {
+          idvSessionObjectId = new ObjectId(idvSessionId as string);
+        } catch (err: any) {
+          return res.status(400).json({ error: "Invalid idvSessionId" });
+        }
+
+        const idvSession = await config.SessionModel.findOne({ _id: idvSessionObjectId }).exec();
+        if (!idvSession) {
+          return res.status(404).json({ error: "IDV session not found" });
+        }
+        check_id = idvSession.check_id;
+      } else {
+        return res.status(400).json({ error: "onfidoSessionId or idvSessionId query parameter is required" });
       }
 
-      const idvSession = await config.SessionModel.findOne({ _id: idvSessionObjectId }).exec();
-      if (!idvSession) {
-        return res.status(404).json({ error: "IDV session not found" });
-      }
-
-      const check_id = idvSession.check_id;
       if (!check_id) {
-        return res.status(400).json({ error: "Unexpected: No onfido check_id in the idv session" });
+        return res.status(400).json({ error: "Unexpected: No onfido check_id in the session" });
       }
 
       const check = await getOnfidoCheck(config.onfidoAPIKey, check_id);
@@ -1931,7 +2131,10 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         holoUserId: session.sigDigest,
         issuanceNullifier,
         uuid,
-        idvSessionId,
+        // Store idvSessionId for backward compat with re-issuance via nullifier lookup.
+        // When new frontend sends onfidoSessionId, idvSessionId is undefined — that's OK
+        // since the re-issuance path also falls back to IOnfidoSession.
+        idvSessionId: idvSessionId || onfidoSessionIdParam,
       });
       await newNullifierAndCreds.save();
 
@@ -2061,6 +2264,8 @@ export {
   postSessionSandbox,
   postSessionv2Live as postSessionv2,
   postSessionv2Sandbox,
+  postSessionv3Live as postSessionv3,
+  postSessionv3Sandbox,
   createPayPalOrder,
   payForSession,
   payForSessionV2,
