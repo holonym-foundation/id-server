@@ -135,7 +135,7 @@ export async function sendCode(req: Request, res: Response) {
       `https://ipqualityscore.com/api/json/phone/${process.env.IPQUALITYSCORE_APIKEY}/${number}?country[]=${countryCode}`
     )
     if (!('fraud_score' in response?.data)) {
-      console.error(`Invalid response: ${JSON.stringify(response)}`)
+      console.error(`Invalid response: ${JSON.stringify(response.data)}`)
       return res
         .status(500)
         .send({ error: 'Received invalid response from ipqualityscore' })
@@ -448,7 +448,7 @@ export async function getCredentials(req: Request, res: Response) {
 
       return res
         .status(400)
-        .send({ error: 'Could not verify number with given code' })
+        .send({ error: `Could not verify number with given code (${req.params.code})` })
     }
 
     const isRegistered = await getIsRegisteredWithinLast11Months(

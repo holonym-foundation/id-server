@@ -5,6 +5,12 @@
 
 set -e  # Exit on error
 
+if ! command -v aws &> /dev/null; then
+  echo "Error: AWS CLI is not installed."
+  echo "Install it: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+  exit 1
+fi
+
 if [ -f .env ]; then
   export $(grep AWS_DYNAMODB_ACCESS_KEY_ID .env | xargs)
   export $(grep AWS_DYNAMODB_SECRET_ACCESS_KEY .env | xargs)
