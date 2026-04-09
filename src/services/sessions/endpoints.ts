@@ -372,15 +372,6 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(400).json({ error: "paymentChainId is required and must be a number" });
       }
 
-      // Reserve payment before creating session
-      const reservation = await reserveRedemption({
-        secret: paymentSecret,
-        chainId: chainIdNum,
-        service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
-        config,
-      });
-      reservationToken = reservation.reservationToken;
-
       let domain = null;
       if (req.body.domain === "app.holonym.id") {
         domain = "app.holonym.id";
@@ -453,6 +444,15 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
           error: "User has reached the maximum number of sessions (10)"
         });
       }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
 
       if (idvProvider === "onfido") {
         // Check for reusable Onfido session

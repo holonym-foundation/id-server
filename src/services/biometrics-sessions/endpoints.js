@@ -191,15 +191,6 @@ function createPostSessionV3(environment) {
         return res.status(400).json({ error: "paymentChainId is required and must be a number" });
       }
 
-      // Reserve payment before creating session
-      const reservation = await reserveRedemption({
-        secret: paymentSecret,
-        chainId: chainIdNum,
-        service: PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
-        config: routeHandlerConfig,
-      });
-      reservationToken = reservation.reservationToken;
-
       // Rate limiting with whitelist support
       const address = req.body.address || null;
       const ip = req.headers['x-forwarded-for'] ?? req.socket.remoteAddress;
@@ -274,6 +265,15 @@ function createPostSessionV3(environment) {
           error: "User has reached the maximum number of sessions (3)"
         });
       }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+        config: routeHandlerConfig,
+      });
+      reservationToken = reservation.reservationToken;
 
       await session.save();
 

@@ -235,15 +235,6 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(400).json({ error: "paymentChainId is required and must be a number" });
       }
 
-      // Reserve payment before creating session
-      const reservation = await reserveRedemption({
-        secret: paymentSecret,
-        chainId: chainIdNum,
-        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
-        config,
-      });
-      reservationToken = reservation.reservationToken;
-
       let silkDiffWallet = null;
       if (req.body.silkDiffWallet === "silk") {
         silkDiffWallet = "silk";
@@ -268,6 +259,15 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
           error: "User has reached the maximum number of sessions (15)"
         });
       }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
 
       const session = new config.AMLChecksSessionModel({
         sigDigest: sigDigest,

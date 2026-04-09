@@ -554,15 +554,6 @@ function createPostSessionV3(config: PostSessionV3Config) {
           .json({ error: 'paymentChainId is required and must be a number' })
       }
 
-      // Reserve payment before creating session
-      const reservation = await reserveRedemption({
-        secret: paymentSecret,
-        chainId: chainIdNum,
-        service: PAYMENT_SERVICE_PHONE_VERIFICATION,
-        config: routeHandlerConfig,
-      })
-      reservationToken = reservation.reservationToken
-
       // Only allow a user to create up to 2 sessions
       const existingSessions =
         await config.getPhoneSessionsBySigDigest(sigDigest)
@@ -583,6 +574,15 @@ function createPostSessionV3(config: PostSessionV3Config) {
           error: 'User has reached the maximum number of sessions (2)'
         })
       }
+
+      // Reserve payment after all validation checks pass
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service: PAYMENT_SERVICE_PHONE_VERIFICATION,
+        config: routeHandlerConfig,
+      })
+      reservationToken = reservation.reservationToken
 
       // We started using ObjectId on Feb 25, 2025
       const id = new ObjectId().toString()
