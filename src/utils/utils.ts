@@ -109,13 +109,16 @@ export function validateUUIDv4(uuid: string) {
 /**
  * When checking whether a user has already been verified, we want to ignore
  * records that are older than 11 months. The soonest an SBT can expire is
- * 11 months after the _credentials_ are issued. See the logic in the 
+ * 11 months after the _credentials_ are issued. See the logic in the
  * frontend for the security offset to see why we use 11 months instead of 12.
  */
-export function objectIdElevenMonthsAgo() {
+export function dateElevenMonthsAgo() {
   const now = new Date();
-  const elevenMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, now.getDate())
-  return new ObjectId(Math.floor(elevenMonthsAgo.getTime() / 1000).toString(16) + "0000000000000000");
+  return new Date(now.getFullYear(), now.getMonth() - 11, now.getDate());
+}
+
+export function objectIdElevenMonthsAgo() {
+  return new ObjectId(Math.floor(dateElevenMonthsAgo().getTime() / 1000).toString(16) + "0000000000000000");
 }
 
 export function objectIdFiveDaysAgo() {

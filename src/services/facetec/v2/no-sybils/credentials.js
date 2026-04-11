@@ -212,31 +212,57 @@ async function getCredentials(req, res) {
         } else if(faceDbSearchResponse.data.results.length === 1 && faceDbSearchResponse.data.results[0].identifier === session.externalDatabaseRefID) {
           // search returns 1 result which is the same, so it is not a duplicate
           // so continue with enrollment flow
-        } else { 
-          // TODO: Get the externalDatabaseRefID of each result. For each result find it in the UserVerifications collection. For each
-          // document in the collection, check if it was inserted within the last 11 months. If there were any inserted within the last
-          // 11 months, then DO NOT issue credentials (the user is a sybil); otherwise, issue credentials
+        } else {
+          const duplicateUuidV2s = faceDbSearchResponse.data.results
+            .map((r) => r?.identifier)
+            .filter(
+              (id) =>
+                typeof id === "string" &&
+                id.length > 0 &&
+                id !== session.externalDatabaseRefID
+            )
+            .map((id) => govIdUUID(id, "", ""));
 
-          // duplicates found, return error
-          endpointLogger.error(
+          let recentUser = null;
+          if (duplicateUuidV2s.length > 0) {
+            recentUser = await UserVerifications.findOne({
+              "biometrics.uuidV2": { $in: duplicateUuidV2s },
+              _id: { $gt: objectIdElevenMonthsAgo() },
+            }).exec();
+          }
+
+          if (recentUser) {
+            endpointLogger.error(
+              {
+                resultsLength: faceDbSearchResponse.data.results.length,
+                results: faceDbSearchResponse.data.results,
+                externalDatabaseRefID: session.externalDatabaseRefID,
+                matchedUserVerificationId: recentUser._id.toString(),
+              },
+              "Duplicate check: found duplicates within the last 11 months"
+            );
+            await updateSessionStatus(
+              session,
+              biometricsSessionStatusEnum.VERIFICATION_FAILED,
+              `Face scan failed as highly matching duplicates are found.`
+            );
+
+            return res.status(400).json({
+              error: true,
+              errorMessage: "duplicate check: found duplicates",
+              triggerRetry: false,
+            });
+          }
+
+          // No duplicate is within the last 11 months. Fall through to
+          // issuance — the user is allowed to re-verify.
+          endpointLogger.info(
             {
               resultsLength: faceDbSearchResponse.data.results.length,
-              results: faceDbSearchResponse.data.results,
               externalDatabaseRefID: session.externalDatabaseRefID,
             },
-            "Duplicate check: found duplicates"
+            "Duplicate check: duplicates found but none are within the last 11 months; allowing re-verification"
           );
-          await updateSessionStatus(
-            session,
-            biometricsSessionStatusEnum.VERIFICATION_FAILED,
-            `Face scan failed as highly matching duplicates are found.`
-          );
-
-          return res.status(400).json({
-            error: true,
-            errorMessage: "duplicate check: found duplicates",
-            triggerRetry: false,
-          });
         }
       } else if (faceDbSearchResponse.data?.errorMessage?.includes("/3d-db/enroll first")) {
         endpointLogger.info({ externalDatabaseRefID: session.externalDatabaseRefID }, "Fresh/empty groupName detected, continuing with enrollment flow");

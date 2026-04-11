@@ -8,6 +8,7 @@ import {
 import express, { Request, Response, NextFunction } from 'express'
 import { valkeyClient } from '../../utils/valkey-glide.js'
 import { makeUnknownErrorLoggable } from '../../utils/errors.js'
+import { dateElevenMonthsAgo } from '../../utils/utils.js'
 import {
   addNumber,
   numberExists,
@@ -290,14 +291,12 @@ function getIsRegisteredWithinLast11Months(
         result?.Item?.insertedAt?.N &&
         process.env.DISABLE_SYBIL_RESISTANCE_FOR_TESTING !== 'true'
       ) {
-        const now = new Date()
         const insertedAt = new Date(parseInt(result.Item.insertedAt.N))
 
-        // If the number was inserted within the last 11 months, it is considered registered
-        if (
-          now.getTime() - insertedAt.getTime() <
-          1000 * 60 * 60 * 24 * 30 * 11
-        ) {
+        // If the number was inserted within the last 11 months, it is considered registered.
+        // Use the same calendar-month boundary as objectIdElevenMonthsAgo so that the
+        // sybil-resistance cutoff is consistent with the KYC, Clean Hands, and biometrics flows.
+        if (insertedAt >= dateElevenMonthsAgo()) {
           resolve(true)
           return
         } else {
@@ -329,8 +328,9 @@ function getIsRegisteredWithinLast11MonthsAndNotLast5Days(
 
         console.log('insertedAt', insertedAt)
 
-        const insertedWithinLast11Months =
-          now.getTime() - insertedAt.getTime() < 1000 * 60 * 60 * 24 * 30 * 11
+        // Use the same calendar-month boundary as objectIdElevenMonthsAgo so that the
+        // sybil-resistance cutoff is consistent with the KYC, Clean Hands, and biometrics flows.
+        const insertedWithinLast11Months = insertedAt >= dateElevenMonthsAgo()
         const insertedOver5DaysAgo =
           now.getTime() - insertedAt.getTime() > 1000 * 60 * 60 * 24 * 5
         if (insertedWithinLast11Months && insertedOver5DaysAgo) {
