@@ -18,6 +18,8 @@ import {
   refreshSumsubTokenSandbox,
   refund,
   refundV2,
+  refundSessionProd,
+  refundSessionSandbox,
   getSessionsProd,
   getSessionsSandbox,
 } from "../services/sessions/endpoints.js";
@@ -35,6 +37,7 @@ prodRouter.get("/:_id/set-idv-provider/:idvProvider", setIdvProvider);
 // These refund endpoints are old, for when we charged for sessions rather than for SBTs.
 // prodRouter.post("/:_id/idv-session/refund", refund);
 // prodRouter.post("/:_id/idv-session/refund/v2", refundV2);
+prodRouter.post("/:_id/refund", refundSessionProd);
 prodRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenProd);
 prodRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointProd);
 prodRouter.post("/:_id/idv-session/sumsub/token", refreshSumsubTokenProd);
@@ -47,6 +50,7 @@ sandboxRouter.post("/v3", postSessionV3Sandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/token", refreshOnfidoTokenSandbox);
 sandboxRouter.post("/:_id/idv-session/onfido/check", createOnfidoCheckEndpointSandbox);
 sandboxRouter.post("/:_id/idv-session/sumsub/token", refreshSumsubTokenSandbox);
+sandboxRouter.post("/:_id/refund", refundSessionSandbox);
 sandboxRouter.get("/", getSessionsSandbox);
 
 export default prodRouter;

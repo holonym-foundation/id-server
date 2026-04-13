@@ -255,6 +255,13 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
+  // keccak256 of the payment secret used to redeem onchain payment for this session.
+  // Set at v3 session creation. Used by POST /sessions/:_id/refund to look up
+  // the onchain payment when the session ends in VERIFICATION_FAILED.
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
   // Veriff sessionId
   sessionId: {
     type: String,
@@ -355,6 +362,7 @@ const sessionSchema = new Schema<ISession>({
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
 sessionSchema.index({ sumsub_applicant_id: 1 })
+sessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true })
 
 const sandboxSessionSchema = new Schema<ISandboxSession>({
   sigDigest: String,
@@ -373,6 +381,10 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   refundTxHash: {
+    type: String,
+    required: false,
+  },
+  paymentCommitment: {
     type: String,
     required: false,
   },
@@ -492,6 +504,10 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
     type: String,
     required: false,
   },
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
   veriffSessionId: {
     type: String,
     required: false,
@@ -522,6 +538,7 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
   },
 });
 amlChecksSessionSchema.index({ sigDigest: 1 })
+amlChecksSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true })
 
 const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
   sigDigest: String,
@@ -551,6 +568,10 @@ const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
   },
   // Transaction hash of the refund transaction
   refundTxHash: {
+    type: String,
+    required: false,
+  },
+  paymentCommitment: {
     type: String,
     required: false,
   },
@@ -613,8 +634,21 @@ const biometricsSessionSchema = new Schema<IBiometricsSession>({
     type: Number,
     required: false,
   },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  refundTxHash: {
+    type: String,
+    required: false,
+  },
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
 });
 biometricsSessionSchema.index({ sigDigest: 1 })
+biometricsSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true })
 
 // TODO: Do not use MongoDB for mutex purposes. Use something like Redis instead.
 const sessionRefundMutexSchema = new Schema<ISessionRefundMutex>({

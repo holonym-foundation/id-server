@@ -12,6 +12,8 @@ import {
   payForSessionV3,
   refund,
   refundV2,
+  refundCleanHandsSession,
+  refundCleanHandsSessionSandbox,
   issueCreds,
   issueCredsV2,
   issueCredsV3,
@@ -34,8 +36,9 @@ router.post("/:_id/pay/v2", payForSessionV2);
 router.post("/:_id/paypal-order", createPayPalOrder);
 // router.post("/:_id/v2", createIdvSessionV2);
 router.post("/:_id/v3", payForSessionV3);
-// router.post("/:_id/refund", refund); // TODO: Uncomment
+// router.post("/:_id/refund", refund); // legacy v1; never enabled in prod
 router.post("/:_id/refund/v2", refundV2);
+router.post("/:_id/refund", refundCleanHandsSession);
 router.get("/:_id/credentials/:nullifier", issueCreds);
 router.get("/:_id/credentials/v2/:nullifier", issueCredsV2);
 router.get("/:_id/credentials/v3/:nullifier", issueCredsV3);
@@ -55,6 +58,7 @@ sandboxRouter.get("/", getSessionsSandbox);
 // sandboxRouter.post("/:_id/refund/v2", refundV2Sandbox);
 sandboxRouter.get("/:_id/credentials/v4/:nullifier", issueCredsV4Sandbox);
 sandboxRouter.post("/:_id/statement/confirm", confirmStatementSandbox);
+sandboxRouter.post("/:_id/refund", refundCleanHandsSessionSandbox);
 
 export default router;
 export { sandboxRouter };

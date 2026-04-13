@@ -48,6 +48,7 @@ import {
 import {
   reserveRedemption,
   completeRedemption,
+  forceRefundPayment,
   cancelRedemption,
   PaymentError,
 } from "../payments/functions.js";
@@ -273,6 +274,8 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         sigDigest: sigDigest,
         status: sessionStatusEnum.IN_PROGRESS,
         silkDiffWallet,
+        paymentCommitment: reservation.commitment,
+        chainId: chainIdNum,
       });
       await session.save();
 
@@ -2259,6 +2262,95 @@ async function getSessionsSandbox(req: Request, res: Response) {
   return createGetSessionsRouteHandler(config)(req, res);
 }
 
+const refundCleanHandsLogger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/refund] ",
+  base: { ...pinoOptions.base, feature: "holonym", subFeature: "clean-hands-refund" },
+});
+
+/**
+ * POST /aml-sessions/:_id/refund
+ *
+ * User-initiated refund for a Clean Hands session that ended in VERIFICATION_FAILED.
+ * Authorization: req.body.sigDigest must match session.sigDigest.
+ */
+function createRefundCleanHandsSessionRouteHandler(
+  config: SandboxVsLiveKYCRouteHandlerConfig
+) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sid = req.params._id;
+      const sigDigest = req.body?.sigDigest;
+
+      if (!sid) {
+        return res.status(400).json({ error: "session id is required" });
+      }
+      if (!sigDigest || typeof sigDigest !== "string") {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      let objectId: ObjectId;
+      try {
+        objectId = new ObjectId(sid);
+      } catch {
+        return res.status(400).json({ error: "Invalid session id" });
+      }
+
+      const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      if (session.sigDigest !== sigDigest) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (session.status === sessionStatusEnum.REFUNDED) {
+        return res.status(200).json({
+          alreadyRefunded: true,
+          txHash: session.refundTxHash,
+        });
+      }
+      if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({ error: "Session is not eligible for refund" });
+      }
+      if (!session.paymentCommitment || !session.chainId) {
+        return res.status(400).json({
+          error: "Session predates refund-capable payment model",
+        });
+      }
+
+      const result = await forceRefundPayment(
+        session.paymentCommitment,
+        session.chainId,
+        { logger: refundCleanHandsLogger, environment: config.environment }
+      );
+
+      if (!result.success) {
+        return res.status(result.status).json({ error: result.error });
+      }
+
+      session.status = sessionStatusEnum.REFUNDED;
+      session.refundTxHash = result.txHash;
+      await session.save();
+
+      return res.status(200).json({ txHash: result.txHash });
+    } catch (err: any) {
+      refundCleanHandsLogger.error(
+        { error: makeUnknownErrorLoggable(err) },
+        "Error processing Clean Hands refund"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function refundCleanHandsSessionLive(req: Request, res: Response) {
+  return createRefundCleanHandsSessionRouteHandler(getRouteHandlerConfig("live"))(req, res);
+}
+
+async function refundCleanHandsSessionSandbox(req: Request, res: Response) {
+  return createRefundCleanHandsSessionRouteHandler(getRouteHandlerConfig("sandbox"))(req, res);
+}
+
 export {
   postSessionLive as postSession,
   postSessionSandbox,
@@ -2272,6 +2364,8 @@ export {
   payForSessionV3,
   refund,
   refundV2,
+  refundCleanHandsSessionLive as refundCleanHandsSession,
+  refundCleanHandsSessionSandbox,
   issueCreds,
   issueCredsV2,
   issueCredsV3,

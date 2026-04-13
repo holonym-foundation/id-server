@@ -163,6 +163,7 @@ export type ISession = {
   txHash?: string;
   chainId?: number;
   refundTxHash?: string;
+  paymentCommitment?: string;
   sessionId?: string;
   veriffUrl?: string;
   scanRef?: string;
@@ -198,6 +199,7 @@ export type ISandboxSession = {
   txHash?: string;
   chainId?: number;
   refundTxHash?: string;
+  paymentCommitment?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
@@ -233,6 +235,7 @@ export type IAmlChecksSession = {
   txHash?: string;
   chainId?: number;
   refundTxHash?: string;
+  paymentCommitment?: string;
   veriffSessionId?: string;
   verificationFailureReason?: string;
   userDeclaration?: {
@@ -255,6 +258,9 @@ export type IBiometricsSession = {
   externalDatabaseRefID?: string;
   verificationFailureReason?: string;
   num_facetec_liveness_checks?: number;
+  chainId?: number;
+  refundTxHash?: string;
+  paymentCommitment?: string;
 };
 
 export type ISessionRefundMutex = {
