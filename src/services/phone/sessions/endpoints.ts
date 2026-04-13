@@ -20,7 +20,8 @@ import {
   getSandboxPhoneSessionsBySigDigest,
   setPhoneSessionPaymentCommitment,
   setSandboxPhoneSessionPaymentCommitment,
-  ddb
+  setPhoneSessionRefunded,
+  setSandboxPhoneSessionRefunded
 } from '../_utils/dynamodb.js'
 import { valkeyClient } from '../../../utils/valkey-glide.js'
 import {
@@ -676,6 +677,10 @@ const refundPhoneSessionLogger = logger.child({
 interface RefundPhoneSessionV3Config {
   environment: 'sandbox' | 'live'
   getPhoneSessionById: (id: string) => Promise<AWS.DynamoDB.GetItemOutput>
+  setPhoneSessionRefunded: (
+    id: string,
+    refundTxHash: string
+  ) => Promise<AWS.DynamoDB.UpdateItemOutput>
 }
 
 /**
@@ -741,19 +746,7 @@ function createRefundPhoneSessionV3(config: RefundPhoneSessionV3Config) {
         return res.status(refundResult.status).json({ error: refundResult.error })
       }
 
-      const tableName =
-        config.environment === 'sandbox' ? 'sandbox-phone-sessions' : 'phone-sessions'
-      await ddb
-        .updateItem({
-          TableName: tableName,
-          Key: { id: { S: id } },
-          UpdateExpression: 'SET sessionStatus = :s, refundTxHash = :h',
-          ExpressionAttributeValues: {
-            ':s': { S: sessionStatusEnum.REFUNDED },
-            ':h': { S: refundResult.txHash },
-          },
-        })
-        .promise()
+      await config.setPhoneSessionRefunded(id, refundResult.txHash)
 
       return res.status(200).json({ txHash: refundResult.txHash })
     } catch (err) {
@@ -770,11 +763,13 @@ function createRefundPhoneSessionV3(config: RefundPhoneSessionV3Config) {
 export const refundPhoneSessionV3 = createRefundPhoneSessionV3({
   environment: 'live',
   getPhoneSessionById,
+  setPhoneSessionRefunded,
 })
 
 export const refundPhoneSessionV3Sandbox = createRefundPhoneSessionV3({
   environment: 'sandbox',
   getPhoneSessionById: getSandboxPhoneSessionById,
+  setPhoneSessionRefunded: setSandboxPhoneSessionRefunded,
 })
 
 /**

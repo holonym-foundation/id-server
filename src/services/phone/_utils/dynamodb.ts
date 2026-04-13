@@ -295,6 +295,41 @@ export const setSandboxPhoneSessionPaymentCommitment = (
   )
 }
 
+/**
+ * Mark a phone session as REFUNDED with the on-chain refund tx hash.
+ * Used by POST /phone/sessions/:id/refund/v3.
+ */
+const setPhoneSessionRefundedCommon = (
+  tableName: string,
+  id: string,
+  refundTxHash: string
+): Promise<AWS.DynamoDB.UpdateItemOutput> => {
+  const params: AWS.DynamoDB.UpdateItemInput = {
+    TableName: tableName,
+    Key: { id: { S: `${id}` } },
+    UpdateExpression: 'SET sessionStatus = :s, refundTxHash = :h',
+    ExpressionAttributeValues: {
+      ':s': { S: 'REFUNDED' },
+      ':h': { S: refundTxHash }
+    }
+  }
+  return ddb.updateItem(params).promise()
+}
+
+export const setPhoneSessionRefunded = (
+  id: string,
+  refundTxHash: string
+): Promise<AWS.DynamoDB.UpdateItemOutput> => {
+  return setPhoneSessionRefundedCommon('phone-sessions', id, refundTxHash)
+}
+
+export const setSandboxPhoneSessionRefunded = (
+  id: string,
+  refundTxHash: string
+): Promise<AWS.DynamoDB.UpdateItemOutput> => {
+  return setPhoneSessionRefundedCommon('sandbox-phone-sessions', id, refundTxHash)
+}
+
 const getPhoneSessionByIdCommon = (
   tableName: string,
   id: string

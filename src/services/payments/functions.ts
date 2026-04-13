@@ -260,30 +260,12 @@ export async function isRefundPending(
 }
 
 /**
- * Store redemption-pending record in valkey with TTL (5 minutes)
- */
-export async function storeRedemptionPending(
-  commitment: string,
-  environment: "sandbox" | "live"
-): Promise<void> {
-  if (!valkeyClient) {
-    throw new Error("Valkey client not initialized");
-  }
-
-  const prefix = environment === "sandbox" ? "sandbox:" : "";
-  const key = `${prefix}payment:redemption-pending:${commitment}`;
-  // TTL: 5 minutes (300 seconds). Prefer `tryAcquireRedemptionPending` for atomic
-  // check-and-set semantics; this writer remains for backwards-compat callers only.
-  await valkeyClient.set(key, "1", { expiry: { type: TimeUnit.Seconds, count: 5 * 60 } });
-}
-
-/**
  * Atomically attempt to acquire the redemption-pending lock for a commitment.
  * Returns true if the lock was acquired, false if another caller already holds it.
  *
- * Replaces the non-atomic `isRedemptionPending` + `storeRedemptionPending` pair
- * to prevent two concurrent requests with the same payment secret from both
- * proceeding to create sessions for the same payment.
+ * Race-free replacement for the previous non-atomic check-then-write pattern
+ * that allowed two concurrent requests with the same payment secret to both
+ * proceed to create sessions for the same payment.
  */
 export async function tryAcquireRedemptionPending(
   commitment: string,
