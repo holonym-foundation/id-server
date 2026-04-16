@@ -13,6 +13,7 @@ import {
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
+  forceRefundPayment,
   PaymentError,
 } from "../payments/functions.js";
 
@@ -274,6 +275,8 @@ function createPostSessionV3(environment) {
         config: routeHandlerConfig,
       });
       reservationToken = reservation.reservationToken;
+      session.paymentCommitment = reservation.commitment;
+      session.chainId = chainIdNum;
 
       await session.save();
 
@@ -315,9 +318,88 @@ function createPostSessionV3(environment) {
 const postSessionV3 = createPostSessionV3("live");
 const postSessionV3Sandbox = createPostSessionV3("sandbox");
 
+const refundBiometricsLogger = logger.child({
+  msgPrefix: "[POST /biometrics-sessions/:_id/refund] ",
+  base: { ...pinoOptions.base, feature: "holonym", subFeature: "biometrics-refund" },
+});
+
+/**
+ * POST /biometrics-sessions/:_id/refund
+ *
+ * User-initiated refund for a biometrics session that ended in VERIFICATION_FAILED.
+ * Authorization: req.body.sigDigest must match session.sigDigest.
+ */
+async function refundBiometricsSession(req, res) {
+  const routeHandlerConfig = getRouteHandlerConfig("live");
+  try {
+    const sid = req.params._id;
+    const sigDigest = req.body?.sigDigest;
+
+    if (!sid) {
+      return res.status(400).json({ error: "session id is required" });
+    }
+    if (!sigDigest || typeof sigDigest !== "string") {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    let objectId;
+    try {
+      objectId = new ObjectId(sid);
+    } catch {
+      return res.status(400).json({ error: "Invalid session id" });
+    }
+
+    const session = await BiometricsSession.findOne({ _id: objectId }).exec();
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (session.sigDigest !== sigDigest) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (session.status === sessionStatusEnum.REFUNDED) {
+      return res.status(200).json({
+        alreadyRefunded: true,
+        txHash: session.refundTxHash,
+      });
+    }
+    if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
+      return res.status(400).json({ error: "Session is not eligible for refund" });
+    }
+    if (!session.paymentCommitment || !session.chainId) {
+      return res.status(400).json({
+        error: "Session predates refund-capable payment model",
+      });
+    }
+
+    const result = await forceRefundPayment(
+      session.paymentCommitment,
+      session.chainId,
+      { logger: refundBiometricsLogger, environment: routeHandlerConfig.environment }
+    );
+
+    if (!result.success) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    session.status = sessionStatusEnum.REFUNDED;
+    session.refundTxHash = result.txHash;
+    await session.save();
+
+    return res.status(200).json({ txHash: result.txHash });
+  } catch (err) {
+    refundBiometricsLogger.error(
+      { error: err?.message || String(err) },
+      "Error processing biometrics refund"
+    );
+    return res.status(500).json({ error: "An unknown error occurred" });
+  }
+}
+
 export {
   postSessionV2,
   postSessionV3,
   postSessionV3Sandbox,
   getSessions,
+  refundBiometricsSession,
 };
