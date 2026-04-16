@@ -221,6 +221,28 @@ export async function storeRefundPending(
 }
 
 /**
+ * Atomically attempt to acquire the refund-pending lock for a commitment.
+ * Returns true if the lock was acquired (no prior pending refund), false otherwise.
+ *
+ * Race-free replacement for `isRefundPending` + `storeRefundPending` pairs.
+ */
+export async function tryAcquireRefundPending(
+  commitment: string,
+  environment: "sandbox" | "live"
+): Promise<boolean> {
+  if (!valkeyClient) {
+    throw new Error("Valkey client not initialized");
+  }
+  const prefix = environment === "sandbox" ? "sandbox:" : "";
+  const key = `${prefix}payment:refund-pending:${commitment}`;
+  const result = await valkeyClient.set(key, "1", {
+    conditionalSet: "onlyIfDoesNotExist",
+    expiry: { type: TimeUnit.Seconds, count: 10 * 60 },
+  });
+  return result !== null;
+}
+
+/**
  * Check if refund is pending
  */
 export async function isRefundPending(
@@ -238,23 +260,27 @@ export async function isRefundPending(
 }
 
 /**
- * Store redemption-pending record in valkey with TTL (5 minutes)
+ * Atomically attempt to acquire the redemption-pending lock for a commitment.
+ * Returns true if the lock was acquired, false if another caller already holds it.
+ *
+ * Race-free replacement for the previous non-atomic check-then-write pattern
+ * that allowed two concurrent requests with the same payment secret to both
+ * proceed to create sessions for the same payment.
  */
-export async function storeRedemptionPending(
+export async function tryAcquireRedemptionPending(
   commitment: string,
   environment: "sandbox" | "live"
-): Promise<void> {
+): Promise<boolean> {
   if (!valkeyClient) {
     throw new Error("Valkey client not initialized");
   }
-
   const prefix = environment === "sandbox" ? "sandbox:" : "";
   const key = `${prefix}payment:redemption-pending:${commitment}`;
-  // TTL: 5 minutes (300 seconds)
-  // TODO: Use SET NX (set-if-not-exists) to make this atomic with the isRedemptionPending()
-  // check. Currently, two concurrent requests can both pass isRedemptionPending() before
-  // either writes, allowing double reservation. With NX, only the first SET succeeds.
-  await valkeyClient.set(key, "1", { expiry: { type: TimeUnit.Seconds, count: 5 * 60 } });
+  const result = await valkeyClient.set(key, "1", {
+    conditionalSet: "onlyIfDoesNotExist",
+    expiry: { type: TimeUnit.Seconds, count: 5 * 60 },
+  });
+  return result !== null;
 }
 
 /**
@@ -528,21 +554,17 @@ export async function reserveRedemption({
     throw new PaymentError("Payment has already been redeemed", 400);
   }
 
-  // Check if redemption is pending
-  if (await isRedemptionPending(commitment, config.environment)) {
-    throw new PaymentError("Redemption is already pending", 400);
-  }
-
   // Check if refund is pending
   if (await isRefundPending(commitment, config.environment)) {
     throw new PaymentError("Refund is pending for this payment", 400);
   }
 
-  // Insert redemption-pending record with 5 min TTL
-  // TODO: Use SET NX (set-if-not-exists) to make this atomic with the isRedemptionPending()
-  // check. Currently, two concurrent requests can both pass isRedemptionPending() before
-  // either writes, allowing double reservation. With NX, only the first SET succeeds.
-  await storeRedemptionPending(commitment, config.environment);
+  // Atomically acquire the redemption-pending lock. SET NX ensures that two
+  // concurrent requests with the same payment secret cannot both proceed.
+  const acquired = await tryAcquireRedemptionPending(commitment, config.environment);
+  if (!acquired) {
+    throw new PaymentError("Redemption is already pending", 400);
+  }
 
   // Generate reservation token
   const reservationToken = generateReservationToken();
@@ -652,6 +674,82 @@ export async function cancelRedemption({
   );
 
   return { commitment };
+}
+
+/**
+ * Result of a `forceRefundPayment` attempt.
+ */
+export type ForceRefundResult =
+  | { success: true; txHash: string; contractAddress: string }
+  | { success: false; status: number; error: string };
+
+/**
+ * Issue an admin-wallet `forceRefund` for a previously-paid commitment.
+ *
+ * Caller is responsible for authorizing the refund (admin API key for the
+ * admin endpoint; sigDigest + session.status === VERIFICATION_FAILED for
+ * per-session endpoints). This helper does NOT check `isPaymentRedeemed` —
+ * the per-session callers always invoke it for redeemed payments.
+ */
+export async function forceRefundPayment(
+  commitment: string,
+  chainId: number,
+  ctx: { logger: { info: (...args: any[]) => void; error: (...args: any[]) => void }; environment: "sandbox" | "live" }
+): Promise<ForceRefundResult> {
+  const contractAddress = humanIDPaymentsContractAddresses[chainId];
+  if (!contractAddress) {
+    return { success: false, status: 400, error: `Unsupported chain ID: ${chainId}` };
+  }
+
+  let payment;
+  try {
+    payment = await getPaymentFromContract(commitment, chainId, contractAddress);
+  } catch (err: any) {
+    return { success: false, status: 500, error: err?.message || String(err) };
+  }
+  if (!payment) {
+    return { success: false, status: 404, error: "Payment not found onchain" };
+  }
+  if (payment.refunded) {
+    return { success: false, status: 400, error: "Payment has already been refunded" };
+  }
+
+  if (await isRedemptionPending(commitment, ctx.environment)) {
+    return { success: false, status: 400, error: "Redemption is pending for this payment" };
+  }
+
+  // Atomically acquire the refund-pending lock to prevent concurrent refund attempts
+  // (e.g. user-triggered session refund colliding with admin force-refund).
+  const acquired = await tryAcquireRefundPending(commitment, ctx.environment);
+  if (!acquired) {
+    return { success: false, status: 400, error: "Refund is already pending" };
+  }
+
+  const adminPrivateKey = process.env.PAYMENTS_ADMIN_PRIVATE_KEY;
+  if (!adminPrivateKey) {
+    return { success: false, status: 500, error: "Missing payments admin private key" };
+  }
+
+  const provider = getProvider(chainId);
+  const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
+  const contract = new ethers.Contract(contractAddress, humanIDPaymentsABI, adminWallet);
+
+  let txHash: string;
+  try {
+    const tx = await contract.forceRefund(commitment);
+    txHash = tx.hash;
+    ctx.logger.info({ commitment, chainId, txHash }, "forceRefund transaction sent");
+    await tx.wait();
+  } catch (err: any) {
+    ctx.logger.error(
+      { commitment, chainId, error: err?.message || err },
+      "Error calling forceRefund"
+    );
+    return { success: false, status: 500, error: err?.message || String(err) };
+  }
+
+  ctx.logger.info({ commitment, chainId, txHash }, "forceRefund completed successfully");
+  return { success: true, txHash, contractAddress };
 }
 
 /**

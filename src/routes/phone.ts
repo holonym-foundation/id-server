@@ -16,6 +16,8 @@ import {
   redeemVoucher,
   refund,
   refundV2,
+  refundPhoneSessionV3,
+  refundPhoneSessionV3Sandbox,
   isVoucherRedeemed,
   getSessionsSandbox,
   postSessionV2Sandbox,
@@ -45,6 +47,7 @@ phoneRouter.post('/sessions/:id/payment/v3', paymentV3)
 phoneRouter.post('/sessions/:id/redeem-voucher', redeemVoucher)
 phoneRouter.post('/sessions/:id/refund', refund)
 phoneRouter.post('/sessions/:id/refund/v2', refundV2)
+phoneRouter.post('/sessions/:id/refund/v3', refundPhoneSessionV3)
 phoneRouter.post('/sessions/is-voucher-redeemed', isVoucherRedeemed)
 phoneRouter.get('/sessions', getSessions)
 phoneRouter.get('/sessions/generate-voucher', generateVoucher)
@@ -57,6 +60,7 @@ const phoneRouterSandbox = express.Router()
 phoneRouterSandbox.get('/sessions', getSessionsSandbox)
 phoneRouterSandbox.post('/sessions/v2', postSessionV2Sandbox)
 phoneRouterSandbox.post('/sessions/v3', postSessionV3Sandbox)
+phoneRouterSandbox.post('/sessions/:id/refund/v3', refundPhoneSessionV3Sandbox)
 phoneRouterSandbox.post('/send/v4', sendCodeSandbox)
 phoneRouterSandbox.get('/getCredentials/v6/:number/:code/:country/:sessionId/:nullifier', getCredentialsSandbox)
 

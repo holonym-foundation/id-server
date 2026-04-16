@@ -30,6 +30,7 @@ import {
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
+  forceRefundPayment,
   PaymentError,
 } from "../payments/functions.js";
 import {
@@ -453,6 +454,8 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         config,
       });
       reservationToken = reservation.reservationToken;
+      session.paymentCommitment = reservation.commitment;
+      session.chainId = chainIdNum;
 
       if (idvProvider === "onfido") {
         // Check for reusable Onfido session
@@ -1396,6 +1399,95 @@ async function getSessionsSandbox(req: Request, res: Response) {
   return createGetSessionsRouteHandler(config)(req, res);
 }
 
+const refundSessionLogger = logger.child({
+  msgPrefix: "[POST /sessions/:_id/refund] ",
+  base: { ...pinoOptions.base, feature: "holonym", subFeature: "kyc-refund" },
+});
+
+/**
+ * POST /sessions/:_id/refund
+ *
+ * User-initiated refund for a gov-id session that ended in VERIFICATION_FAILED.
+ * Authorization: req.body.sigDigest must match session.sigDigest. The :_id
+ * (an ObjectId generated server-side at session creation) acts as a user-held
+ * secret — only the legitimate session owner should know it.
+ */
+function createRefundSessionRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sid = req.params._id;
+      const sigDigest = req.body?.sigDigest;
+
+      if (!sid) {
+        return res.status(400).json({ error: "session id is required" });
+      }
+      if (!sigDigest || typeof sigDigest !== "string") {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      let objectId: ObjectId;
+      try {
+        objectId = new ObjectId(sid);
+      } catch {
+        return res.status(400).json({ error: "Invalid session id" });
+      }
+
+      const session = await config.SessionModel.findOne({ _id: objectId }).exec();
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      if (session.sigDigest !== sigDigest) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (session.status === sessionStatusEnum.REFUNDED) {
+        return res.status(200).json({
+          alreadyRefunded: true,
+          txHash: session.refundTxHash,
+        });
+      }
+      if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({ error: "Session is not eligible for refund" });
+      }
+      if (!session.paymentCommitment || !session.chainId) {
+        return res.status(400).json({
+          error: "Session predates refund-capable payment model",
+        });
+      }
+
+      const result = await forceRefundPayment(
+        session.paymentCommitment,
+        session.chainId,
+        { logger: refundSessionLogger, environment: config.environment }
+      );
+
+      if (!result.success) {
+        return res.status(result.status).json({ error: result.error });
+      }
+
+      session.status = sessionStatusEnum.REFUNDED;
+      session.refundTxHash = result.txHash;
+      await session.save();
+
+      return res.status(200).json({ txHash: result.txHash });
+    } catch (err: any) {
+      refundSessionLogger.error(
+        { error: makeUnknownErrorLoggable(err) },
+        "Error processing session refund"
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function refundSessionProd(req: Request, res: Response) {
+  return createRefundSessionRouteHandler(getRouteHandlerConfig("live"))(req, res);
+}
+
+async function refundSessionSandbox(req: Request, res: Response) {
+  return createRefundSessionRouteHandler(getRouteHandlerConfig("sandbox"))(req, res);
+}
+
 export {
   postSession,
   postSessionV2Prod,
@@ -1415,6 +1507,8 @@ export {
   refreshSumsubTokenSandbox,
   refund,
   refundV2,
+  refundSessionProd,
+  refundSessionSandbox,
   getSessionsProd,
   getSessionsSandbox,
   createPostSessionV2RouteHandler,

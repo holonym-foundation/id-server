@@ -17,7 +17,11 @@ import {
   batchPutVouchers,
   putSandboxPhoneSession,
   getSandboxPhoneSessionById,
-  getSandboxPhoneSessionsBySigDigest
+  getSandboxPhoneSessionsBySigDigest,
+  setPhoneSessionPaymentCommitment,
+  setSandboxPhoneSessionPaymentCommitment,
+  setPhoneSessionRefunded,
+  setSandboxPhoneSessionRefunded
 } from '../_utils/dynamodb.js'
 import { valkeyClient } from '../../../utils/valkey-glide.js'
 import {
@@ -33,6 +37,7 @@ import {
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
+  forceRefundPayment,
   PaymentError,
 } from '../../payments/functions.js'
 import {
@@ -517,6 +522,11 @@ const postSessionsV3Logger = logger.child({
 
 interface PostSessionV3Config extends PostSessionConfig {
   environment: 'sandbox' | 'live'
+  setPhoneSessionPaymentCommitment: (
+    id: string,
+    paymentCommitment: string,
+    chainId: number
+  ) => Promise<AWS.DynamoDB.UpdateItemOutput>
 }
 
 /**
@@ -597,6 +607,13 @@ function createPostSessionV3(config: PostSessionV3Config) {
         null
       )
 
+      // Link this session to its onchain payment so VERIFICATION_FAILED can be refunded later.
+      await config.setPhoneSessionPaymentCommitment(
+        id,
+        reservation.commitment,
+        chainIdNum
+      )
+
       // Complete payment redemption after successful session creation
       await completeRedemption({
         reservationToken: reservationToken!,
@@ -641,13 +658,118 @@ function createPostSessionV3(config: PostSessionV3Config) {
 export const postSessionV3 = createPostSessionV3({
   getPhoneSessionsBySigDigest,
   putPhoneSession,
+  setPhoneSessionPaymentCommitment,
   environment: 'live',
 })
 
 export const postSessionV3Sandbox = createPostSessionV3({
   getPhoneSessionsBySigDigest: getSandboxPhoneSessionsBySigDigest,
   putPhoneSession: putSandboxPhoneSession,
+  setPhoneSessionPaymentCommitment: setSandboxPhoneSessionPaymentCommitment,
   environment: 'sandbox',
+})
+
+const refundPhoneSessionLogger = logger.child({
+  msgPrefix: '[POST /phone/sessions/:id/refund/v3] ',
+  base: { ...pinoOptions.base, feature: 'holonym', subFeature: 'phone-refund' },
+})
+
+interface RefundPhoneSessionV3Config {
+  environment: 'sandbox' | 'live'
+  getPhoneSessionById: (id: string) => Promise<AWS.DynamoDB.GetItemOutput>
+  setPhoneSessionRefunded: (
+    id: string,
+    refundTxHash: string
+  ) => Promise<AWS.DynamoDB.UpdateItemOutput>
+}
+
+/**
+ * POST /phone/sessions/:id/refund/v3
+ *
+ * User-initiated refund for a phone session that ended in VERIFICATION_FAILED.
+ * Authorization: req.body.sigDigest must match session.sigDigest.
+ *
+ * v3 path is used to avoid colliding with the legacy `/refund` and `/refund/v2`
+ * endpoints, which are user-signed refunds for the pre-2026 session-payment
+ * model.
+ */
+function createRefundPhoneSessionV3(config: RefundPhoneSessionV3Config) {
+  return async function refundPhoneSessionV3(
+    req: Request,
+    res: Response
+  ): Promise<Response> {
+    try {
+      const id = req.params.id as string
+      const sigDigest = req.body?.sigDigest as string | undefined
+
+      if (!id) {
+        return res.status(400).json({ error: 'session id is required' })
+      }
+      if (!sigDigest || typeof sigDigest !== 'string') {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const result = await config.getPhoneSessionById(id)
+      const item = result?.Item
+      if (!item) {
+        return res.status(404).json({ error: 'Session not found' })
+      }
+      const storedSigDigest = item.sigDigest?.S
+      if (storedSigDigest !== sigDigest) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const status = item.sessionStatus?.S as SessionStatus | undefined
+      const refundTxHash = item.refundTxHash?.S
+      const paymentCommitment = item.paymentCommitment?.S
+      const chainIdStr = item.chainId?.N
+      const chainId = chainIdStr ? Number(chainIdStr) : null
+
+      if (status === sessionStatusEnum.REFUNDED) {
+        return res.status(200).json({ alreadyRefunded: true, txHash: refundTxHash })
+      }
+      if (status !== sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({ error: 'Session is not eligible for refund' })
+      }
+      if (!paymentCommitment || !chainId) {
+        return res.status(400).json({
+          error: 'Session predates refund-capable payment model',
+        })
+      }
+
+      const refundResult = await forceRefundPayment(paymentCommitment, chainId, {
+        logger: refundPhoneSessionLogger,
+        environment: config.environment,
+      })
+
+      if (!refundResult.success) {
+        return res.status(refundResult.status).json({ error: refundResult.error })
+      }
+
+      await config.setPhoneSessionRefunded(id, refundResult.txHash)
+
+      return res.status(200).json({ txHash: refundResult.txHash })
+    } catch (err) {
+      const error = err as Error
+      refundPhoneSessionLogger.error(
+        { error: makeUnknownErrorLoggable(error) },
+        'Error processing phone refund'
+      )
+      return res.status(500).json({ error: 'An unknown error occurred' })
+    }
+  }
+}
+
+export const refundPhoneSessionV3 = createRefundPhoneSessionV3({
+  environment: 'live',
+  getPhoneSessionById,
+  setPhoneSessionRefunded,
+})
+
+export const refundPhoneSessionV3Sandbox = createRefundPhoneSessionV3({
+  environment: 'sandbox',
+  getPhoneSessionById: getSandboxPhoneSessionById,
+  setPhoneSessionRefunded: setSandboxPhoneSessionRefunded,
 })
 
 /**
