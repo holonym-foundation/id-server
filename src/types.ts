@@ -269,7 +269,6 @@ export type IZkPassportSession = {
   status?: string;
   paymentCommitment?: string;
   chainId?: number;
-  numAttempts?: number;
   failureReason?: string;
   refundTxHashes?: string[];
   createdAt?: Date;

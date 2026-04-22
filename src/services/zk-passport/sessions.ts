@@ -29,7 +29,7 @@ const zkPassportSessionsLogger = logger.child({
 const MAX_ZK_PASSPORT_SESSIONS_PER_USER = 10;
 
 /**
- * POST /zk-passport/sessions/v2
+ * POST /zk-passport/sessions
  *
  * Creates a zkPassport verification session bound to a paid commitment.
  * The session only exists post-payment: `reserveRedemption` validates the
@@ -42,7 +42,7 @@ const MAX_ZK_PASSPORT_SESSIONS_PER_USER = 10;
  * Body: { holoUserId, paymentSecret, paymentChainId }
  * Returns: { session } with _id as the sid.
  */
-function createPostZkPassportSessionV2Handler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+function createPostZkPassportSessionHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     let reservationToken: string | null = null;
 
@@ -115,7 +115,6 @@ function createPostZkPassportSessionV2Handler(config: SandboxVsLiveKYCRouteHandl
         status: sessionStatusEnum.IN_PROGRESS,
         paymentCommitment: reservation.commitment,
         chainId: chainIdNum,
-        numAttempts: 0,
       });
       await session.save();
 
@@ -159,19 +158,19 @@ function createPostZkPassportSessionV2Handler(config: SandboxVsLiveKYCRouteHandl
 
       zkPassportSessionsLogger.error(
         { error: makeUnknownErrorLoggable(err) },
-        "POST /zk-passport/sessions/v2 error",
+        "POST /zk-passport/sessions error",
       );
       return res.status(500).json({ error: "An unknown error occurred" });
     }
   };
 }
 
-export async function postZkPassportSessionV2Prod(req: Request, res: Response) {
-  return createPostZkPassportSessionV2Handler(getRouteHandlerConfig("live"))(req, res);
+export async function postZkPassportSessionProd(req: Request, res: Response) {
+  return createPostZkPassportSessionHandler(getRouteHandlerConfig("live"))(req, res);
 }
 
-export async function postZkPassportSessionV2Sandbox(req: Request, res: Response) {
-  return createPostZkPassportSessionV2Handler(getRouteHandlerConfig("sandbox"))(req, res);
+export async function postZkPassportSessionSandbox(req: Request, res: Response) {
+  return createPostZkPassportSessionHandler(getRouteHandlerConfig("sandbox"))(req, res);
 }
 
 /**
@@ -213,7 +212,6 @@ function createGetZkPassportSessionHandler(config: SandboxVsLiveKYCRouteHandlerC
       return res.status(200).json({
         _id: session._id,
         status: session.status,
-        numAttempts: session.numAttempts ?? 0,
         failureReason: session.failureReason,
         chainId: session.chainId,
       });
