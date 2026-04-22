@@ -983,11 +983,6 @@ const zkPassportSessionSchema = new Schema<IZkPassportSession>({
     type: Number,
     required: false,
   },
-  numAttempts: {
-    type: Number,
-    required: false,
-    default: 0,
-  },
   failureReason: {
     type: String,
     required: false,
@@ -1014,11 +1009,6 @@ const sandboxZkPassportSessionSchema = new Schema<ISandboxZkPassportSession>({
   chainId: {
     type: Number,
     required: false,
-  },
-  numAttempts: {
-    type: Number,
-    required: false,
-    default: 0,
   },
   failureReason: {
     type: String,

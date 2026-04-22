@@ -4,8 +4,8 @@ import {
   verifyAndIssueSandbox,
 } from "../services/zk-passport/verify-and-issue.js";
 import {
-  postZkPassportSessionV2Prod,
-  postZkPassportSessionV2Sandbox,
+  postZkPassportSessionProd,
+  postZkPassportSessionSandbox,
   getZkPassportSessionProd,
   getZkPassportSessionSandbox,
   refundZkPassportSessionProd,
@@ -14,14 +14,14 @@ import {
 
 const prodRouter = express.Router();
 
-prodRouter.post("/sessions/v2", postZkPassportSessionV2Prod);
+prodRouter.post("/sessions", postZkPassportSessionProd);
 prodRouter.get("/sessions/:sid", getZkPassportSessionProd);
 prodRouter.post("/sessions/:sid/refund", refundZkPassportSessionProd);
 prodRouter.post("/verify-and-issue", verifyAndIssueProd);
 
 const sandboxRouter = express.Router();
 
-sandboxRouter.post("/sessions/v2", postZkPassportSessionV2Sandbox);
+sandboxRouter.post("/sessions", postZkPassportSessionSandbox);
 sandboxRouter.get("/sessions/:sid", getZkPassportSessionSandbox);
 sandboxRouter.post("/sessions/:sid/refund", refundZkPassportSessionSandbox);
 sandboxRouter.post("/verify-and-issue", verifyAndIssueSandbox);
