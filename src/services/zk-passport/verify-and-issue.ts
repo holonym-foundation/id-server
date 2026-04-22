@@ -540,7 +540,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       return res.status(200).json(response);
     } catch (err: any) {
       if (err.status && err.error) {
-        return res.status(err.status).json({ err: err.error });
+        return res.status(err.status).json({ error: err.error });
       }
 
       endpointLogger.error(
