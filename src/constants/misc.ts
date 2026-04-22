@@ -119,6 +119,8 @@ export const idvSessionUSDPrice = 5.0;
 
 export const amlSessionUSDPrice = 1;
 
+export const zkPassportSessionUSDPrice = 3.0;
+
 export const defaultActionId = 123456789;
 
 export const kycIssuerAddress =
@@ -214,3 +216,4 @@ export const PAYMENT_SERVICE_GOV_ID_VERIFICATION = ethers.utils.keccak256(ethers
 export const PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_clean_hands_verification'))
 export const PAYMENT_SERVICE_PHONE_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_phone_verification'))
 export const PAYMENT_SERVICE_BIOMETRICS_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_biometrics_verification'))
+export const PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_zk_passport_verification'))

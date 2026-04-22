@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { ObjectId } from "mongodb";
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import { poseidon } from "circomlibjs-old";
@@ -7,6 +8,7 @@ import {
   UserVerifications,
   VerificationCollisionMetadata,
 } from "../../init.js";
+import { sessionStatusEnum } from "../../constants/misc.js";
 import {
   getDateAsInt,
   govIdUUID,
@@ -201,6 +203,25 @@ function formatDateOfBirth(dob: Date | string): string {
 }
 
 /**
+ * Map ZKPassport SDK error shapes to our structured error codes so the
+ * frontend can render PRD §4.2 UX (unsupported doc, PFM failure, generic).
+ */
+function classifyZkPassportError(err: unknown): string {
+  const msg =
+    typeof err === "string"
+      ? err
+      : (err as any)?.message || JSON.stringify(err ?? "");
+  const lower = (msg || "").toLowerCase();
+  if (lower.includes("face match") || lower.includes("pfm") || lower.includes("private face match")) {
+    return "ZK_PASSPORT_PFM_FAILED";
+  }
+  if (lower.includes("unsupported") || lower.includes("not supported") || lower.includes("document")) {
+    return "ZK_PASSPORT_UNSUPPORTED_DOCUMENT";
+  }
+  return "ZK_PASSPORT_VERIFICATION_FAILED";
+}
+
+/**
  * POST /zk-passport/verify-and-issue
  *
  * Single request/response endpoint for ZK Passport verification and credential issuance.
@@ -215,10 +236,31 @@ function formatDateOfBirth(dob: Date | string): string {
  */
 function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
+    let session: any = null;
     try {
-      const { proofs, queryResult, nullifier: issuanceNullifier } = req.body;
+      const {
+        sid,
+        holoUserId,
+        proofs,
+        queryResult,
+        nullifier: issuanceNullifier,
+      } = req.body;
 
       // --- Validate request body ---
+
+      if (!sid || typeof sid !== "string") {
+        return res.status(400).json({
+          code: "MISSING_SESSION_ID",
+          error: "sid is required",
+        });
+      }
+
+      if (!holoUserId || typeof holoUserId !== "string") {
+        return res.status(401).json({
+          code: "UNAUTHORIZED",
+          error: "holoUserId is required",
+        });
+      }
 
       if (!proofs || !Array.isArray(proofs) || proofs.length === 0) {
         return res.status(400).json({ error: "Missing or invalid proofs array" });
@@ -230,6 +272,52 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       if (!issuanceNullifier) {
         return res.status(400).json({ error: "Missing nullifier (issuance nullifier)" });
+      }
+
+      // --- Load + gate the session ---
+
+      let sessionObjectId: ObjectId;
+      try {
+        sessionObjectId = new ObjectId(sid);
+      } catch {
+        return res.status(400).json({
+          code: "INVALID_SESSION_ID",
+          error: "Invalid sid",
+        });
+      }
+
+      session = await config.ZkPassportSessionModel.findOne({ _id: sessionObjectId }).exec();
+      if (!session) {
+        return res.status(404).json({
+          code: "SESSION_NOT_FOUND",
+          error: "Session not found",
+        });
+      }
+
+      // Bind caller to session owner. Without this, any party who learns a
+      // victim's IN_PROGRESS sid could flip it to ISSUED using their own
+      // proof — burning the victim's $3 and receiving creds bound to the
+      // attacker's own issuanceNullifier.
+      if (session.sigDigest !== holoUserId) {
+        return res.status(401).json({
+          code: "UNAUTHORIZED",
+          error: "Session does not belong to this user",
+        });
+      }
+
+      // Allow both IN_PROGRESS and ISSUED at this point so the 5-day
+      // nullifier+uniqueIdentifier recovery branch below can idempotently
+      // re-fetch creds. Post-recovery-branch, we re-tighten to IN_PROGRESS
+      // only so a different nullifier/passport cannot mint a second
+      // credential on an already-issued paid session.
+      if (
+        session.status !== sessionStatusEnum.IN_PROGRESS &&
+        session.status !== sessionStatusEnum.ISSUED
+      ) {
+        return res.status(400).json({
+          code: "SESSION_NOT_ELIGIBLE",
+          error: `Session is not eligible for verification (status: ${session.status})`,
+        });
       }
 
       try {
@@ -278,6 +366,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           "ZK Passport verification threw an error"
         );
         return res.status(400).json({
+          code: classifyZkPassportError(err),
           error: "ZK Passport proof verification failed.",
         });
       }
@@ -287,7 +376,9 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           { queryResultErrors: verificationResult.queryResultErrors },
           "ZK Passport proof verification returned verified=false"
         );
+        const code = classifyZkPassportError(verificationResult.queryResultErrors);
         return res.status(400).json({
+          code,
           error: "ZK Passport proof verification failed.",
           details: verificationResult.queryResultErrors,
         });
@@ -329,6 +420,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         );
 
         return res.status(400).json({
+          code: "ZK_PASSPORT_UNSUPPORTED_DOCUMENT",
           error: `Unsupported country (${nationalityStr}) from ZK Passport proof`,
         });
       }
@@ -366,14 +458,30 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         response.metadata = creds;
 
         endpointLogger.info(
-          { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier },
+          { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier, sid: session._id },
           "Re-issuing ZK Passport credentials (recovery branch)"
         );
+
+        // Idempotent re-issuance within 5 days. Keep session status ISSUED.
+        if (session && session.status !== sessionStatusEnum.ISSUED) {
+          session.status = sessionStatusEnum.ISSUED;
+          try { await session.save(); } catch { /* non-fatal */ }
+        }
 
         return res.status(200).json(response);
       }
 
       // --- Normal first-time flow ---
+
+      // No nullifier match means this is a fresh issuance, not a recovery
+      // re-fetch. An already-ISSUED session reaching this point would mint
+      // a second credential on one paid session — reject.
+      if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+        return res.status(400).json({
+          code: "SESSION_NOT_ELIGIBLE",
+          error: `Session is not eligible for fresh issuance (status: ${session.status})`,
+        });
+      }
 
       if (config.environment === "live") {
         const existingUser = await findOneUserVerificationLast11Months(uuidV1, uuidV2);
@@ -414,14 +522,25 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       await newNullifierAndCreds.save();
 
       endpointLogger.info(
-        { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier },
+        { uuidV2, uniqueIdentifier: verificationResult.uniqueIdentifier, sid: session._id },
         "Issuing ZK Passport credentials"
       );
+
+      // Flip session to ISSUED. This is the one-verify-per-payment gate for
+      // future verify-and-issue calls (the 5-day nullifier recovery window
+      // allows idempotent re-fetches via the branch above).
+      session.status = sessionStatusEnum.ISSUED;
+      try { await session.save(); } catch (err) {
+        endpointLogger.error(
+          { error: makeUnknownErrorLoggable(err), sid: session._id },
+          "Failed to flip zkPassport session to ISSUED — creds were issued but session state is stale",
+        );
+      }
 
       return res.status(200).json(response);
     } catch (err: any) {
       if (err.status && err.error) {
-        return res.status(err.status).json({ err: err.error });
+        return res.status(err.status).json({ error: err.error });
       }
 
       endpointLogger.error(

@@ -18,7 +18,12 @@ import {
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { idvSessionUSDPrice, humanIDPaymentsContractAddresses } from "../../constants/misc.js";
+import {
+  idvSessionUSDPrice,
+  zkPassportSessionUSDPrice,
+  humanIDPaymentsContractAddresses,
+  PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION,
+} from "../../constants/misc.js";
 
 const paymentsLogger = logger.child({
   base: {
@@ -53,8 +58,15 @@ function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHand
       }
       const timestamp = Math.floor(Date.now() / 1000);
 
+      // Per-service USD price. Default to idvSessionUSDPrice (gov-id/KYC price)
+      // for unrecognized services to preserve legacy behavior.
+      let usdPrice = idvSessionUSDPrice;
+      if (service.toLowerCase() === PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION.toLowerCase()) {
+        usdPrice = zkPassportSessionUSDPrice;
+      }
+
       // Calculate price in token
-      const amount = await calculatePriceInToken(idvSessionUSDPrice, chainIdNum);
+      const amount = await calculatePriceInToken(usdPrice, chainIdNum);
 
       // Generate signature
       const signature = await generatePaymentSignature(

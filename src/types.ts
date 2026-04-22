@@ -263,6 +263,19 @@ export type IBiometricsSession = {
   paymentCommitment?: string;
 };
 
+export type IZkPassportSession = {
+  _id?: Types.ObjectId;
+  sigDigest?: string;
+  status?: string;
+  paymentCommitment?: string;
+  chainId?: number;
+  failureReason?: string;
+  refundTxHashes?: string[];
+  createdAt?: Date;
+};
+
+export type ISandboxZkPassportSession = IZkPassportSession;
+
 export type ISessionRefundMutex = {
   _id?: Types.ObjectId;
   sessionId?: string;
@@ -699,6 +712,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
   ZkPassportNullifierAndCredsModel: Model<IZkPassportNullifierAndCreds | ISandboxZkPassportNullifierAndCreds>
+  ZkPassportSessionModel: Model<IZkPassportSession | ISandboxZkPassportSession>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>

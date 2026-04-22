@@ -31,6 +31,8 @@ import {
   IBiometricsNullifierAndCreds,
   IZkPassportNullifierAndCreds,
   ISandboxZkPassportNullifierAndCreds,
+  IZkPassportSession,
+  ISandboxZkPassportSession,
   IEncryptedNullifiers,
   ISandboxEncryptedNullifiers,
   IDailyVerificationCount,
@@ -965,6 +967,65 @@ const SandboxZkPassportNullifierAndCredsSchema = new Schema<ISandboxZkPassportNu
   },
 });
 
+// ZkPassportSession binds a $3 payment commitment to a zkPassport verification
+// attempt. The session only exists post-payment; status lifecycle is
+// IN_PROGRESS → { ISSUED | VERIFICATION_FAILED | REFUNDED }. Refunds are
+// allowed only when status === VERIFICATION_FAILED (ISSUED sessions have had
+// their redemption consumed).
+const zkPassportSessionSchema = new Schema<IZkPassportSession>({
+  sigDigest: String,
+  status: String,
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  failureReason: {
+    type: String,
+    required: false,
+  },
+  refundTxHashes: {
+    type: [String],
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+zkPassportSessionSchema.index({ sigDigest: 1 });
+zkPassportSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true });
+
+const sandboxZkPassportSessionSchema = new Schema<ISandboxZkPassportSession>({
+  sigDigest: String,
+  status: String,
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  failureReason: {
+    type: String,
+    required: false,
+  },
+  refundTxHashes: {
+    type: [String],
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+sandboxZkPassportSessionSchema.index({ sigDigest: 1 });
+sandboxZkPassportSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true });
+
 // To allow the user to persist a nullifier so that they can request their
 // signed credentials in more than one browser session.
 const EncryptedNullifiersSchema = new Schema<IEncryptedNullifiers>({
@@ -1594,6 +1655,8 @@ export {
   BiometricsNullifierAndCredsSchema,
   ZkPassportNullifierAndCredsSchema,
   SandboxZkPassportNullifierAndCredsSchema,
+  zkPassportSessionSchema,
+  sandboxZkPassportSessionSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
