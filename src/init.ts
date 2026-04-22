@@ -30,6 +30,8 @@ import {
   BiometricsNullifierAndCredsSchema,
   ZkPassportNullifierAndCredsSchema,
   SandboxZkPassportNullifierAndCredsSchema,
+  zkPassportSessionSchema,
+  sandboxZkPassportSessionSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
@@ -81,6 +83,8 @@ import {
   IBiometricsNullifierAndCreds,
   IZkPassportNullifierAndCreds,
   ISandboxZkPassportNullifierAndCreds,
+  IZkPassportSession,
+  ISandboxZkPassportSession,
   IVerificationCollisionMetadata,
   IAmlChecksSession,
   ISandboxAmlChecksSession,
@@ -342,6 +346,16 @@ async function initializeMongoDb() {
     SandboxZkPassportNullifierAndCredsSchema
   );
 
+  const ZkPassportSession = mongoose.model(
+    "ZkPassportSession",
+    zkPassportSessionSchema
+  );
+
+  const SandboxZkPassportSession = mongoose.model(
+    "SandboxZkPassportSession",
+    sandboxZkPassportSessionSchema
+  );
+
   const DailyVerificationCount = mongoose.model(
     "DailyVerificationCount",
     DailyVerificationCountSchema
@@ -502,6 +516,8 @@ async function initializeMongoDb() {
     BiometricsNullifierAndCreds,
     ZkPassportNullifierAndCreds,
     SandboxZkPassportNullifierAndCreds,
+    ZkPassportSession,
+    SandboxZkPassportSession,
     DailyVerificationCount,
     DailyVerificationDeletions,
     VerificationCollisionMetadata,
@@ -557,6 +573,8 @@ let UserVerifications: Model<IUserVerifications>,
   BiometricsNullifierAndCreds: Model<IBiometricsNullifierAndCreds>,
   ZkPassportNullifierAndCreds: Model<IZkPassportNullifierAndCreds>,
   SandboxZkPassportNullifierAndCreds: Model<ISandboxZkPassportNullifierAndCreds>,
+  ZkPassportSession: Model<IZkPassportSession>,
+  SandboxZkPassportSession: Model<ISandboxZkPassportSession>,
   DailyVerificationCount: Model<IDailyVerificationCount>,
   DailyVerificationDeletions: Model<IDailyVerificationDeletions>,
   VerificationCollisionMetadata: Model<IVerificationCollisionMetadata>,
@@ -610,6 +628,8 @@ initializeMongoDb().then((result) => {
     BiometricsNullifierAndCreds = result.BiometricsNullifierAndCreds;
     ZkPassportNullifierAndCreds = result.ZkPassportNullifierAndCreds;
     SandboxZkPassportNullifierAndCreds = result.SandboxZkPassportNullifierAndCreds;
+    ZkPassportSession = result.ZkPassportSession;
+    SandboxZkPassportSession = result.SandboxZkPassportSession;
     DailyVerificationCount = result.DailyVerificationCount;
     DailyVerificationDeletions = result.DailyVerificationDeletions;
     VerificationCollisionMetadata = result.VerificationCollisionMetadata;
@@ -670,6 +690,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       AMLChecksSessionModel: SandboxAMLChecksSession,
       CleanHandsNullifierAndCredsModel: SandboxCleanHandsNullifierAndCreds,
       ZkPassportNullifierAndCredsModel: SandboxZkPassportNullifierAndCreds,
+      ZkPassportSessionModel: SandboxZkPassportSession,
       SanctionsResultModel: SanctionsResult,
       PaymentRedemptionModel: SandboxPaymentRedemption,
       PaymentSecretModel: SandboxPaymentSecret,
@@ -704,6 +725,7 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     AMLChecksSessionModel: AMLChecksSession,
     CleanHandsNullifierAndCredsModel: CleanHandsNullifierAndCreds,
     ZkPassportNullifierAndCredsModel: ZkPassportNullifierAndCreds,
+    ZkPassportSessionModel: ZkPassportSession,
     SanctionsResultModel: SanctionsResult,
     issuerPrivateKey: process.env.HOLONYM_ISSUER_PRIVKEY!,
     cleanHandsIssuerPrivateKey: process.env.HOLONYM_ISSUER_CLEAN_HANDS_PRIVKEY!,
@@ -741,6 +763,8 @@ export {
   BiometricsNullifierAndCreds,
   ZkPassportNullifierAndCreds,
   SandboxZkPassportNullifierAndCreds,
+  ZkPassportSession,
+  SandboxZkPassportSession,
   DailyVerificationCount,
   DailyVerificationDeletions,
   VerificationCollisionMetadata,
