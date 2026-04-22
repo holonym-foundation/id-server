@@ -174,6 +174,53 @@ export async function postZkPassportSessionSandbox(req: Request, res: Response) 
 }
 
 /**
+ * GET /zk-passport/sessions?sigDigest=<holoUserId>
+ *
+ * List the caller's zkPassport sessions. Used by the Prereqs page so a user
+ * with an existing IN_PROGRESS or ISSUED session can resume rather than
+ * being forced back through /pay.
+ */
+function createListZkPassportSessionsHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.query?.sigDigest;
+      if (!sigDigest || typeof sigDigest !== "string") {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+
+      const sessions = await config.ZkPassportSessionModel.find({ sigDigest })
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec();
+
+      return res.status(200).json(
+        sessions.map((s) => ({
+          _id: s._id,
+          status: s.status,
+          chainId: s.chainId,
+          failureReason: s.failureReason,
+          createdAt: s.createdAt,
+        })),
+      );
+    } catch (err: any) {
+      zkPassportSessionsLogger.error(
+        { error: makeUnknownErrorLoggable(err) },
+        "GET /zk-passport/sessions error",
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+export async function listZkPassportSessionsProd(req: Request, res: Response) {
+  return createListZkPassportSessionsHandler(getRouteHandlerConfig("live"))(req, res);
+}
+
+export async function listZkPassportSessionsSandbox(req: Request, res: Response) {
+  return createListZkPassportSessionsHandler(getRouteHandlerConfig("sandbox"))(req, res);
+}
+
+/**
  * GET /zk-passport/sessions/:sid
  *
  * Returns session status. Used by the frontend to gate access to verify/
