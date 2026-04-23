@@ -47,6 +47,7 @@ import {
   sessionStatusEnum,
   cleanHandsSessionStatusEnum,
   PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+  PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION,
 } from "../../constants/misc.js";
 import {
   reserveRedemption,
@@ -352,6 +353,107 @@ async function postSessionv3Live(req: Request, res: Response) {
 async function postSessionv3Sandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createPostSessionv3RouteHandler(config)(req, res);
+}
+
+const postSessionsV4Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/v4] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
+const VALID_IDV_PROVIDERS = ["onfido", "zk-passport"] as const;
+type IdvProvider = (typeof VALID_IDV_PROVIDERS)[number];
+
+function resolveIdvProvider(raw: unknown): IdvProvider | null {
+  if (raw === undefined || raw === null) return "onfido";
+  if (typeof raw !== "string") return null;
+  return (VALID_IDV_PROVIDERS as readonly string[]).includes(raw)
+    ? (raw as IdvProvider)
+    : null;
+}
+
+/**
+ * Creates an AML session V4. Unlike v3, v4 splits session creation from
+ * payment: the session is created with status NEEDS_PAYMENT and no payment
+ * is required. A separate POST /:id/pay/v4 endpoint transitions the session
+ * to IN_PROGRESS after accepting payment. Callers supply `idvProvider` to
+ * pick which verification branch this session will run.
+ */
+function createPostSessionv4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+
+      const idvProvider = resolveIdvProvider(req.body.idvProvider);
+      if (!idvProvider) {
+        return res.status(400).json({
+          error: `idvProvider must be one of: ${VALID_IDV_PROVIDERS.join(", ")}`,
+        });
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Max-15 sessions guard, matching v2/v3 behavior.
+      const existingSessions = await config.AMLChecksSessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED,
+          ],
+        },
+      }).exec();
+
+      if (existingSessions.length >= 15) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (15)",
+        });
+      }
+
+      const session = new config.AMLChecksSessionModel({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.NEEDS_PAYMENT,
+        silkDiffWallet,
+        idvProvider,
+      });
+      await session.save();
+
+      postSessionsV4Logger.info(
+        { sessionId: session._id, idvProvider },
+        "Created AML session v4",
+      );
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log(
+        "POST /aml-sessions/v4: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function postSessionv4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionv4RouteHandler(config)(req, res);
+}
+
+async function postSessionv4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionv4RouteHandler(config)(req, res);
 }
 
 /**
@@ -721,6 +823,155 @@ async function payForSessionV3(req: Request, res: Response) {
 
     return res.status(500).json({ error: "An unknown error occurred", err });
   }
+}
+
+const payForSessionV4Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/pay/v4] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
+/**
+ * Accepts payment for an existing AML session in NEEDS_PAYMENT and transitions
+ * it to IN_PROGRESS. Uses the commitment-based payment system (paymentSecret +
+ * paymentChainId), the same path v3 used internally — but now decoupled from
+ * session creation. Service constant is selected by the session's idvProvider
+ * so the payment oracle can enforce branch-specific pricing ($5 Onfido / $3
+ * ZK Passport). For the Onfido branch, this handler also creates or reuses an
+ * Onfido session and returns its id, matching v3's response shape.
+ */
+function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    let reservationToken: string | null = null;
+
+    try {
+      const _id = req.params._id;
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum =
+        typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res
+          .status(400)
+          .json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      let objectId: ObjectId | null = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err: any) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      const session = await config.AMLChecksSessionModel.findOne({
+        _id: objectId,
+      }).exec();
+
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      if (session.status !== sessionStatusEnum.NEEDS_PAYMENT) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.NEEDS_PAYMENT}'`,
+        });
+      }
+
+      // Missing idvProvider on legacy/pre-v4 docs is treated as 'onfido'.
+      const idvProvider: IdvProvider = (session.idvProvider as IdvProvider) ?? "onfido";
+      const service =
+        idvProvider === "zk-passport"
+          ? PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION
+          : PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION;
+
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
+
+      session.status = sessionStatusEnum.IN_PROGRESS;
+      session.paymentCommitment = reservation.commitment;
+      session.chainId = chainIdNum;
+
+      let onfidoSessionId: any = undefined;
+      if (idvProvider === "onfido") {
+        const reusable = await findReusableOnfidoSession(config, session.sigDigest!);
+        if (reusable) {
+          onfidoSessionId = reusable._id;
+          session.onfidoSessionId = reusable._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, onfidoSessionId: reusable._id },
+            "Reusing existing Onfido session for Clean Hands (v4)",
+          );
+        } else {
+          const onfidoSession = await createOnfidoSession(
+            config,
+            session.sigDigest!,
+            "clean-hands",
+            session._id!,
+          );
+          onfidoSessionId = onfidoSession._id;
+          session.onfidoSessionId = onfidoSession._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, onfidoSessionId: onfidoSession._id },
+            "Created new Onfido session for Clean Hands (v4)",
+          );
+        }
+      }
+
+      await session.save();
+
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service,
+        fulfillmentReceipt: `clean-hands-session:${session._id}`,
+        config,
+      });
+
+      return res.status(200).json({ session, onfidoSessionId });
+    } catch (err: any) {
+      if (reservationToken) {
+        try {
+          await cancelRedemption({ reservationToken, config });
+        } catch (cancelErr: any) {
+          payForSessionV4Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation",
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
+      console.log(
+        "POST /aml-sessions/:_id/pay/v4: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function payForSessionV4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPayForSessionV4RouteHandler(config)(req, res);
+}
+
+async function payForSessionV4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPayForSessionV4RouteHandler(config)(req, res);
 }
 
 /**
@@ -2370,10 +2621,14 @@ export {
   postSessionv2Sandbox,
   postSessionv3Live as postSessionv3,
   postSessionv3Sandbox,
+  postSessionv4Live as postSessionv4,
+  postSessionv4Sandbox,
   createPayPalOrder,
   payForSession,
   payForSessionV2,
   payForSessionV3,
+  payForSessionV4Live as payForSessionV4,
+  payForSessionV4Sandbox,
   refund,
   refundV2,
   refundCleanHandsSessionLive as refundCleanHandsSession,
