@@ -401,6 +401,11 @@ export type ICleanHandsNullifierAndCreds = {
   };
   idvSessionId?: string;
   uuid?: string;
+  // ZK Passport's deterministic per-passport identifier. Populated only when
+  // the creds were issued via the ZK Passport branch. Enables the same 5-day
+  // recovery semantics the ZK Passport gov-id flow uses: a later verify-and-
+  // issue call with the same nullifier must present the same passport.
+  zkPassportUniqueIdentifier?: string;
 };
 
 export type ISandboxCleanHandsNullifierAndCreds = ICleanHandsNullifierAndCreds;

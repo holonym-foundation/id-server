@@ -946,6 +946,10 @@ const CleanHandsNullifierAndCredsSchema = new Schema<ICleanHandsNullifierAndCred
     type: String,
     required: false,
   },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
 });
 
 const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNullifierAndCreds>({
@@ -965,6 +969,10 @@ const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNu
     required: false,
   },
   uuid: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
     type: String,
     required: false,
   },
