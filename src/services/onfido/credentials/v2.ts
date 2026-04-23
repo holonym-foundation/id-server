@@ -10,9 +10,8 @@ import {
   getOnfidoReports,
   deleteOnfidoApplicant,
 } from "../../../utils/onfido.js";
-import {
-  findOneUserVerificationLast11Months,
-} from "../../../utils/user-verifications.js";
+import { findUserVerification } from "../../../utils/user-verifications.js";
+import { dateElevenMonthsAgo } from "../../../utils/utils.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
 import {
   validateCheck,
@@ -188,7 +187,11 @@ export async function getCredentialsV2(req: Request, res: Response) {
     // want to check the database for the old UUIDs too.
 
     // Assert user hasn't registered yet
-    const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+    const user = await findUserVerification(uuidNew, "govId", {
+      issuedAt: { after: dateElevenMonthsAgo() },
+      // Ignore expired user verifications
+      expiresAt: { after: new Date() }
+    });
     if (user) {
       await saveCollisionMetadata(uuidOld, uuidNew, check_id, documentReport);
 

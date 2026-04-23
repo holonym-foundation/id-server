@@ -27,15 +27,18 @@ import {
   cleanHandsDummyUserCreds,
   siIdentifierPrefixesToBlock
 } from "../../utils/constants.js";
-import { getDateAsInt, govIdUUID } from "../../utils/utils.js";
+import {
+  getDateAsInt,
+  govIdUUID,
+  dateElevenMonthsAgo,
+  dateElevenMonthsFromNow,
+  dateFiveDaysAgo,
+} from "../../utils/utils.js";
 import {
   findOneNullifierAndCredsLast5Days
 } from "../../utils/clean-hands-nullifier-and-creds.js";
 import { parseStatementForUserCertification } from '../../utils/clean-hands-misc.js'
-import {
-  findOneCleanHandsUserVerificationLast11Months,
-  findOneCleanHandsUserVerification11Months5Days
-} from "../../utils/user-verifications.js";
+import { findUserVerification } from "../../utils/user-verifications.js";
 import { makeUnknownErrorLoggable, toAlreadyRegisteredStr } from "../../utils/errors.js";
 import {
   supportedChainIds,
@@ -981,6 +984,7 @@ async function saveUserToDb(uuid: string) {
     aml: {
       uuid: uuid,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {
@@ -1810,7 +1814,11 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         // is only getting the credentials+nullifier that they were already issued.
         // However, we keep it here to be extra safe.
         if (config.environment === "live") {
-          const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+          const user = await findUserVerification(uuid, "aml", {
+            issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
+          });
           if (user) {
             // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
             issueCredsV4Logger.alreadyRegistered(uuid);
@@ -2106,7 +2114,11 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
 
       // Assert user hasn't registered yet
       if (config.environment === "live") {
-        const user = await findOneCleanHandsUserVerificationLast11Months(uuid);
+        const user = await findUserVerification(uuid, "aml", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
+        });
         if (user) {
           // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
           issueCredsV4Logger.alreadyRegistered(uuid);

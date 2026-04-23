@@ -117,13 +117,25 @@ export function dateElevenMonthsAgo() {
   return new Date(now.getFullYear(), now.getMonth() - 11, now.getDate());
 }
 
+export function dateElevenMonthsFromNow() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 11, now.getDate());
+}
+
+export function dateFiveDaysAgo() {
+  return new Date(new Date().getTime() - (5 * 24 * 60 * 60 * 1000));
+}
+
+export function objectIdFromDate(date: Date) {
+  return new ObjectId(Math.floor(date.getTime() / 1000).toString(16) + "0000000000000000");
+}
+
 export function objectIdElevenMonthsAgo() {
-  return new ObjectId(Math.floor(dateElevenMonthsAgo().getTime() / 1000).toString(16) + "0000000000000000");
+  return objectIdFromDate(dateElevenMonthsAgo());
 }
 
 export function objectIdFiveDaysAgo() {
-  const fiveDaysAgo = new Date(new Date().getTime() - (5 * 24 * 60 * 60 * 1000));
-  return new ObjectId(Math.floor(fiveDaysAgo.getTime() / 1000).toString(16) + "0000000000000000");
+  return objectIdFromDate(dateFiveDaysAgo());
 }
 
 export async function retry<T>(

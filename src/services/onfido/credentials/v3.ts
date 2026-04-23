@@ -11,10 +11,8 @@ import {
   getOnfidoReports,
   deleteOnfidoApplicant,
 } from "../../../utils/onfido.js";
-import {
-  findOneUserVerificationLast11Months,
-  findOneUserVerification11Months5Days
-} from "../../../utils/user-verifications.js";
+import { findUserVerification } from "../../../utils/user-verifications.js";
+import { dateElevenMonthsAgo, dateFiveDaysAgo } from "../../../utils/utils.js";
 import { getSessionById, failSession } from "../../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
@@ -150,7 +148,11 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         // is only getting the credentials+nullifier that they were already issued.
         // However, we keep it here to be extra safe.
         if (config.environment == "live") {
-          const user = await findOneUserVerification11Months5Days(uuidOld, uuidNew);
+          const user = await findUserVerification(uuidNew, "govId", {
+            issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
+          });
           if (user) {
             await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
             endpointLoggerV3.alreadyRegistered(uuidNew);
@@ -240,7 +242,11 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // Assert user hasn't registered yet
       if (config.environment == "live") {
-        const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+        const user = await findUserVerification(uuidNew, "govId", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
+        });
         if (user) {
           await saveCollisionMetadata(uuidOld, uuidNew, check_id, documentReport);
 

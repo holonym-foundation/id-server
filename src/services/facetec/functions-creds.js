@@ -11,6 +11,7 @@ import {
   sha256,
   govIdUUID,
   objectIdElevenMonthsAgo,
+  dateElevenMonthsFromNow,
 } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import {
@@ -380,6 +381,7 @@ export async function saveUserToDb(uuidV2, sessionId) {
       uuidV2: uuidV2,
       sessionId: sessionId,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {
