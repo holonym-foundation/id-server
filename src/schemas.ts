@@ -116,6 +116,10 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
       sessionId: String,
       issuedAt: Date,
       expiresAt: Date,
+      // Identifies which issuance flow produced this verification.
+      // Known values: "free-zk-passport". Future values may include
+      // "paid-onfido", "paid-sumsub", "paid-zk-passport", etc.
+      createdByFlow: String,
     },
     required: false,
   },
@@ -139,6 +143,7 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
 });
 userVerificationsSchema.index({ "govId.uuidV2": 1 })
 userVerificationsSchema.index({ "govId.uuid": 1 })
+userVerificationsSchema.index({ "aml.uuid": 1 })
 // By keeping track of a user's sessions, we can let them start verification
 // and finish issuance in separate browsing sessions, which is useful for
 // handling the delay between when a user submits their documents to the

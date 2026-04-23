@@ -91,6 +91,10 @@ export type IUserVerifications = {
     sessionId?: string;
     issuedAt?: Date;
     expiresAt?: Date;
+    // Identifies which issuance flow produced this verification.
+    // Known values: "free-zk-passport". Future values may include
+    // "paid-onfido", "paid-sumsub", "paid-zk-passport", etc.
+    createdByFlow?: string;
   };
   aml?: {
     uuid?: string;
