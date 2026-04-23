@@ -16,7 +16,10 @@ import {
   sha256,
   govIdUUID,
   objectIdElevenMonthsAgo,
-  objectIdFiveDaysAgo
+  objectIdFiveDaysAgo,
+  dateElevenMonthsAgo,
+  dateElevenMonthsFromNow,
+  dateFiveDaysAgo,
 } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import {
@@ -28,10 +31,7 @@ import {
   getVeriffSessionDecision,
   deleteVeriffSession,
 } from "../../utils/veriff.js";
-import {
-  findOneUserVerificationLast11Months,
-  findOneUserVerification11Months5Days
-} from "../../utils/user-verifications.js"
+import { findUserVerification } from "../../utils/user-verifications.js"
 import { getSessionById, failSession } from "../../utils/sessions.js"
 import {
   findOneNullifierAndCredsLast5Days
@@ -423,6 +423,7 @@ async function saveUserToDb(uuidV2, sessionId) {
       uuidV2: uuidV2,
       sessionId: sessionId,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {
@@ -546,7 +547,9 @@ async function getCredentials(req, res) {
     // want to check the database for the old UUIDs too.
 
     // Assert user hasn't registered yet
-    const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+    const user = await findUserVerification(uuidNew, "govId", {
+      issuedAt: { after: dateElevenMonthsAgo() },
+    });
     if (user) {
       await saveCollisionMetadata(
         uuidOld,
@@ -761,11 +764,12 @@ async function getCredentialsV2(req, res) {
       };
     }
 
-    const uuidOld = uuidOldFromVeriffSession(session);
     const uuidNew = uuidNewFromVeriffSession(session);
 
     // Assert user hasn't registered yet
-    const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+    const user = await findUserVerification(uuidNew, "govId", {
+      issuedAt: { after: dateElevenMonthsAgo() },
+    });
 
     if (user) {
       endpointLogger.error(
@@ -911,16 +915,15 @@ async function getCredentialsV3(req, res) {
 
       // We expect there to be a UserVerification record for this user. If it was created
       // within the last 5 days, then it is within the buffer period, and we ignore it.
-      const uuidOld = uuidOldFromVeriffSession(veriffSession);
       const uuidNew = uuidNewFromVeriffSession(veriffSession);
-      // We started using a new UUID generation method on May 24, 2024, but we still
-      // want to check the database for the old UUIDs too.
 
       // This step is not strictly necessary since we are only considering nullifiers
       // from the last 5 days (in the nullifierAndCreds query above) and the user
       // is only getting the credentials+nullifier that they were already issued.
       // However, we keep it here to be extra safe.
-      const user = await findOneUserVerification11Months5Days(uuidOld, uuidNew);
+      const user = await findUserVerification(uuidNew, "govId", {
+        issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+      });
       if (user) {
         endpointLoggerV3.error({ uuidV2: uuidNew }, "User has already registered.");
         await failSession(session, toAlreadyRegisteredStr(user._id));
@@ -992,7 +995,9 @@ async function getCredentialsV3(req, res) {
     // want to check the database for the old UUIDs too.
 
     // Assert user hasn't registered yet
-    const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+    const user = await findUserVerification(uuidNew, "govId", {
+      issuedAt: { after: dateElevenMonthsAgo() },
+    });
     if (user) {
       await saveCollisionMetadata(uuidOld, uuidNew, veriffSessionIdFromSession, veriffSession);
 

@@ -90,15 +90,18 @@ export type IUserVerifications = {
     uuidV2?: string;
     sessionId?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
   };
   aml?: {
     uuid?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
   };
   biometrics?: {
     uuidV2?: string;
     sessionId?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
   };
 };
 
@@ -402,6 +405,17 @@ export type IZkPassportNullifierAndCreds = {
 };
 
 export type ISandboxZkPassportNullifierAndCreds = IZkPassportNullifierAndCreds;
+
+export type IOffChainAttestation = {
+  _id?: Types.ObjectId;
+  address?: string;
+  attestationType?: string;
+  payload?: Record<string, any>;
+  issuedAt?: Date;
+  expiresAt?: Date;
+};
+
+export type ISandboxOffChainAttestation = IOffChainAttestation;
 
 export type IEncryptedNullifiers = {
   _id?: Types.ObjectId;
@@ -713,6 +727,7 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
   ZkPassportNullifierAndCredsModel: Model<IZkPassportNullifierAndCreds | ISandboxZkPassportNullifierAndCreds>
   ZkPassportSessionModel: Model<IZkPassportSession | ISandboxZkPassportSession>
+  OffChainAttestationModel: Model<IOffChainAttestation | ISandboxOffChainAttestation>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>

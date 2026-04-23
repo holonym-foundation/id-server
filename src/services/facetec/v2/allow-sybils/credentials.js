@@ -15,6 +15,7 @@ import { pinoOptions, logger } from "../../../../utils/logger.js";
 import { biometricsSessionStatusEnum } from "../../../../constants/misc.js";
 import { getFaceTecBaseURL } from "../../../../utils/facetec.js";
 import { upgradeV3Logger } from "../../error-logger.js";
+import { dateElevenMonthsFromNow } from "../../../../utils/utils.js";
 
 const endpointLogger = upgradeV3Logger(
   logger.child({
@@ -33,6 +34,7 @@ async function saveUserToDb(uuidV2) {
     biometrics: {
       uuidV2: uuidV2,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {

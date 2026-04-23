@@ -13,15 +13,15 @@ import {
   getDateAsInt,
   govIdUUID,
   sha256,
+  dateElevenMonthsAgo,
+  dateElevenMonthsFromNow,
+  dateFiveDaysAgo,
 } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import {
   countryCodeToPrime,
 } from "../../utils/constants.js";
-import {
-  findOneUserVerificationLast11Months,
-  findOneUserVerification11Months5Days,
-} from "../../utils/user-verifications.js";
+import { findUserVerification } from "../../utils/user-verifications.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/zk-passport-nullifier-and-creds.js";
 import { issuev2ZKPassport } from "../../utils/issuance.js";
 import { makeUnknownErrorLoggable } from "../../utils/errors.js";
@@ -44,6 +44,8 @@ const endpointLogger = logger.child({
 // We use the frontend domain (id.human.tech), NOT the server's own hostname.
 const zkPassportDomain = process.env.NODE_ENV === 'development' ? 'localhost' : "id.human.tech";
 const zkPassport = new ZKPassport(zkPassportDomain);
+
+export { zkPassport };
 
 /**
  * Extract credentials from ZK Passport disclosed fields.
@@ -170,6 +172,7 @@ async function saveUserToDb(uuidV2: string) {
       // sessionId is null for ZK Passport entries — verification is session-less
       sessionId: null,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {
@@ -193,7 +196,7 @@ async function saveUserToDb(uuidV2: string) {
  * ZK Passport returns dateOfBirth as a Date object from queryResult.birthdate?.disclose?.result.
  * We need it as a "YYYY-MM-DD" string to match Onfido/Sumsub format.
  */
-function formatDateOfBirth(dob: Date | string): string {
+export function formatDateOfBirth(dob: Date | string): string {
   if (typeof dob === "string") return dob;
   const d = new Date(dob);
   const year = d.getFullYear();
@@ -206,7 +209,7 @@ function formatDateOfBirth(dob: Date | string): string {
  * Map ZKPassport SDK error shapes to our structured error codes so the
  * frontend can render PRD §4.2 UX (unsupported doc, PFM failure, generic).
  */
-function classifyZkPassportError(err: unknown): string {
+export function classifyZkPassportError(err: unknown): string {
   const msg =
     typeof err === "string"
       ? err
@@ -444,7 +447,9 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         // Recovery: same passport, same nullifier. Re-issue credentials.
         // Extra safety: check 11mo-5day window (same as Onfido/Sumsub recovery).
         if (config.environment === "live") {
-          const existingUser = await findOneUserVerification11Months5Days(uuidV1, uuidV2);
+          const existingUser = await findUserVerification(uuidV2, "govId", {
+            issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+          });
           if (existingUser) {
             await saveCollisionMetadata(uuidV1, uuidV2);
             return res.status(400).json({
@@ -484,7 +489,9 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       }
 
       if (config.environment === "live") {
-        const existingUser = await findOneUserVerificationLast11Months(uuidV1, uuidV2);
+        const existingUser = await findUserVerification(uuidV2, "govId", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+        });
         if (existingUser) {
           await saveCollisionMetadata(uuidV1, uuidV2);
           endpointLogger.error(

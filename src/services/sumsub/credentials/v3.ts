@@ -9,10 +9,8 @@ import {
   getSumsubApplicantData,
   getSumsubDuplicateCheck,
 } from "../../../utils/sumsub.js";
-import {
-  findOneUserVerificationLast11Months,
-  findOneUserVerification11Months5Days,
-} from "../../../utils/user-verifications.js";
+import { findUserVerification } from "../../../utils/user-verifications.js";
+import { dateElevenMonthsAgo, dateFiveDaysAgo } from "../../../utils/utils.js";
 import { failSession } from "../../../utils/sessions.js";
 import { findOneNullifierAndCredsLast5Days } from "../../../utils/nullifier-and-creds.js";
 import { issuev2KYC } from "../../../utils/issuance.js";
@@ -117,7 +115,9 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
         // Assert user hasn't registered yet (extra safety — see Onfido v3 creds issuance route for rationale)
         if (config.environment === "live") {
-          const user = await findOneUserVerification11Months5Days(uuidOld, uuidNew);
+          const user = await findUserVerification(uuidNew, "govId", {
+            issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+          });
           if (user) {
             await saveCollisionMetadata(uuidOld, uuidNew, applicantIdFromNullifier);
             endpointLoggerV3.error(
@@ -226,7 +226,9 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // Assert user hasn't registered yet
       if (config.environment === "live") {
-        const user = await findOneUserVerificationLast11Months(uuidOld, uuidNew);
+        const user = await findUserVerification(uuidNew, "govId", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+        });
         if (user) {
           await saveCollisionMetadata(uuidOld, uuidNew, applicantId);
           endpointLoggerV3.error(
