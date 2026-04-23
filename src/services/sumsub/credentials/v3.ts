@@ -117,6 +117,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         if (config.environment === "live") {
           const user = await findUserVerification(uuidNew, "govId", {
             issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
           });
           if (user) {
             await saveCollisionMetadata(uuidOld, uuidNew, applicantIdFromNullifier);
@@ -228,6 +230,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (config.environment === "live") {
         const user = await findUserVerification(uuidNew, "govId", {
           issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
         });
         if (user) {
           await saveCollisionMetadata(uuidOld, uuidNew, applicantId);

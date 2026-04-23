@@ -1816,6 +1816,8 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         if (config.environment === "live") {
           const user = await findUserVerification(uuid, "aml", {
             issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
           });
           if (user) {
             // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
@@ -2114,6 +2116,8 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
       if (config.environment === "live") {
         const user = await findUserVerification(uuid, "aml", {
           issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
         });
         if (user) {
           // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);

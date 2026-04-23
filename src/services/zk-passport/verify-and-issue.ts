@@ -449,6 +449,8 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         if (config.environment === "live") {
           const existingUser = await findUserVerification(uuidV2, "govId", {
             issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
           });
           if (existingUser) {
             await saveCollisionMetadata(uuidV1, uuidV2);
@@ -491,6 +493,8 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (config.environment === "live") {
         const existingUser = await findUserVerification(uuidV2, "govId", {
           issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
         });
         if (existingUser) {
           await saveCollisionMetadata(uuidV1, uuidV2);

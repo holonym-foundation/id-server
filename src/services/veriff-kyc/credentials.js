@@ -549,6 +549,8 @@ async function getCredentials(req, res) {
     // Assert user hasn't registered yet
     const user = await findUserVerification(uuidNew, "govId", {
       issuedAt: { after: dateElevenMonthsAgo() },
+      // Ignore expired user verifications
+      expiresAt: { after: new Date() }
     });
     if (user) {
       await saveCollisionMetadata(
@@ -769,6 +771,8 @@ async function getCredentialsV2(req, res) {
     // Assert user hasn't registered yet
     const user = await findUserVerification(uuidNew, "govId", {
       issuedAt: { after: dateElevenMonthsAgo() },
+      // Ignore expired user verifications
+      expiresAt: { after: new Date() }
     });
 
     if (user) {
@@ -923,6 +927,8 @@ async function getCredentialsV3(req, res) {
       // However, we keep it here to be extra safe.
       const user = await findUserVerification(uuidNew, "govId", {
         issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+        // Ignore expired user verifications
+        expiresAt: { after: new Date() }
       });
       if (user) {
         endpointLoggerV3.error({ uuidV2: uuidNew }, "User has already registered.");
@@ -997,6 +1003,8 @@ async function getCredentialsV3(req, res) {
     // Assert user hasn't registered yet
     const user = await findUserVerification(uuidNew, "govId", {
       issuedAt: { after: dateElevenMonthsAgo() },
+      // Ignore expired user verifications
+      expiresAt: { after: new Date() }
     });
     if (user) {
       await saveCollisionMetadata(uuidOld, uuidNew, veriffSessionIdFromSession, veriffSession);

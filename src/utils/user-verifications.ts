@@ -1,4 +1,6 @@
+import { HydratedDocument } from "mongoose";
 import { UserVerifications } from "../init.js";
+import { IUserVerifications } from "../types.js";
 import { objectIdFromDate } from "./utils.js";
 
 type DateRange = { before?: Date; after?: Date };
@@ -7,9 +9,7 @@ type UserVerificationNamespace = "govId" | "aml" | "biometrics";
 
 type FindUserVerificationOpts = {
   issuedAt?: DateRange;
-  // IMPORTANT: The expiresAt field was added April 23, 2026. It should not
-  // be used in queries until March 23, 2027.
-  // expiresAt?: DateRange;
+  expiresAt?: DateRange;
 };
 
 const NAMESPACE_UUID_FIELD: Record<UserVerificationNamespace, string> = {
@@ -23,12 +23,15 @@ const NAMESPACE_UUID_FIELD: Record<UserVerificationNamespace, string> = {
  * namespace matches, optionally constrained by an issuedAt window (enforced
  * via the document's _id ObjectId creation timestamp) and/or an expiresAt
  * window (enforced via the namespace's stored expiresAt field).
+ * 
+ * The expiresAt filter is treated as optional. Documents before April 23, 2026
+ * do not have it. We do not exclude those documents from the search results.
  */
 export async function findUserVerification(
   uuid: string,
   namespace: UserVerificationNamespace,
   opts: FindUserVerificationOpts = {}
-) {
+): Promise<HydratedDocument<IUserVerifications> | null> {
   const uuidField = NAMESPACE_UUID_FIELD[namespace];
 
   const query: Record<string, any> = { [uuidField]: uuid };
@@ -40,13 +43,19 @@ export async function findUserVerification(
     query._id = idFilter;
   }
 
-  // TODO: Uncomment this after March 23, 2027
-  // if (opts.expiresAt?.after || opts.expiresAt?.before) {
-  //   const expiresFilter: Record<string, any> = {};
-  //   if (opts.expiresAt.after) expiresFilter.$gt = opts.expiresAt.after;
-  //   if (opts.expiresAt.before) expiresFilter.$lt = opts.expiresAt.before;
-  //   query[`${namespace}.expiresAt`] = expiresFilter;
-  // }
+  // The expiresAt field was added April 23, 2026. Documents created before
+  // then do not have it, so we include them via $exists: false rather than
+  // excluding them from the search.
+  if (opts.expiresAt?.after || opts.expiresAt?.before) {
+    const expiresFilter: Record<string, any> = {};
+    if (opts.expiresAt.after) expiresFilter.$gt = opts.expiresAt.after;
+    if (opts.expiresAt.before) expiresFilter.$lt = opts.expiresAt.before;
+    query.$or = [
+      // TODO: After March 23, 2027, remove the $exists check
+      { [`${namespace}.expiresAt`]: { $exists: false } },
+      { [`${namespace}.expiresAt`]: expiresFilter },
+    ];
+  }
 
   return UserVerifications.findOne(query).sort({ _id: "desc" }).exec();
 }

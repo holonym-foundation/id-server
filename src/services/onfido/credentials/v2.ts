@@ -189,6 +189,8 @@ export async function getCredentialsV2(req: Request, res: Response) {
     // Assert user hasn't registered yet
     const user = await findUserVerification(uuidNew, "govId", {
       issuedAt: { after: dateElevenMonthsAgo() },
+      // Ignore expired user verifications
+      expiresAt: { after: new Date() }
     });
     if (user) {
       await saveCollisionMetadata(uuidOld, uuidNew, check_id, documentReport);
