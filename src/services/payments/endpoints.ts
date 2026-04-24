@@ -23,6 +23,7 @@ import {
   zkPassportSessionUSDPrice,
   humanIDPaymentsContractAddresses,
   PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION,
+  PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION,
 } from "../../constants/misc.js";
 
 const paymentsLogger = logger.child({
@@ -61,7 +62,14 @@ function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHand
       // Per-service USD price. Default to idvSessionUSDPrice (gov-id/KYC price)
       // for unrecognized services to preserve legacy behavior.
       let usdPrice = idvSessionUSDPrice;
-      if (service.toLowerCase() === PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION.toLowerCase()) {
+      const serviceLower = service.toLowerCase();
+      if (serviceLower === PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION.toLowerCase()) {
+        usdPrice = zkPassportSessionUSDPrice;
+      } else if (
+        serviceLower === PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION.toLowerCase()
+      ) {
+        // Clean Hands ZK Passport branch is priced like the gov-id ZK Passport
+        // tier ($3) — the lower cost is the reason users pick it over Onfido.
         usdPrice = zkPassportSessionUSDPrice;
       }
 

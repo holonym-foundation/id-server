@@ -252,6 +252,23 @@ export type IAmlChecksSession = {
   };
   // Reference to standalone IOnfidoSession (Phase 3 decoupling)
   onfidoSessionId?: Types.ObjectId;
+  // Which identity-verification provider this AML session uses. Missing value
+  // is treated as 'onfido' so pre-existing documents keep their original
+  // semantics. See docs/plans/2026-04-23-feat-zk-passport-clean-hands-flow-plan.md (U1).
+  idvProvider?: 'onfido' | 'zk-passport';
+  // Populated only when idvProvider === 'zk-passport'. Mirrors the fields we
+  // need to reach parity with the Onfido branch for sanctions/PEP + issuance.
+  zkPassport?: {
+    proofsReceivedAt?: Date;
+    disclosedFields?: {
+      firstName?: string;
+      lastName?: string;
+      dateOfBirth?: string;
+      nationality?: string;
+    };
+    sanctionsPassedAt?: Date;
+    uniqueIdentifier?: string;
+  };
 };
 
 export type ISandboxAmlChecksSession = IAmlChecksSession;
@@ -384,6 +401,11 @@ export type ICleanHandsNullifierAndCreds = {
   };
   idvSessionId?: string;
   uuid?: string;
+  // ZK Passport's deterministic per-passport identifier. Populated only when
+  // the creds were issued via the ZK Passport branch. Enables the same 5-day
+  // recovery semantics the ZK Passport gov-id flow uses: a later verify-and-
+  // issue call with the same nullifier must present the same passport.
+  zkPassportUniqueIdentifier?: string;
 };
 
 export type ISandboxCleanHandsNullifierAndCreds = ICleanHandsNullifierAndCreds;

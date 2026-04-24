@@ -552,6 +552,34 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
     type: Schema.Types.ObjectId,
     required: false,
   },
+  // Which identity-verification provider this AML session uses. Missing value
+  // is treated as 'onfido' by callers so pre-existing documents keep their
+  // original semantics. Enum-validated at the Mongoose layer.
+  idvProvider: {
+    type: String,
+    enum: ['onfido', 'zk-passport'],
+    required: false,
+  },
+  // Populated only when idvProvider === 'zk-passport'. Holds fields disclosed
+  // by the ZKPassport proof plus branch-specific lifecycle timestamps that the
+  // Onfido branch tracks via its own collection.
+  zkPassport: {
+    type: {
+      proofsReceivedAt: Date,
+      disclosedFields: {
+        type: {
+          firstName: String,
+          lastName: String,
+          dateOfBirth: String,
+          nationality: String,
+        },
+        required: false,
+      },
+      sanctionsPassedAt: Date,
+      uniqueIdentifier: String,
+    },
+    required: false,
+  },
 });
 amlChecksSessionSchema.index({ sigDigest: 1 })
 amlChecksSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true })
@@ -617,6 +645,28 @@ const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
   },
   onfidoSessionId: {
     type: Schema.Types.ObjectId,
+    required: false,
+  },
+  idvProvider: {
+    type: String,
+    enum: ['onfido', 'zk-passport'],
+    required: false,
+  },
+  zkPassport: {
+    type: {
+      proofsReceivedAt: Date,
+      disclosedFields: {
+        type: {
+          firstName: String,
+          lastName: String,
+          dateOfBirth: String,
+          nationality: String,
+        },
+        required: false,
+      },
+      sanctionsPassedAt: Date,
+      uniqueIdentifier: String,
+    },
     required: false,
   },
 });
@@ -896,6 +946,10 @@ const CleanHandsNullifierAndCredsSchema = new Schema<ICleanHandsNullifierAndCred
     type: String,
     required: false,
   },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
 });
 
 const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNullifierAndCreds>({
@@ -915,6 +969,10 @@ const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNu
     required: false,
   },
   uuid: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
     type: String,
     required: false,
   },

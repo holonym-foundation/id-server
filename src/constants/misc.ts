@@ -217,3 +217,4 @@ export const PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION = ethers.utils.keccak256(e
 export const PAYMENT_SERVICE_PHONE_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_phone_verification'))
 export const PAYMENT_SERVICE_BIOMETRICS_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_biometrics_verification'))
 export const PAYMENT_SERVICE_ZK_PASSPORT_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_zk_passport_verification'))
+export const PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('human_id_clean_hands_zk_passport_verification'))
