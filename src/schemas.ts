@@ -1557,6 +1557,10 @@ const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecre
     type: String,
     required: true,
   },
+  service: {
+    type: String,
+    required: true,
+  },
   chainId: {
     type: Number,
     required: true,
@@ -1595,6 +1599,10 @@ const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCredi
     ref: 'SandboxPaymentCommitment',
   },
   secret: {
+    type: String,
+    required: true,
+  },
+  service: {
     type: String,
     required: true,
   },

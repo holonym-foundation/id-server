@@ -676,6 +676,7 @@ export type IHumanIDCreditsPaymentSecret = {
   userId: Types.ObjectId;  // Reference to HumanIDCreditsUsers
   commitmentId: Types.ObjectId;  // Reference to PaymentCommitments (not commitment string)
   secret: string;  // Plaintext secret
+  service: string;  // bytes32 hex; the service the secret is bound to (signed into every payment signature)
   chainId: number;
   price: string;  // Price in wei
   priceOverrideId?: Types.ObjectId;  // Optional reference to price override

@@ -537,6 +537,7 @@ export async function generatePaymentSecretsBatch(
           userId,
           commitmentId,
           secret,
+          service,
           chainId,
           price,
           createdAt: new Date(),
