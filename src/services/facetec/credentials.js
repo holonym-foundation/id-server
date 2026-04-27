@@ -18,13 +18,10 @@ import {
   validateUUIDv4,
   objectIdElevenMonthsAgo,
   objectIdFiveDaysAgo,
+  dateElevenMonthsFromNow,
 } from "../../utils/utils.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { sessionStatusEnum } from "../../constants/misc.js";
-import {
-  findOneUserVerificationLast11Months,
-  findOneUserVerification11Months5Days,
-} from "../../utils/user-verifications.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/biometrics-nullifier-and-creds.js";
 import { getFaceTecBaseURL } from "../../utils/facetec.js";
 import { upgradeV3Logger } from "./error-logger.js";
@@ -49,6 +46,7 @@ async function saveUserToDb(uuidV2) {
     biometrics: {
       uuidV2: uuidV2,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {

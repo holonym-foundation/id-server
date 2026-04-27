@@ -26,6 +26,7 @@ import payments, { sandboxRouter as sandboxPayments } from "./routes/payments.js
 import paymentSecrets, { sandboxRouter as sandboxPaymentSecrets } from "./routes/payment-secrets.js";
 import sumsub, { sandboxRouter as sandboxSumsub } from "./routes/sumsub.js";
 import zkPassport, { sandboxRouter as sandboxZkPassport } from "./routes/zk-passport.js";
+import offChainAttestations, { sandboxRouter as sandboxOffChainAttestations } from "./routes/off-chain-attestations.js";
 import onfidoSessions, { sandboxRouter as sandboxOnfidoSessions } from "./routes/onfido-sessions.js";
 
 const app = express();
@@ -104,6 +105,7 @@ app.use("/payments", payments);
 app.use("/payment-secrets", paymentSecrets);
 app.use("/sumsub", sumsub);
 app.use("/zk-passport", zkPassport);
+app.use("/off-chain-attestations", offChainAttestations);
 app.use("/onfido-sessions", onfidoSessions);
 
 // ---------- Sandbox routes ----------
@@ -119,6 +121,7 @@ app.use("/sandbox/payments", sandboxPayments);
 app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
 app.use("/sandbox/sumsub", sandboxSumsub);
 app.use("/sandbox/zk-passport", sandboxZkPassport);
+app.use("/sandbox/off-chain-attestations", sandboxOffChainAttestations);
 app.use("/sandbox/onfido-sessions", sandboxOnfidoSessions);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy

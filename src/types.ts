@@ -90,15 +90,22 @@ export type IUserVerifications = {
     uuidV2?: string;
     sessionId?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
+    // Identifies which issuance flow produced this verification.
+    // Known values: "free-zk-passport". Future values may include
+    // "paid-onfido", "paid-sumsub", "paid-zk-passport", etc.
+    createdByFlow?: string;
   };
   aml?: {
     uuid?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
   };
   biometrics?: {
     uuidV2?: string;
     sessionId?: string;
     issuedAt?: Date;
+    expiresAt?: Date;
   };
 };
 
@@ -245,6 +252,23 @@ export type IAmlChecksSession = {
   };
   // Reference to standalone IOnfidoSession (Phase 3 decoupling)
   onfidoSessionId?: Types.ObjectId;
+  // Which identity-verification provider this AML session uses. Missing value
+  // is treated as 'onfido' so pre-existing documents keep their original
+  // semantics. See docs/plans/2026-04-23-feat-zk-passport-clean-hands-flow-plan.md (U1).
+  idvProvider?: 'onfido' | 'zk-passport';
+  // Populated only when idvProvider === 'zk-passport'. Mirrors the fields we
+  // need to reach parity with the Onfido branch for sanctions/PEP + issuance.
+  zkPassport?: {
+    proofsReceivedAt?: Date;
+    disclosedFields?: {
+      firstName?: string;
+      lastName?: string;
+      dateOfBirth?: string;
+      nationality?: string;
+    };
+    sanctionsPassedAt?: Date;
+    uniqueIdentifier?: string;
+  };
 };
 
 export type ISandboxAmlChecksSession = IAmlChecksSession;
@@ -262,6 +286,19 @@ export type IBiometricsSession = {
   refundTxHash?: string;
   paymentCommitment?: string;
 };
+
+export type IZkPassportSession = {
+  _id?: Types.ObjectId;
+  sigDigest?: string;
+  status?: string;
+  paymentCommitment?: string;
+  chainId?: number;
+  failureReason?: string;
+  refundTxHashes?: string[];
+  createdAt?: Date;
+};
+
+export type ISandboxZkPassportSession = IZkPassportSession;
 
 export type ISessionRefundMutex = {
   _id?: Types.ObjectId;
@@ -364,6 +401,11 @@ export type ICleanHandsNullifierAndCreds = {
   };
   idvSessionId?: string;
   uuid?: string;
+  // ZK Passport's deterministic per-passport identifier. Populated only when
+  // the creds were issued via the ZK Passport branch. Enables the same 5-day
+  // recovery semantics the ZK Passport gov-id flow uses: a later verify-and-
+  // issue call with the same nullifier must present the same passport.
+  zkPassportUniqueIdentifier?: string;
 };
 
 export type ISandboxCleanHandsNullifierAndCreds = ICleanHandsNullifierAndCreds;
@@ -389,6 +431,17 @@ export type IZkPassportNullifierAndCreds = {
 };
 
 export type ISandboxZkPassportNullifierAndCreds = IZkPassportNullifierAndCreds;
+
+export type IOffChainAttestation = {
+  _id?: Types.ObjectId;
+  address?: string;
+  attestationType?: string;
+  payload?: Record<string, any>;
+  issuedAt?: Date;
+  expiresAt?: Date;
+};
+
+export type ISandboxOffChainAttestation = IOffChainAttestation;
 
 export type IEncryptedNullifiers = {
   _id?: Types.ObjectId;
@@ -623,6 +676,7 @@ export type IHumanIDCreditsPaymentSecret = {
   userId: Types.ObjectId;  // Reference to HumanIDCreditsUsers
   commitmentId: Types.ObjectId;  // Reference to PaymentCommitments (not commitment string)
   secret: string;  // Plaintext secret
+  service: string;  // bytes32 hex; the service the secret is bound to (signed into every payment signature)
   chainId: number;
   price: string;  // Price in wei
   priceOverrideId?: Types.ObjectId;  // Optional reference to price override
@@ -699,6 +753,8 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   AMLChecksSessionModel: Model<IAmlChecksSession | ISandboxAmlChecksSession>
   CleanHandsNullifierAndCredsModel: Model<ICleanHandsNullifierAndCreds | ISandboxCleanHandsNullifierAndCreds>
   ZkPassportNullifierAndCredsModel: Model<IZkPassportNullifierAndCreds | ISandboxZkPassportNullifierAndCreds>
+  ZkPassportSessionModel: Model<IZkPassportSession | ISandboxZkPassportSession>
+  OffChainAttestationModel: Model<IOffChainAttestation | ISandboxOffChainAttestation>
   SanctionsResultModel: Model<ISanctionsResult>
   PaymentRedemptionModel: Model<IPaymentRedemption | ISandboxPaymentRedemption>
   PaymentSecretModel: Model<IPaymentSecret | ISandboxPaymentSecret>

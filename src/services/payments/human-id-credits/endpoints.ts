@@ -264,12 +264,17 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         return res.status(400).json({ error: 'limit must be a number between 1 and 1000' });
       }
 
-      const serviceValidation = validateService(service);
-      if (!serviceValidation.valid) {
-        return res.status(400).json({ error: serviceValidation.error });
+      // `service` is now optional on this endpoint. When provided, it acts purely
+      // as a filter — the secret's signature is generated against the service that
+      // was persisted at gensecrets time, not whatever the client supplies here.
+      let validatedService: string | undefined;
+      if (service !== undefined) {
+        const serviceValidation = validateService(service);
+        if (!serviceValidation.valid) {
+          return res.status(400).json({ error: serviceValidation.error });
+        }
+        validatedService = service;
       }
-      // After validation, service is guaranteed to be a string
-      const validatedService = service as string;
 
       // Validate status if provided
       if (status && status !== 'redeemed' && status !== 'unredeemed') {
@@ -321,6 +326,9 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
       }
       if (priceOverrideObjectId) {
         matchStage.priceOverrideId = priceOverrideObjectId;
+      }
+      if (validatedService) {
+        matchStage.service = validatedService;
       }
       if (cursorObjectId) {
         matchStage._id = { $lt: cursorObjectId };
@@ -391,6 +399,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
         $project: {
           _id: 1,
           secret: 1,
+          service: 1,
           commitment: '$commitmentDoc.commitment',
           chainId: 1,
           price: 1,
@@ -418,12 +427,14 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
       const formattedSecrets = await Promise.all(
         secretsToReturn.map(async (secret: any) => {
           const commitment = secret.commitment || '';
-          
-          // Generate signature using stored params
+
+          // Sign against the service that was bound to this secret at gensecrets
+          // time. Using a client-supplied service here is what produced the
+          // InvalidSignature() reverts on batchPay.
           const signature = await generatePaymentSignature(
             secret.price,
             commitment,
-            validatedService,
+            secret.service,
             secret.chainId,
             timestamp
           );
@@ -432,6 +443,7 @@ export function createGetSecretsEndpoint(config: CreditsRouteHandlerConfig) {
             id: secret._id.toString(),
             secret: secret.secret,
             commitment,
+            service: secret.service,
             chainId: secret.chainId,
             price: secret.price,
             priceOverrideId: secret.priceOverrideId?.toString() ?? undefined,

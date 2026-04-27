@@ -25,17 +25,27 @@ import {
 } from "../../utils/transactions.js";
 import {
   cleanHandsDummyUserCreds,
-  siIdentifierPrefixesToBlock
+  siIdentifierPrefixesToBlock,
+  countryCodeToPrime,
 } from "../../utils/constants.js";
-import { getDateAsInt, govIdUUID } from "../../utils/utils.js";
+import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
+import {
+  zkPassport,
+  classifyZkPassportError,
+  formatDateOfBirth,
+} from "../zk-passport/verify-and-issue.js";
+import {
+  getDateAsInt,
+  govIdUUID,
+  dateElevenMonthsAgo,
+  dateElevenMonthsFromNow,
+  dateFiveDaysAgo,
+} from "../../utils/utils.js";
 import {
   findOneNullifierAndCredsLast5Days
 } from "../../utils/clean-hands-nullifier-and-creds.js";
 import { parseStatementForUserCertification } from '../../utils/clean-hands-misc.js'
-import {
-  findOneCleanHandsUserVerificationLast11Months,
-  findOneCleanHandsUserVerification11Months5Days
-} from "../../utils/user-verifications.js";
+import { findUserVerification } from "../../utils/user-verifications.js";
 import { makeUnknownErrorLoggable, toAlreadyRegisteredStr } from "../../utils/errors.js";
 import {
   supportedChainIds,
@@ -44,6 +54,7 @@ import {
   sessionStatusEnum,
   cleanHandsSessionStatusEnum,
   PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
+  PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION,
 } from "../../constants/misc.js";
 import {
   reserveRedemption,
@@ -349,6 +360,107 @@ async function postSessionv3Live(req: Request, res: Response) {
 async function postSessionv3Sandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createPostSessionv3RouteHandler(config)(req, res);
+}
+
+const postSessionsV4Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/v4] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
+const VALID_IDV_PROVIDERS = ["onfido", "zk-passport"] as const;
+type IdvProvider = (typeof VALID_IDV_PROVIDERS)[number];
+
+function resolveIdvProvider(raw: unknown): IdvProvider | null {
+  if (raw === undefined || raw === null) return "onfido";
+  if (typeof raw !== "string") return null;
+  return (VALID_IDV_PROVIDERS as readonly string[]).includes(raw)
+    ? (raw as IdvProvider)
+    : null;
+}
+
+/**
+ * Creates an AML session V4. Unlike v3, v4 splits session creation from
+ * payment: the session is created with status NEEDS_PAYMENT and no payment
+ * is required. A separate POST /:id/pay/v4 endpoint transitions the session
+ * to IN_PROGRESS after accepting payment. Callers supply `idvProvider` to
+ * pick which verification branch this session will run.
+ */
+function createPostSessionv4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    try {
+      const sigDigest = req.body.sigDigest;
+      if (!sigDigest) {
+        return res.status(400).json({ error: "sigDigest is required" });
+      }
+
+      const idvProvider = resolveIdvProvider(req.body.idvProvider);
+      if (!idvProvider) {
+        return res.status(400).json({
+          error: `idvProvider must be one of: ${VALID_IDV_PROVIDERS.join(", ")}`,
+        });
+      }
+
+      let silkDiffWallet = null;
+      if (req.body.silkDiffWallet === "silk") {
+        silkDiffWallet = "silk";
+      } else if (req.body.silkDiffWallet === "diff-wallet") {
+        silkDiffWallet = "diff-wallet";
+      }
+
+      // Max-15 sessions guard, matching v2/v3 behavior.
+      const existingSessions = await config.AMLChecksSessionModel.find({
+        sigDigest: sigDigest,
+        status: {
+          "$in": [
+            sessionStatusEnum.IN_PROGRESS,
+            sessionStatusEnum.VERIFICATION_FAILED,
+            sessionStatusEnum.ISSUED,
+          ],
+        },
+      }).exec();
+
+      if (existingSessions.length >= 15) {
+        return res.status(400).json({
+          error: "User has reached the maximum number of sessions (15)",
+        });
+      }
+
+      const session = new config.AMLChecksSessionModel({
+        sigDigest: sigDigest,
+        status: sessionStatusEnum.NEEDS_PAYMENT,
+        silkDiffWallet,
+        idvProvider,
+      });
+      await session.save();
+
+      postSessionsV4Logger.info(
+        { sessionId: session._id, idvProvider },
+        "Created AML session v4",
+      );
+
+      return res.status(201).json({ session });
+    } catch (err: any) {
+      console.log(
+        "POST /aml-sessions/v4: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function postSessionv4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPostSessionv4RouteHandler(config)(req, res);
+}
+
+async function postSessionv4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPostSessionv4RouteHandler(config)(req, res);
 }
 
 /**
@@ -720,6 +832,155 @@ async function payForSessionV3(req: Request, res: Response) {
   }
 }
 
+const payForSessionV4Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/pay/v4] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
+/**
+ * Accepts payment for an existing AML session in NEEDS_PAYMENT and transitions
+ * it to IN_PROGRESS. Uses the commitment-based payment system (paymentSecret +
+ * paymentChainId), the same path v3 used internally — but now decoupled from
+ * session creation. Service constant is selected by the session's idvProvider
+ * so the payment oracle can enforce branch-specific pricing ($5 Onfido / $3
+ * ZK Passport). For the Onfido branch, this handler also creates or reuses an
+ * Onfido session and returns its id, matching v3's response shape.
+ */
+function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
+  return async (req: Request, res: Response) => {
+    let reservationToken: string | null = null;
+
+    try {
+      const _id = req.params._id;
+      const paymentSecret = req.body.paymentSecret;
+      const paymentChainId = req.body.paymentChainId;
+
+      if (!paymentSecret || typeof paymentSecret !== "string") {
+        return res.status(400).json({ error: "paymentSecret is required" });
+      }
+      const chainIdNum =
+        typeof paymentChainId === "number" ? paymentChainId : Number(paymentChainId);
+      if (!paymentChainId || isNaN(chainIdNum)) {
+        return res
+          .status(400)
+          .json({ error: "paymentChainId is required and must be a number" });
+      }
+
+      let objectId: ObjectId | null = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch (err: any) {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      const session = await config.AMLChecksSessionModel.findOne({
+        _id: objectId,
+      }).exec();
+
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      if (session.status !== sessionStatusEnum.NEEDS_PAYMENT) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.NEEDS_PAYMENT}'`,
+        });
+      }
+
+      // Missing idvProvider on legacy/pre-v4 docs is treated as 'onfido'.
+      const idvProvider: IdvProvider = (session.idvProvider as IdvProvider) ?? "onfido";
+      const service =
+        idvProvider === "zk-passport"
+          ? PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION
+          : PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION;
+
+      const reservation = await reserveRedemption({
+        secret: paymentSecret,
+        chainId: chainIdNum,
+        service,
+        config,
+      });
+      reservationToken = reservation.reservationToken;
+
+      session.status = sessionStatusEnum.IN_PROGRESS;
+      session.paymentCommitment = reservation.commitment;
+      session.chainId = chainIdNum;
+
+      let onfidoSessionId: any = undefined;
+      if (idvProvider === "onfido") {
+        const reusable = await findReusableOnfidoSession(config, session.sigDigest!);
+        if (reusable) {
+          onfidoSessionId = reusable._id;
+          session.onfidoSessionId = reusable._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, onfidoSessionId: reusable._id },
+            "Reusing existing Onfido session for Clean Hands (v4)",
+          );
+        } else {
+          const onfidoSession = await createOnfidoSession(
+            config,
+            session.sigDigest!,
+            "clean-hands",
+            session._id!,
+          );
+          onfidoSessionId = onfidoSession._id;
+          session.onfidoSessionId = onfidoSession._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, onfidoSessionId: onfidoSession._id },
+            "Created new Onfido session for Clean Hands (v4)",
+          );
+        }
+      }
+
+      await session.save();
+
+      await completeRedemption({
+        reservationToken: reservationToken!,
+        service,
+        fulfillmentReceipt: `clean-hands-session:${session._id}`,
+        config,
+      });
+
+      return res.status(200).json({ session, onfidoSessionId });
+    } catch (err: any) {
+      if (reservationToken) {
+        try {
+          await cancelRedemption({ reservationToken, config });
+        } catch (cancelErr: any) {
+          payForSessionV4Logger.error(
+            { error: cancelErr.message, reservationToken },
+            "Failed to cancel payment reservation",
+          );
+        }
+      }
+
+      if (err instanceof PaymentError) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
+      console.log(
+        "POST /aml-sessions/:_id/pay/v4: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function payForSessionV4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createPayForSessionV4RouteHandler(config)(req, res);
+}
+
+async function payForSessionV4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createPayForSessionV4RouteHandler(config)(req, res);
+}
+
 /**
  * ENDPOINT.
  * Allows a user to request a refund for a failed session.
@@ -981,6 +1242,7 @@ async function saveUserToDb(uuid: string) {
     aml: {
       uuid: uuid,
       issuedAt: new Date(),
+      expiresAt: dateElevenMonthsFromNow(),
     },
   });
   try {
@@ -1810,7 +2072,11 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
         // is only getting the credentials+nullifier that they were already issued.
         // However, we keep it here to be extra safe.
         if (config.environment === "live") {
-          const user = await findOneCleanHandsUserVerification11Months5Days(uuid);
+          const user = await findUserVerification(uuid, "aml", {
+            issuedAt: { after: dateElevenMonthsAgo(), before: dateFiveDaysAgo() },
+            // Ignore expired user verifications
+            expiresAt: { after: new Date() }
+          });
           if (user) {
             // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
             issueCredsV4Logger.alreadyRegistered(uuid);
@@ -2106,7 +2372,11 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
 
       // Assert user hasn't registered yet
       if (config.environment === "live") {
-        const user = await findOneCleanHandsUserVerificationLast11Months(uuid);
+        const user = await findUserVerification(uuid, "aml", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+          // Ignore expired user verifications
+          expiresAt: { after: new Date() }
+        });
         if (user) {
           // await saveCollisionMetadata(uuidOld, uuidNew, checkIdFromNullifier, documentReport);
           issueCredsV4Logger.alreadyRegistered(uuid);
@@ -2160,6 +2430,455 @@ async function issueCredsV4Live(req: Request, res: Response) {
 async function issueCredsV4Sandbox(req: Request, res: Response) {
   const config = getRouteHandlerConfig("sandbox");
   return createIssueCredsV4RouteHandler(config)(req, res);
+}
+
+const verifyAndIssueZkPassportLogger = upgradeLogger(logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/verify-and-issue] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+    idvProvider: "zk-passport",
+  },
+}));
+
+/**
+ * POST /aml-sessions/:_id/verify-and-issue
+ *
+ * ZK Passport branch of Clean Hands issuance. Accepts a ZKPassport proof in
+ * the request body, verifies it via @zkpassport/sdk, extracts disclosed
+ * name/DOB/nationality, runs the same sanctions.io + PEP pipeline the Onfido
+ * branch uses, and writes Clean Hands creds in the shape the v3CleanHands
+ * circuit consumes.
+ *
+ * The sanctions block is duplicated (not factored out) from issueCredsV4 to
+ * avoid perturbing the production Onfido path. Both branches should converge
+ * behaviorally; divergence here is a bug.
+ */
+function createVerifyAndIssueZkPassportRouteHandler(
+  config: SandboxVsLiveKYCRouteHandlerConfig,
+) {
+  return async (req: Request, res: Response) => {
+    try {
+      const _id = req.params._id;
+      const {
+        proofs,
+        queryResult,
+        nullifier: issuanceNullifier,
+      } = req.body;
+
+      // --- Validate request body ---
+
+      if (!proofs || !Array.isArray(proofs) || proofs.length === 0) {
+        return res.status(400).json({ error: "Missing or invalid proofs array" });
+      }
+      if (!queryResult || typeof queryResult !== "object") {
+        return res.status(400).json({ error: "Missing or invalid queryResult" });
+      }
+      if (!issuanceNullifier) {
+        return res.status(400).json({ error: "Missing nullifier (issuance nullifier)" });
+      }
+      try {
+        BigInt(issuanceNullifier);
+      } catch {
+        return res.status(400).json({
+          error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`,
+        });
+      }
+
+      let objectId: ObjectId | null = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      // --- Load + gate the session ---
+
+      const session = await config.AMLChecksSessionModel.findOne({
+        _id: objectId,
+      }).exec();
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      if (session.idvProvider !== "zk-passport") {
+        return res.status(400).json({
+          error: `Session idvProvider is '${session.idvProvider ?? "onfido"}'. This endpoint only handles 'zk-passport' sessions.`,
+        });
+      }
+
+      if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({
+          error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+        });
+      }
+
+      if (session.status === cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
+        return res.status(202).json({
+          message:
+            "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+          statement: session?.userDeclaration?.statement,
+        });
+      }
+
+      // Allow both IN_PROGRESS (fresh issuance) and ISSUED (recovery re-fetch
+      // via nullifier), mirroring the ZK Passport gov-id flow.
+      if (
+        session.status !== sessionStatusEnum.IN_PROGRESS &&
+        session.status !== sessionStatusEnum.ISSUED
+      ) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}' or '${sessionStatusEnum.ISSUED}'.`,
+        });
+      }
+
+      // --- Rate limiting ---
+
+      const ip = (req.headers["x-forwarded-for"] ?? req.socket.remoteAddress) as string;
+      const { limitExceeded } = await rateLimitOccurrencesPerSecs(
+        `NUM_REQUESTS_BY_IP:clean-hands-zk-passport-verify:${ip}`,
+        10,
+        60 * 60 * 24, // 1 day
+      );
+      if (limitExceeded) {
+        verifyAndIssueZkPassportLogger.warn({ ip }, "Rate limit exceeded");
+        return res.status(429).json({
+          error: "Too many ZK Passport verification attempts. Please try again tomorrow.",
+        });
+      }
+
+      // --- Nullifier recovery lookup ---
+
+      const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(
+        config.CleanHandsNullifierAndCredsModel,
+        issuanceNullifier,
+      );
+
+      // --- Verify ZK Passport proofs ---
+
+      verifyAndIssueZkPassportLogger.info("Verifying ZK Passport proofs");
+
+      let verificationResult: any;
+      try {
+        verificationResult = await zkPassport.verify({ proofs, queryResult });
+      } catch (err) {
+        verifyAndIssueZkPassportLogger.error(
+          { error: makeUnknownErrorLoggable(err) },
+          "ZK Passport verification threw an error",
+        );
+        return res.status(400).json({
+          code: classifyZkPassportError(err),
+          error: "ZK Passport proof verification failed.",
+        });
+      }
+
+      if (!verificationResult.verified) {
+        verifyAndIssueZkPassportLogger.error(
+          { queryResultErrors: verificationResult.queryResultErrors },
+          "ZK Passport proof verification returned verified=false",
+        );
+        return res.status(400).json({
+          code: classifyZkPassportError(verificationResult.queryResultErrors),
+          error: "ZK Passport proof verification failed.",
+          details: verificationResult.queryResultErrors,
+        });
+      }
+
+      // --- Extract disclosed fields ---
+
+      const firstName = queryResult.firstname?.disclose?.result;
+      const lastName = queryResult.lastname?.disclose?.result;
+      const dobRaw = queryResult.birthdate?.disclose?.result;
+      const nationality =
+        queryResult.nationality?.disclose?.result ??
+        queryResult.issuing_country?.disclose?.result;
+
+      if (!firstName || !lastName || !dobRaw) {
+        verifyAndIssueZkPassportLogger.error(
+          { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
+          "ZK Passport proof does not disclose required fields",
+        );
+        return res.status(400).json({
+          error:
+            "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.",
+        });
+      }
+
+      const dateOfBirth = formatDateOfBirth(dobRaw);
+      const nationalityStr = nationality ?? "";
+
+      if (
+        nationalityStr &&
+        !countryCodeToPrime[nationalityStr as keyof typeof countryCodeToPrime]
+      ) {
+        verifyAndIssueZkPassportLogger.warn(
+          { nationality: nationalityStr },
+          "ZK Passport nationality not found in countryCodeToPrime",
+        );
+        return res.status(400).json({
+          code: "ZK_PASSPORT_UNSUPPORTED_DOCUMENT",
+          error: `Unsupported country (${nationalityStr}) from ZK Passport proof`,
+        });
+      }
+
+      const uuid = govIdUUID(firstName, lastName, dateOfBirth);
+
+      // --- Recovery branch: same nullifier seen within 5 days ---
+
+      if (nullifierAndCreds?.zkPassportUniqueIdentifier) {
+        if (
+          nullifierAndCreds.zkPassportUniqueIdentifier !==
+          verificationResult.uniqueIdentifier
+        ) {
+          return res.status(400).json({
+            error:
+              "The passport used does not match the one from the original issuance.",
+          });
+        }
+
+        const creds = extractCreds({ firstName, lastName, dateOfBirth });
+        const response = issuev2CleanHands(
+          config.cleanHandsIssuerPrivateKey,
+          issuanceNullifier,
+          creds,
+        );
+        response.metadata = creds;
+
+        verifyAndIssueZkPassportLogger.info(
+          { uuid, sid: session._id },
+          "Re-issuing Clean Hands credentials (ZK Passport recovery branch)",
+        );
+
+        if (session.status !== sessionStatusEnum.ISSUED) {
+          session.status = sessionStatusEnum.ISSUED;
+          try { await session.save(); } catch { /* non-fatal */ }
+        }
+        return res.status(200).json(response);
+      }
+
+      // --- Fresh issuance: session must be IN_PROGRESS ---
+
+      if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}' for fresh issuance.`,
+        });
+      }
+
+      // --- Sanctions.io / PEP pipeline (duplicated from issueCredsV4) ---
+
+      const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      const skipSanctionsCheck =
+        session.userDeclaration?.confirmed &&
+        (session.userDeclaration?.statementGeneratedAt ?? 0) > fiveDaysAgo;
+
+      if (!skipSanctionsCheck) {
+        const sanctionsUrl =
+          "https://api.sanctions.io/search/" +
+          "?min_score=0.93" +
+          `&data_source=${encodeURIComponent(
+            "CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS",
+          )}` +
+          `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+          `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
+          "&entity_type=individual";
+        const reqConfig = {
+          headers: {
+            Accept: "application/json; version=2.2",
+            Authorization: "Bearer " + process.env.SANCTIONS_API_KEY,
+          },
+        };
+        const resp = await fetch(sanctionsUrl, reqConfig);
+        const data = await resp.json();
+
+        const resultsObjectsToStore: Array<
+          HydratedDocument<ISanctionsResult> & { message: string }
+        > = [];
+        const resultsToBlock = data.results.filter((result: any) => {
+          if (result?.data_source?.short_name !== "PEP") return true;
+
+          const resultToLog = {
+            data_source: result.data_source,
+            nationality: result.nationality,
+            confidence_score: result.confidence_score,
+            si_identifier: result.si_identifier,
+          };
+          verifyAndIssueZkPassportLogger.info(
+            { result: resultToLog },
+            "PEP result found",
+          );
+          const resultsObj = new config.SanctionsResultModel({
+            message: "PEP result found",
+            ...resultToLog,
+          });
+          resultsObjectsToStore.push(resultsObj);
+
+          for (const prefix of siIdentifierPrefixesToBlock) {
+            if (!result.si_identifier) {
+              verifyAndIssueZkPassportLogger.warn(
+                { result },
+                "No si_identifier found for PEP result",
+              );
+              return true;
+            }
+            if (result.si_identifier?.startsWith(prefix)) return true;
+          }
+          return false;
+        });
+
+        await Promise.all(resultsObjectsToStore.map((r) => r.save()));
+
+        const resultsThatRequireDeclaration = data.results.filter((result: any) => {
+          if (result?.data_source?.short_name !== "PEP") return false;
+          if (!result.data_hash) {
+            verifyAndIssueZkPassportLogger.error(
+              { result },
+              "Sanctions io PEP result is missing data_hash",
+            );
+            return true;
+          }
+          for (const resultToBlock of resultsToBlock) {
+            if (
+              resultToBlock.data_hash &&
+              result.data_hash === resultToBlock.data_hash
+            ) {
+              return false;
+            } else if (!resultToBlock.data_hash) {
+              verifyAndIssueZkPassportLogger.error(
+                { result: resultToBlock },
+                "Sanctions io PEP result is missing data_hash",
+              );
+              return true;
+            }
+          }
+          return true;
+        });
+
+        if (resultsToBlock.length > 0) {
+          const whitelistItem = await CleanHandsSessionWhitelist.findOne({
+            sessionId: session._id,
+          }).exec();
+          if (!whitelistItem) {
+            verifyAndIssueZkPassportLogger.sanctionsMatchFound(data.results);
+            const confidenceScores = data?.results
+              ?.map(
+                (result: any) =>
+                  `(${result.data_source?.name}: ${result?.confidence_score})`,
+              )
+              .join(", ");
+            await failSession(
+              session,
+              `Sanctions match found. Confidence scores: ${confidenceScores}`,
+            );
+            return res.status(400).json({ error: "Sanctions match found" });
+          } else {
+            verifyAndIssueZkPassportLogger.info(
+              { sessionId: session._id },
+              "Ignoring sanctions match for whitelisted session",
+            );
+          }
+        }
+
+        if (resultsThatRequireDeclaration.length > 0) {
+          session.status = cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION;
+          const statement = parseStatementForUserCertification(
+            resultsThatRequireDeclaration,
+          );
+          session.userDeclaration = {
+            statement,
+            confirmed: false,
+            statementGeneratedAt: new Date(),
+          };
+          await session.save();
+
+          verifyAndIssueZkPassportLogger.info(
+            { sessionId: session._id },
+            "Clean Hands session requires user declaration",
+          );
+
+          return res.status(202).json({
+            message:
+              "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+            statement,
+          });
+        }
+      }
+
+      // --- Uniqueness check (11-month window) ---
+
+      if (config.environment === "live") {
+        const user = await findUserVerification(uuid, "aml", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+          expiresAt: { after: new Date() },
+        });
+        if (user) {
+          verifyAndIssueZkPassportLogger.alreadyRegistered(uuid);
+          await failSession(session, toAlreadyRegisteredStr(user._id.toString()));
+          return res
+            .status(400)
+            .json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+        }
+      }
+
+      const dbResponse = await saveUserToDb(uuid);
+      if (dbResponse.error) return res.status(400).json(dbResponse);
+
+      // --- Issue credentials ---
+
+      const creds = extractCreds({ firstName, lastName, dateOfBirth });
+      const response = issuev2CleanHands(
+        config.cleanHandsIssuerPrivateKey,
+        issuanceNullifier,
+        creds,
+      );
+      response.metadata = creds;
+
+      verifyAndIssueZkPassportLogger.info(
+        { uuid, sid: session._id },
+        "Issuing Clean Hands credentials (ZK Passport branch)",
+      );
+
+      const newNullifierAndCreds = new config.CleanHandsNullifierAndCredsModel({
+        holoUserId: session.sigDigest,
+        issuanceNullifier,
+        uuid,
+        zkPassportUniqueIdentifier: verificationResult.uniqueIdentifier,
+      });
+      await newNullifierAndCreds.save();
+
+      session.status = sessionStatusEnum.ISSUED;
+      session.zkPassport = {
+        proofsReceivedAt: new Date(),
+        disclosedFields: {
+          firstName,
+          lastName,
+          dateOfBirth,
+          nationality: nationalityStr,
+        },
+        sanctionsPassedAt: new Date(),
+        uniqueIdentifier: verificationResult.uniqueIdentifier,
+      };
+      await session.save();
+
+      return res.status(200).json(response);
+    } catch (err: any) {
+      console.error(
+        "POST /aml-sessions/:_id/verify-and-issue: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function verifyAndIssueZkPassportLive(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createVerifyAndIssueZkPassportRouteHandler(config)(req, res);
+}
+
+async function verifyAndIssueZkPassportSandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createVerifyAndIssueZkPassportRouteHandler(config)(req, res);
 }
 
 /**
@@ -2358,10 +3077,14 @@ export {
   postSessionv2Sandbox,
   postSessionv3Live as postSessionv3,
   postSessionv3Sandbox,
+  postSessionv4Live as postSessionv4,
+  postSessionv4Sandbox,
   createPayPalOrder,
   payForSession,
   payForSessionV2,
   payForSessionV3,
+  payForSessionV4Live as payForSessionV4,
+  payForSessionV4Sandbox,
   refund,
   refundV2,
   refundCleanHandsSessionLive as refundCleanHandsSession,
@@ -2371,6 +3094,8 @@ export {
   issueCredsV3,
   issueCredsV4Live as issueCredsV4,
   issueCredsV4Sandbox,
+  verifyAndIssueZkPassportLive as verifyAndIssueZkPassport,
+  verifyAndIssueZkPassportSandbox,
   confirmStatementLive as confirmStatement,
   confirmStatementSandbox,
   getSessionsLive as getSessions,

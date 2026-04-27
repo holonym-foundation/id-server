@@ -31,6 +31,10 @@ import {
   IBiometricsNullifierAndCreds,
   IZkPassportNullifierAndCreds,
   ISandboxZkPassportNullifierAndCreds,
+  IZkPassportSession,
+  ISandboxZkPassportSession,
+  IOffChainAttestation,
+  ISandboxOffChainAttestation,
   IEncryptedNullifiers,
   ISandboxEncryptedNullifiers,
   IDailyVerificationCount,
@@ -92,6 +96,10 @@ const sandboxOnfidoSessionSchema = new Schema<ISandboxOnfidoSession>({
 
 // ---------- User Verifications ----------
 
+// Note: `govId.uuid` (v1 of the govId-namespace UUID) was removed from
+// usage on 2026-04-23. New writes only populate `govId.uuidV2`; legacy
+// rows with only `uuid` set are older than the 11-month sybil window
+// and are no longer queried by `findUserVerification`.
 const userVerificationsSchema = new Schema<IUserVerifications>({
   govId: {
     type: {
@@ -107,6 +115,11 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
       uuidV2: String,
       sessionId: String,
       issuedAt: Date,
+      expiresAt: Date,
+      // Identifies which issuance flow produced this verification.
+      // Known values: "free-zk-passport". Future values may include
+      // "paid-onfido", "paid-sumsub", "paid-zk-passport", etc.
+      createdByFlow: String,
     },
     required: false,
   },
@@ -114,6 +127,7 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
     type: {
       uuid: String,
       issuedAt: Date,
+      expiresAt: Date,
     },
     required: false,
   },
@@ -122,12 +136,14 @@ const userVerificationsSchema = new Schema<IUserVerifications>({
       uuidV2: String,
       sessionId: String,
       issuedAt: Date,
+      expiresAt: Date,
     },
     required: false,
   },
 });
 userVerificationsSchema.index({ "govId.uuidV2": 1 })
 userVerificationsSchema.index({ "govId.uuid": 1 })
+userVerificationsSchema.index({ "aml.uuid": 1 })
 // By keeping track of a user's sessions, we can let them start verification
 // and finish issuance in separate browsing sessions, which is useful for
 // handling the delay between when a user submits their documents to the
@@ -536,6 +552,34 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
     type: Schema.Types.ObjectId,
     required: false,
   },
+  // Which identity-verification provider this AML session uses. Missing value
+  // is treated as 'onfido' by callers so pre-existing documents keep their
+  // original semantics. Enum-validated at the Mongoose layer.
+  idvProvider: {
+    type: String,
+    enum: ['onfido', 'zk-passport'],
+    required: false,
+  },
+  // Populated only when idvProvider === 'zk-passport'. Holds fields disclosed
+  // by the ZKPassport proof plus branch-specific lifecycle timestamps that the
+  // Onfido branch tracks via its own collection.
+  zkPassport: {
+    type: {
+      proofsReceivedAt: Date,
+      disclosedFields: {
+        type: {
+          firstName: String,
+          lastName: String,
+          dateOfBirth: String,
+          nationality: String,
+        },
+        required: false,
+      },
+      sanctionsPassedAt: Date,
+      uniqueIdentifier: String,
+    },
+    required: false,
+  },
 });
 amlChecksSessionSchema.index({ sigDigest: 1 })
 amlChecksSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true })
@@ -601,6 +645,28 @@ const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
   },
   onfidoSessionId: {
     type: Schema.Types.ObjectId,
+    required: false,
+  },
+  idvProvider: {
+    type: String,
+    enum: ['onfido', 'zk-passport'],
+    required: false,
+  },
+  zkPassport: {
+    type: {
+      proofsReceivedAt: Date,
+      disclosedFields: {
+        type: {
+          firstName: String,
+          lastName: String,
+          dateOfBirth: String,
+          nationality: String,
+        },
+        required: false,
+      },
+      sanctionsPassedAt: Date,
+      uniqueIdentifier: String,
+    },
     required: false,
   },
 });
@@ -880,6 +946,10 @@ const CleanHandsNullifierAndCredsSchema = new Schema<ICleanHandsNullifierAndCred
     type: String,
     required: false,
   },
+  zkPassportUniqueIdentifier: {
+    type: String,
+    required: false,
+  },
 });
 
 const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNullifierAndCreds>({
@@ -899,6 +969,10 @@ const sandboxCleanHandsNullifierAndCredsSchema = new Schema<ISandboxCleanHandsNu
     required: false,
   },
   uuid: {
+    type: String,
+    required: false,
+  },
+  zkPassportUniqueIdentifier: {
     type: String,
     required: false,
   },
@@ -964,6 +1038,86 @@ const SandboxZkPassportNullifierAndCredsSchema = new Schema<ISandboxZkPassportNu
     required: false,
   },
 });
+
+// ZkPassportSession binds a $3 payment commitment to a zkPassport verification
+// attempt. The session only exists post-payment; status lifecycle is
+// IN_PROGRESS → { ISSUED | VERIFICATION_FAILED | REFUNDED }. Refunds are
+// allowed only when status === VERIFICATION_FAILED (ISSUED sessions have had
+// their redemption consumed).
+const zkPassportSessionSchema = new Schema<IZkPassportSession>({
+  sigDigest: String,
+  status: String,
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  failureReason: {
+    type: String,
+    required: false,
+  },
+  refundTxHashes: {
+    type: [String],
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+zkPassportSessionSchema.index({ sigDigest: 1 });
+zkPassportSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true });
+
+const sandboxZkPassportSessionSchema = new Schema<ISandboxZkPassportSession>({
+  sigDigest: String,
+  status: String,
+  paymentCommitment: {
+    type: String,
+    required: false,
+  },
+  chainId: {
+    type: Number,
+    required: false,
+  },
+  failureReason: {
+    type: String,
+    required: false,
+  },
+  refundTxHashes: {
+    type: [String],
+    required: false,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+sandboxZkPassportSessionSchema.index({ sigDigest: 1 });
+sandboxZkPassportSessionSchema.index({ paymentCommitment: 1 }, { unique: true, sparse: true });
+
+// Generic off-chain attestation: bound to a wallet address, expires after a
+// type-specific lifetime. Reused across attestation kinds (e.g. "zk-passport").
+// The type-specific disclosed fields live in `payload` as a free-form subdoc.
+const offChainAttestationSchema = new Schema<IOffChainAttestation>({
+  address: { type: String, required: true, lowercase: true },
+  attestationType: { type: String, required: true },
+  payload: { type: Schema.Types.Mixed, required: false },
+  issuedAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, required: true },
+});
+offChainAttestationSchema.index({ address: 1, attestationType: 1 });
+
+const sandboxOffChainAttestationSchema = new Schema<ISandboxOffChainAttestation>({
+  address: { type: String, required: true, lowercase: true },
+  attestationType: { type: String, required: true },
+  payload: { type: Schema.Types.Mixed, required: false },
+  issuedAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, required: true },
+});
+sandboxOffChainAttestationSchema.index({ address: 1, attestationType: 1 });
 
 // To allow the user to persist a nullifier so that they can request their
 // signed credentials in more than one browser session.
@@ -1403,6 +1557,10 @@ const HumanIDCreditsPaymentSecretSchema = new Schema<IHumanIDCreditsPaymentSecre
     type: String,
     required: true,
   },
+  service: {
+    type: String,
+    required: true,
+  },
   chainId: {
     type: Number,
     required: true,
@@ -1441,6 +1599,10 @@ const SandboxHumanIDCreditsPaymentSecretSchema = new Schema<ISandboxHumanIDCredi
     ref: 'SandboxPaymentCommitment',
   },
   secret: {
+    type: String,
+    required: true,
+  },
+  service: {
     type: String,
     required: true,
   },
@@ -1594,6 +1756,10 @@ export {
   BiometricsNullifierAndCredsSchema,
   ZkPassportNullifierAndCredsSchema,
   SandboxZkPassportNullifierAndCredsSchema,
+  zkPassportSessionSchema,
+  sandboxZkPassportSessionSchema,
+  offChainAttestationSchema,
+  sandboxOffChainAttestationSchema,
   DailyVerificationCountSchema,
   DailyVerificationDeletionsSchema,
   VerificationCollisionMetadataSchema,
