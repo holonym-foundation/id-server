@@ -227,17 +227,23 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
         // Checks for an _unexpired_ verification from the last 11 months. Expired
         // verifications are ignored. If there is no explicit expiry (legacy docs),
         // the verification is treated as unexpired.
+        //
+        // Skipped in sandbox: sandbox must not consult or contend with the live
+        // UserVerifications collection, otherwise a previously-verified identity
+        // cannot exercise the sandbox flow.
 
-        const existingUser = await findUserVerification(uuidV2, "govId", {
-          issuedAt: { after: dateElevenMonthsAgo() },
-          expiresAt: { after: new Date() },
-        });
-        if (existingUser) {
-          endpointLogger.info({ uuidV2 }, "Off-chain dedup: identity already registered");
-          return res.status(409).json({
-            code: "ALREADY_REGISTERED",
-            error: `This identity has already been verified (user ID ${existingUser._id}).`,
+        if (config.environment === "live") {
+          const existingUser = await findUserVerification(uuidV2, "govId", {
+            issuedAt: { after: dateElevenMonthsAgo() },
+            expiresAt: { after: new Date() },
           });
+          if (existingUser) {
+            endpointLogger.info({ uuidV2 }, "Off-chain dedup: identity already registered");
+            return res.status(409).json({
+              code: "ALREADY_REGISTERED",
+              error: `This identity has already been verified (user ID ${existingUser._id}).`,
+            });
+          }
         }
 
         // Fresh timestamps captured after the lock is held, so the attestation's
@@ -247,26 +253,31 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
         const expiresAt = new Date(issuedAt.getTime() + ATTESTATION_TTL_MS);
 
         // --- Persist UserVerifications (blocks future free + paid re-verifications) ---
+        //
+        // Skipped in sandbox so sandbox runs neither block live verifications
+        // for the same identity nor get blocked by them.
 
-        try {
-          await new UserVerifications({
-            govId: {
-              uuidV2,
-              sessionId: null,
-              issuedAt,
-              expiresAt,
-              // By specifying which flow this UserVerification record came from, we have
-              // the option of allowing users to verify again via a different (e.g., paid)
-              // flow in the future.
-              createdByFlow: "free-zk-passport",
-            },
-          }).save();
-        } catch (err) {
-          endpointLogger.error(
-            { error: makeUnknownErrorLoggable(err) },
-            "Failed to save UserVerifications"
-          );
-          return res.status(500).json({ error: "Failed to save verification." });
+        if (config.environment === "live") {
+          try {
+            await new UserVerifications({
+              govId: {
+                uuidV2,
+                sessionId: null,
+                issuedAt,
+                expiresAt,
+                // By specifying which flow this UserVerification record came from, we have
+                // the option of allowing users to verify again via a different (e.g., paid)
+                // flow in the future.
+                createdByFlow: "free-zk-passport",
+              },
+            }).save();
+          } catch (err) {
+            endpointLogger.error(
+              { error: makeUnknownErrorLoggable(err) },
+              "Failed to save UserVerifications"
+            );
+            return res.status(500).json({ error: "Failed to save verification." });
+          }
         }
 
         // --- Persist the off-chain attestation ---
