@@ -508,9 +508,14 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         }
       }
 
-      // Store UUID for sybil resistance
-      const dbResponse = await saveUserToDb(uuidV2);
-      if (dbResponse.error) return res.status(400).json(dbResponse);
+      // Store UUID for sybil resistance. Skipped in sandbox so sandbox
+      // verifications do not pollute the live UserVerifications collection
+      // (and so a sandbox run cannot block the same identity from later
+      // verifying in live).
+      if (config.environment === "live") {
+        const dbResponse = await saveUserToDb(uuidV2);
+        if (dbResponse.error) return res.status(400).json(dbResponse);
+      }
 
       // --- Extract credentials and issue ---
 
