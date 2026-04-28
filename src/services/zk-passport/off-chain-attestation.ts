@@ -236,7 +236,7 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
           endpointLogger.info({ uuidV2 }, "Off-chain dedup: identity already registered");
           return res.status(409).json({
             code: "ALREADY_REGISTERED",
-            error: "This identity has already been verified.",
+            error: `This identity has already been verified (user ID ${existingUser._id}).`,
           });
         }
 
