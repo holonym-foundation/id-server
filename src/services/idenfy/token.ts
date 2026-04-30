@@ -87,6 +87,7 @@ export async function createIdenfyToken(args: {
           "Content-Type": "application/json",
           Authorization: basicAuthHeader(apiKey, apiSecret),
         },
+        timeout: 10_000,
       }
     );
 

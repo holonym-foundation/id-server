@@ -73,6 +73,7 @@ export async function fetchIdenfyVerificationData(args: {
           "Content-Type": "application/json",
           Authorization: basicAuthHeader(apiKey, apiSecret),
         },
+        timeout: 10_000,
       }
     );
   } catch (err: any) {

@@ -81,19 +81,31 @@ export type IdenfyVerificationData = {
 export function extractCreds(idenfyData: IdenfyVerificationData) {
   const data = idenfyData?.data ?? {};
 
-  // Country code: iDenfy's docIssuingCountry / selectedCountry is normally ISO
-  // alpha-2. countryCodeToPrime is keyed by alpha-3, so we attempt alpha-3
-  // first then fall back to selectedCountry for compatibility. Real production
-  // flow should normalize to alpha-3 before lookup.
-  // TODO(U11): confirm whether iDenfy returns alpha-2 or alpha-3 and add a
-  // converter (alpha-2 → alpha-3) if necessary.
+  // Country code parity with Onfido (services/onfido/credentials/utils.ts:292):
+  // Onfido reads `issuing_country` from the document report, so iDenfy must
+  // use the same logical value — issuing country, not nationality. Both
+  // Onfido and `countryCodeToPrime` are keyed by ISO 3166-1 alpha-2 (despite
+  // some Onfido docs implying alpha-3), so passing iDenfy's alpha-2 code
+  // through directly preserves byte-parity for ZK circuit inputs.
+  // TODO(U11): confirm exact iDenfy field name on a real /api/v2/data
+  // response — `docIssuingCountry` is the documented primary; fall back to
+  // `selectedCountry`.
   const country =
-    (data.docNationality as string) ||
     (data.docIssuingCountry as string) ||
     (data.selectedCountry as string) ||
     "";
   const countryCode =
     countryCodeToPrime[country as keyof typeof countryCodeToPrime];
+
+  // Fail loud if iDenfy returns a code that isn't in our lookup table —
+  // silently issuing creds with countryCode=undefined would diverge from
+  // Onfido's behavior (it short-circuits with an error, see Onfido utils:136)
+  // and break ZK circuit inputs downstream.
+  if (country && !countryCode) {
+    throw new Error(
+      `iDenfy: unknown country code "${country}" — not present in countryCodeToPrime`
+    );
+  }
 
   const firstNameStr = (data.docFirstName as string) ?? "";
   const middleNameStr = (data.docMiddleName as string) ?? "";
