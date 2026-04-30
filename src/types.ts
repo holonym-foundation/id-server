@@ -175,6 +175,7 @@ export type ISession = {
   veriffUrl?: string;
   scanRef?: string;
   idenfyAuthToken?: string;
+  idenfyScanRef?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
@@ -207,6 +208,8 @@ export type ISandboxSession = {
   chainId?: number;
   refundTxHash?: string;
   paymentCommitment?: string;
+  idenfyAuthToken?: string;
+  idenfyScanRef?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
@@ -770,4 +773,8 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   OnfidoSessionModel: Model<IOnfidoSession | ISandboxOnfidoSession>
   // Sumsub config
   sumsubWebhookSecret?: string;
+  // iDenfy config
+  idenfyApiKey?: string;
+  idenfyApiSecret?: string;
+  idenfyWebhookSigningKey?: string;
 }

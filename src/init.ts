@@ -147,6 +147,21 @@ function validateEnv() {
     "MONGO_DB_CONNECTION_STR environment variable is not set"
   );
 
+  // iDenfy (production credentials). Sandbox credentials are validated lazily —
+  // sandbox endpoints are not required to be configured for prod-only deployments.
+  assert.ok(
+    process.env.IDENFY_API_KEY,
+    "IDENFY_API_KEY environment variable is not set"
+  );
+  assert.ok(
+    process.env.IDENFY_API_SECRET,
+    "IDENFY_API_SECRET environment variable is not set"
+  );
+  assert.ok(
+    process.env.IDENFY_WEBHOOK_SIGNING_KEY,
+    "IDENFY_WEBHOOK_SIGNING_KEY environment variable is not set"
+  );
+
   if (process.env.NODE_ENV !== "development") {
     assert.ok(process.env.BUCKET_NAME, "BUCKET_NAME environment variable is not set");
     assert.ok(
@@ -727,6 +742,10 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       OnfidoSessionModel: SandboxOnfidoSession,
       // Sumsub config
       sumsubWebhookSecret: process.env.SUMSUB_SANDBOX_WEBHOOK_SECRET!,
+      // iDenfy config (sandbox)
+      idenfyApiKey: process.env.IDENFY_SANDBOX_API_KEY,
+      idenfyApiSecret: process.env.IDENFY_SANDBOX_API_SECRET,
+      idenfyWebhookSigningKey: process.env.IDENFY_SANDBOX_WEBHOOK_SIGNING_KEY,
     }
   }
 
@@ -760,6 +779,10 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     OnfidoSessionModel: OnfidoSession,
     // Sumsub config
     sumsubWebhookSecret: process.env.SUMSUB_WEBHOOK_SECRET!,
+    // iDenfy config (live)
+    idenfyApiKey: process.env.IDENFY_API_KEY,
+    idenfyApiSecret: process.env.IDENFY_API_SECRET,
+    idenfyWebhookSigningKey: process.env.IDENFY_WEBHOOK_SIGNING_KEY,
   }
 }
 
