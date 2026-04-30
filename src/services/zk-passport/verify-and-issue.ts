@@ -174,6 +174,7 @@ async function saveUserToDb(uuidV2: string) {
       sessionId: null,
       issuedAt: new Date(),
       expiresAt: dateElevenMonthsFromNow(),
+      createdByFlow: "paid-zk-passport",
     },
   });
   try {
