@@ -25,12 +25,15 @@ import {
   payPalApiUrlBase,
   idvSessionUSDPrice,
   PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+  REFUND_WINDOW_SECONDS,
+  humanIDPaymentsContractAddresses,
 } from "../../constants/misc.js";
 import {
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
   forceRefundPayment,
+  getPaymentFromContract,
   PaymentError,
 } from "../payments/functions.js";
 import {
@@ -47,7 +50,7 @@ import { getSessionById } from "../../utils/sessions.js";
 import { objectIdFiveDaysAgo } from "../../utils/utils.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
 import type { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js"
-import { makeUnknownErrorLoggable } from "../../utils/errors.js";
+import { makeUnknownErrorLoggable, isAlreadyRegisteredFailure } from "../../utils/errors.js";
 
 const postSessionsV2Logger = logger.child({
   msgPrefix: "[POST /sessions/v2] ",
@@ -1453,6 +1456,58 @@ function createRefundSessionRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(400).json({
           error: "Session predates refund-capable payment model",
         });
+      }
+
+      if (isAlreadyRegisteredFailure(session.verificationFailureReason)) {
+        refundSessionLogger.info(
+          { sid: session._id?.toString() },
+          "Refund rejected: already-registered failure"
+        );
+        return res.status(400).json({
+          error: "Refund not available for already-registered failures",
+        });
+      }
+
+      const contractAddress = humanIDPaymentsContractAddresses[session.chainId];
+      if (!contractAddress) {
+        return res.status(400).json({
+          error: "Refunds are not supported on this chain",
+        });
+      }
+      let onChainPayment;
+      try {
+        onChainPayment = await getPaymentFromContract(
+          session.paymentCommitment,
+          session.chainId,
+          contractAddress
+        );
+      } catch (rpcErr) {
+        refundSessionLogger.error(
+          {
+            event: "refund_rpc_failed",
+            sid: session._id?.toString(),
+            chainId: session.chainId,
+            error: makeUnknownErrorLoggable(rpcErr),
+          },
+          "Refund window check failed: on-chain payment read errored"
+        );
+        return res.status(503).json({
+          error: "Unable to verify payment on-chain. Please try again.",
+        });
+      }
+      if (!onChainPayment) {
+        refundSessionLogger.info(
+          { sid: session._id?.toString(), commitment: session.paymentCommitment, chainId: session.chainId },
+          "Refund rejected: payment not found on-chain"
+        );
+        return res.status(400).json({ error: "Payment not found on-chain" });
+      }
+      if (Math.floor(Date.now() / 1000) - onChainPayment.timestamp > REFUND_WINDOW_SECONDS) {
+        refundSessionLogger.info(
+          { sid: session._id?.toString(), paymentTimestamp: onChainPayment.timestamp },
+          "Refund rejected: refund window expired"
+        );
+        return res.status(400).json({ error: "Refund window has expired" });
       }
 
       const result = await forceRefundPayment(

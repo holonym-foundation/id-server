@@ -46,7 +46,7 @@ import {
 } from "../../utils/clean-hands-nullifier-and-creds.js";
 import { parseStatementForUserCertification } from '../../utils/clean-hands-misc.js'
 import { findUserVerification } from "../../utils/user-verifications.js";
-import { makeUnknownErrorLoggable, toAlreadyRegisteredStr } from "../../utils/errors.js";
+import { makeUnknownErrorLoggable, toAlreadyRegisteredStr, isAlreadyRegisteredFailure } from "../../utils/errors.js";
 import {
   supportedChainIds,
   amlSessionUSDPrice,
@@ -55,12 +55,15 @@ import {
   cleanHandsSessionStatusEnum,
   PAYMENT_SERVICE_CLEAN_HANDS_VERIFICATION,
   PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION,
+  REFUND_WINDOW_SECONDS,
+  humanIDPaymentsContractAddresses,
 } from "../../constants/misc.js";
 import {
   reserveRedemption,
   completeRedemption,
   forceRefundPayment,
   cancelRedemption,
+  getPaymentFromContract,
   PaymentError,
 } from "../payments/functions.js";
 import V3NameDOBVKey from "../../constants/zk/V3NameDOB.verification_key.json" with { type: "json" };
@@ -3035,6 +3038,58 @@ function createRefundCleanHandsSessionRouteHandler(
         return res.status(400).json({
           error: "Session predates refund-capable payment model",
         });
+      }
+
+      if (isAlreadyRegisteredFailure(session.verificationFailureReason)) {
+        refundCleanHandsLogger.info(
+          { sid: session._id?.toString() },
+          "Refund rejected: already-registered failure"
+        );
+        return res.status(400).json({
+          error: "Refund not available for already-registered failures",
+        });
+      }
+
+      const contractAddress = humanIDPaymentsContractAddresses[session.chainId];
+      if (!contractAddress) {
+        return res.status(400).json({
+          error: "Refunds are not supported on this chain",
+        });
+      }
+      let onChainPayment;
+      try {
+        onChainPayment = await getPaymentFromContract(
+          session.paymentCommitment,
+          session.chainId,
+          contractAddress
+        );
+      } catch (rpcErr) {
+        refundCleanHandsLogger.error(
+          {
+            event: "refund_rpc_failed",
+            sid: session._id?.toString(),
+            chainId: session.chainId,
+            error: makeUnknownErrorLoggable(rpcErr),
+          },
+          "Refund window check failed: on-chain payment read errored"
+        );
+        return res.status(503).json({
+          error: "Unable to verify payment on-chain. Please try again.",
+        });
+      }
+      if (!onChainPayment) {
+        refundCleanHandsLogger.info(
+          { sid: session._id?.toString(), commitment: session.paymentCommitment, chainId: session.chainId },
+          "Refund rejected: payment not found on-chain"
+        );
+        return res.status(400).json({ error: "Payment not found on-chain" });
+      }
+      if (Math.floor(Date.now() / 1000) - onChainPayment.timestamp > REFUND_WINDOW_SECONDS) {
+        refundCleanHandsLogger.info(
+          { sid: session._id?.toString(), paymentTimestamp: onChainPayment.timestamp },
+          "Refund rejected: refund window expired"
+        );
+        return res.status(400).json({ error: "Refund window has expired" });
       }
 
       const result = await forceRefundPayment(

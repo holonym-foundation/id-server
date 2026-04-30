@@ -4,6 +4,38 @@ export function toAlreadyRegisteredStr(userId: string) {
   return `User has already registered. User ID: ${userId}`
 }
 
+/**
+ * Canonical sybil-failure prefixes across credential types. Each prefix is the
+ * writer of a uniqueness/sybil rejection in its respective flow:
+ *
+ *   - 'User has already registered' — gov-id / KYC / clean-hands / zk-passport.
+ *     Canonical writer: `toAlreadyRegisteredStr` above. Used by Onfido v1/v2/v3,
+ *     Sumsub, Veriff, Idenfy, AML cross-provider, and zk-passport.
+ *   - 'Number has been registered already' — phone. Writer:
+ *     `failPhoneSession(..., 'Number has been registered already')` in
+ *     `services/phone/check-number.ts`.
+ *   - 'Face scan failed as highly matching duplicates are found' — biometrics.
+ *     Writer: FaceTec duplicate-match path in
+ *     `services/facetec/{credentials,v2/no-sybils/credentials,enrollment-3d}.js`.
+ *
+ * Keep this list in sync with new sybil writers. The frontend mirrors this in
+ * `frontend/src/hooks/holonym/misc.ts:isAlreadyRegisteredFailure`.
+ */
+const SYBIL_FAILURE_PREFIXES = [
+  'User has already registered',
+  'Number has been registered already',
+  'Face scan failed as highly matching duplicates are found'
+] as const
+
+/**
+ * True iff the given verification-failure reason indicates a sybil/uniqueness
+ * rejection across any credential type.
+ */
+export function isAlreadyRegisteredFailure(reason: string | null | undefined): boolean {
+  if (!reason) return false
+  return SYBIL_FAILURE_PREFIXES.some((p) => reason.startsWith(p))
+}
+
 export class CustomError extends Error {
   userFacingMessage: string;
   logMessage: string;
