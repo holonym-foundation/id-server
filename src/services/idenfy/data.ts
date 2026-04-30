@@ -1,6 +1,11 @@
 import axios from "axios";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import type { IdenfyVerificationData } from "./credentials/utils.js";
+import {
+  IDENFY_BASE_URL,
+  getIdenfyCredentials,
+  idenfyBasicAuthHeader,
+} from "./http.js";
 
 const dataLogger = logger.child({
   msgPrefix: "[services/idenfy/data] ",
@@ -9,25 +14,6 @@ const dataLogger = logger.child({
     idvProvider: "idenfy",
   },
 });
-
-const IDENFY_BASE_URL = "https://ivs.idenfy.com";
-
-function getCredentials(sandbox: boolean): { apiKey: string; apiSecret: string } {
-  if (sandbox) {
-    return {
-      apiKey: process.env.IDENFY_SANDBOX_API_KEY ?? "",
-      apiSecret: process.env.IDENFY_SANDBOX_API_SECRET ?? "",
-    };
-  }
-  return {
-    apiKey: process.env.IDENFY_API_KEY ?? "",
-    apiSecret: process.env.IDENFY_API_SECRET ?? "",
-  };
-}
-
-function basicAuthHeader(apiKey: string, apiSecret: string): string {
-  return `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`;
-}
 
 /**
  * Fetch full verification data for a completed iDenfy session.
@@ -49,7 +35,7 @@ export async function fetchIdenfyVerificationData(args: {
   sandbox?: boolean;
 }): Promise<IdenfyVerificationData> {
   const { scanRef, sandbox = false } = args;
-  const { apiKey, apiSecret } = getCredentials(sandbox);
+  const { apiKey, apiSecret } = getIdenfyCredentials(sandbox);
 
   if (!apiKey || !apiSecret) {
     throw new Error(
@@ -71,7 +57,7 @@ export async function fetchIdenfyVerificationData(args: {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: basicAuthHeader(apiKey, apiSecret),
+          Authorization: idenfyBasicAuthHeader(apiKey, apiSecret),
         },
         timeout: 10_000,
       }

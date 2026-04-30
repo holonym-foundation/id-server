@@ -165,10 +165,11 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // Webhook must have moved the session to IN_PROGRESS (APPROVED).
       // If still NEEDS_PAYMENT or otherwise pre-IN_PROGRESS, the verification
-      // hasn't completed yet — return 404 (frontend will retry). Do NOT flip
-      // session to VERIFICATION_FAILED.
+      // hasn't completed yet — return 400 (matches Onfido v3's behavior;
+      // frontend retry policy treats 4xx alike, only retrying 429). Do NOT
+      // flip session to VERIFICATION_FAILED.
       if (session.status !== sessionStatusEnum.IN_PROGRESS) {
-        return res.status(404).json({
+        return res.status(400).json({
           error: `Verification not complete. Session status: '${session.status}'`,
         });
       }
@@ -216,9 +217,14 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         }
       }
 
-      const dbResponse = await saveUserToDb(uuidNew, scanRef);
-      if ((dbResponse as any).error)
-        return res.status(400).json(dbResponse);
+      // Store UUID for Sybil resistance. Skipped in sandbox so sandbox runs
+      // do not pollute the live UserVerifications collection (matches Onfido
+      // v3 sandbox semantics — see services/onfido/credentials/v3.ts:262).
+      if (config.environment === "live") {
+        const dbResponse = await saveUserToDb(uuidNew, scanRef);
+        if ((dbResponse as any).error)
+          return res.status(400).json(dbResponse);
+      }
 
       const response = issuev2KYC(config.issuerPrivateKey, issuanceNullifier, creds);
       response.metadata = creds;
