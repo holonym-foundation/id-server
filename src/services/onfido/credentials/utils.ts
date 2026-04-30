@@ -467,6 +467,7 @@ export async function saveUserToDb(uuidV2: string, check_id: string) {
       sessionId: check_id,
       issuedAt: new Date(),
       expiresAt: dateElevenMonthsFromNow(),
+      createdByFlow: "onfido",
     },
   });
   try {
