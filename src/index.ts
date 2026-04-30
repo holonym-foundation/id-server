@@ -4,8 +4,7 @@ import "./utils/axios-onfido-interceptor.js";
 import express from "express";
 import cors from "cors";
 import veriff from "./routes/veriff-kyc.js";
-// TODO(U7): re-enable iDenfy router once new implementation lands.
-// import idenfy from "./routes/idenfy.js";
+import idenfy, { sandboxRouter as sandboxIdenfy } from "./routes/idenfy.js";
 import onfido, { sandboxRouter as sandboxOnfido } from "./routes/onfido.js";
 import credentials, { sandboxRouter as sandboxCredentials } from "./routes/credentials.js";
 import proofMetadata from "./routes/proof-metadata.js";
@@ -41,6 +40,8 @@ app.use(cors(corsOptions));
 // Middleware to capture raw body for webhook signature verification
 app.use('/onfido/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use('/sumsub/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
+app.use('/idenfy/webhook', express.raw({ type: '*/*', limit: '1mb' }));
+app.use('/sandbox/idenfy/webhook', express.raw({ type: '*/*', limit: '1mb' }));
 
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
@@ -85,8 +86,7 @@ app.use((req, res, next) => {
 app.use("/credentials", credentials);
 app.use("/proof-metadata", proofMetadata);
 app.use("/veriff", veriff);
-// TODO(U7): re-enable iDenfy mount once new implementation lands.
-// app.use("/idenfy", idenfy);
+app.use("/idenfy", idenfy);
 app.use("/onfido", onfido);
 app.use("/admin", admin);
 app.use("/session-status", sessionStatus);
@@ -122,6 +122,7 @@ app.use("/sandbox/phone", phoneRouterSandbox);
 app.use("/sandbox/payments", sandboxPayments);
 app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
 app.use("/sandbox/sumsub", sandboxSumsub);
+app.use("/sandbox/idenfy", sandboxIdenfy);
 app.use("/sandbox/zk-passport", sandboxZkPassport);
 app.use("/sandbox/off-chain-attestations", sandboxOffChainAttestations);
 app.use("/sandbox/onfido-sessions", sandboxOnfidoSessions);
