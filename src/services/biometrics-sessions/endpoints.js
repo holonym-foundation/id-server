@@ -4,16 +4,20 @@ import { BiometricsSession, getRouteHandlerConfig } from "../../init.js";
 import {
   sessionStatusEnum,
   PAYMENT_SERVICE_BIOMETRICS_VERIFICATION,
+  REFUND_WINDOW_SECONDS,
+  humanIDPaymentsContractAddresses,
 } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { v4 as uuidV4 } from "uuid";
 import { rateLimitByTier } from "../../utils/rate-limiting.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
+import { isAlreadyRegisteredFailure } from "../../utils/errors.js";
 import {
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
   forceRefundPayment,
+  getPaymentFromContract,
   PaymentError,
 } from "../payments/functions.js";
 
@@ -370,6 +374,58 @@ async function refundBiometricsSession(req, res) {
       return res.status(400).json({
         error: "Session predates refund-capable payment model",
       });
+    }
+
+    if (isAlreadyRegisteredFailure(session.verificationFailureReason)) {
+      refundBiometricsLogger.info(
+        { sid: session._id?.toString() },
+        "Refund rejected: already-registered failure"
+      );
+      return res.status(400).json({
+        error: "Refund not available for already-registered failures",
+      });
+    }
+
+    const contractAddress = humanIDPaymentsContractAddresses[session.chainId];
+    if (!contractAddress) {
+      return res.status(400).json({
+        error: "Refunds are not supported on this chain",
+      });
+    }
+    let onChainPayment;
+    try {
+      onChainPayment = await getPaymentFromContract(
+        session.paymentCommitment,
+        session.chainId,
+        contractAddress
+      );
+    } catch (rpcErr) {
+      refundBiometricsLogger.error(
+        {
+          event: "refund_rpc_failed",
+          sid: session._id?.toString(),
+          chainId: session.chainId,
+          error: rpcErr?.message || String(rpcErr),
+        },
+        "Refund window check failed: on-chain payment read errored"
+      );
+      return res.status(503).json({
+        error: "Unable to verify payment on-chain. Please try again.",
+      });
+    }
+    if (!onChainPayment) {
+      refundBiometricsLogger.info(
+        { sid: session._id?.toString(), commitment: session.paymentCommitment, chainId: session.chainId },
+        "Refund rejected: payment not found on-chain"
+      );
+      return res.status(400).json({ error: "Payment not found on-chain" });
+    }
+    if (Math.floor(Date.now() / 1000) - onChainPayment.timestamp > REFUND_WINDOW_SECONDS) {
+      refundBiometricsLogger.info(
+        { sid: session._id?.toString(), paymentTimestamp: onChainPayment.timestamp },
+        "Refund rejected: refund window expired"
+      );
+      return res.status(400).json({ error: "Refund window has expired" });
     }
 
     const result = await forceRefundPayment(

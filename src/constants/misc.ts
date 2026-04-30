@@ -209,6 +209,13 @@ export const humanIDPaymentsABI = [
 export const PAYMENT_SERVICE_SBT_MINT = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('mint_zeronym_v3_sbt'))
 
 /**
+ * Refund eligibility window. Sessions whose on-chain payment timestamp is older
+ * than this are no longer refundable. Expressed in seconds to match the units
+ * of `payments(commitment).timestamp` on the HumanIDPayments contract.
+ */
+export const REFUND_WINDOW_SECONDS = 7 * 24 * 60 * 60
+
+/**
  * Per-flow service identifiers for verification payments.
  * Used to distinguish payment attribution per verification type.
  */
