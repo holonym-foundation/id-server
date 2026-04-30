@@ -4,6 +4,15 @@ export function toAlreadyRegisteredStr(userId: string) {
   return `User has already registered. User ID: ${userId}`
 }
 
+/**
+ * True iff the given verification-failure reason indicates a sybil/uniqueness
+ * rejection (the "already registered" failure mode). Pinned to the canonical
+ * writer `toAlreadyRegisteredStr` via prefix match.
+ */
+export function isAlreadyRegisteredFailure(reason: string | null | undefined): boolean {
+  return reason?.startsWith('User has already registered') ?? false
+}
+
 export class CustomError extends Error {
   userFacingMessage: string;
   logMessage: string;

@@ -31,6 +31,8 @@ import {
   payPalApiUrlBase,
   SessionStatus,
   PAYMENT_SERVICE_PHONE_VERIFICATION,
+  REFUND_WINDOW_SECONDS,
+  humanIDPaymentsContractAddresses,
 } from '../../../constants/misc.js'
 import { getRouteHandlerConfig } from '../../../init.js'
 import {
@@ -38,6 +40,7 @@ import {
   completeRedemption,
   cancelRedemption,
   forceRefundPayment,
+  getPaymentFromContract,
   PaymentError,
 } from '../../payments/functions.js'
 import {
@@ -46,7 +49,7 @@ import {
   getRefundDetails as getPayPalRefundDetails,
   capturePayPalOrder
 } from '../../../utils/paypal.js'
-import { makeUnknownErrorLoggable } from '../../../utils/errors.js'
+import { makeUnknownErrorLoggable, isAlreadyRegisteredFailure } from '../../../utils/errors.js'
 import { pinoOptions, logger } from '../../../utils/logger.js'
 import { usdToETH, usdToFTM, usdToAVAX } from '../../../utils/cmc.js'
 import { getProvider } from '../../../utils/misc.js'
@@ -735,6 +738,43 @@ function createRefundPhoneSessionV3(config: RefundPhoneSessionV3Config) {
         return res.status(400).json({
           error: 'Session predates refund-capable payment model',
         })
+      }
+
+      const failureReason = item.verificationFailureReason?.S
+      if (isAlreadyRegisteredFailure(failureReason)) {
+        refundPhoneSessionLogger.info(
+          { sid: id },
+          'Refund rejected: already-registered failure'
+        )
+        return res.status(400).json({
+          error: 'Refund not available for already-registered failures',
+        })
+      }
+
+      const contractAddress = humanIDPaymentsContractAddresses[chainId]
+      if (!contractAddress) {
+        return res.status(400).json({
+          error: 'Refunds are not supported on this chain',
+        })
+      }
+      const onChainPayment = await getPaymentFromContract(
+        paymentCommitment,
+        chainId,
+        contractAddress
+      )
+      if (!onChainPayment) {
+        refundPhoneSessionLogger.info(
+          { sid: id, commitment: paymentCommitment, chainId },
+          'Refund rejected: payment not found on-chain'
+        )
+        return res.status(400).json({ error: 'Payment not found on-chain' })
+      }
+      if (Math.floor(Date.now() / 1000) - onChainPayment.timestamp > REFUND_WINDOW_SECONDS) {
+        refundPhoneSessionLogger.info(
+          { sid: id, paymentTimestamp: onChainPayment.timestamp },
+          'Refund rejected: refund window expired'
+        )
+        return res.status(400).json({ error: 'Refund window has expired' })
       }
 
       const refundResult = await forceRefundPayment(paymentCommitment, chainId, {
