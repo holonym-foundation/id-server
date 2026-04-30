@@ -757,11 +757,27 @@ function createRefundPhoneSessionV3(config: RefundPhoneSessionV3Config) {
           error: 'Refunds are not supported on this chain',
         })
       }
-      const onChainPayment = await getPaymentFromContract(
-        paymentCommitment,
-        chainId,
-        contractAddress
-      )
+      let onChainPayment
+      try {
+        onChainPayment = await getPaymentFromContract(
+          paymentCommitment,
+          chainId,
+          contractAddress
+        )
+      } catch (rpcErr) {
+        refundPhoneSessionLogger.error(
+          {
+            event: 'refund_rpc_failed',
+            sid: id,
+            chainId,
+            error: makeUnknownErrorLoggable(rpcErr),
+          },
+          'Refund window check failed: on-chain payment read errored'
+        )
+        return res.status(503).json({
+          error: 'Unable to verify payment on-chain. Please try again.',
+        })
+      }
       if (!onChainPayment) {
         refundPhoneSessionLogger.info(
           { sid: id, commitment: paymentCommitment, chainId },

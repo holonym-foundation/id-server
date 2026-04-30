@@ -392,11 +392,27 @@ async function refundBiometricsSession(req, res) {
         error: "Refunds are not supported on this chain",
       });
     }
-    const onChainPayment = await getPaymentFromContract(
-      session.paymentCommitment,
-      session.chainId,
-      contractAddress
-    );
+    let onChainPayment;
+    try {
+      onChainPayment = await getPaymentFromContract(
+        session.paymentCommitment,
+        session.chainId,
+        contractAddress
+      );
+    } catch (rpcErr) {
+      refundBiometricsLogger.error(
+        {
+          event: "refund_rpc_failed",
+          sid: session._id?.toString(),
+          chainId: session.chainId,
+          error: rpcErr?.message || String(rpcErr),
+        },
+        "Refund window check failed: on-chain payment read errored"
+      );
+      return res.status(503).json({
+        error: "Unable to verify payment on-chain. Please try again.",
+      });
+    }
     if (!onChainPayment) {
       refundBiometricsLogger.info(
         { sid: session._id?.toString(), commitment: session.paymentCommitment, chainId: session.chainId },
