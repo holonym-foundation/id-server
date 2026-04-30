@@ -346,46 +346,20 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           },
         });
       } else if (ambiguousSession.idvProvider === "idenfy") {
-        const session = ambiguousSession as HydratedDocument<ISession>; // idenfy is only in prod
-        if (!session.scanRef) {
-          return res.status(200).json({
-            idenfy: {
-              sid: session._id,
-              status: null,
-              scanRef: null,
-            },
-          });
-        }
-
-        const idenfySession = await getIdenfySession(session.scanRef);
-        if (!idenfySession) {
-          return res.status(404).json({ error: "IDV Session not found" });
-        }
-
-        let failureReason = undefined;
-        if (
-          (idenfySession?.fraudTags ?? []).length > 0 ||
-          (idenfySession?.mismatchTags ?? []).length > 0 ||
-          (idenfySession?.manualDocument &&
-            idenfySession.manualDocument !== "DOC_VALIDATED") ||
-          (idenfySession?.manualFace && idenfySession.manualFace !== "DOC_VALIDATED")
-        ) {
-          failureReason = {
-            fraudTags: idenfySession?.fraudTags,
-            mismatchTags: idenfySession?.mismatchTags,
-            manualDocument: idenfySession?.manualDocument,
-            manualFace: idenfySession?.manualFace,
-          };
-        }
-
+        // The new iDenfy flow stores everything we need on the session row
+        // itself. The webhook handler persists the raw iDenfy status on
+        // `session.idenfyVerificationStatus`, so the frontend can detect
+        // APPROVED/DENIED/SUSPECTED/EXPIRED without us round-tripping to
+        // iDenfy's /api/v2/data here. The verify page also needs `authToken`
+        // to construct the iframe URL.
+        const session = ambiguousSession as HydratedDocument<ISession>;
         return res.status(200).json({
           idenfy: {
             sid: session._id,
-            status: idenfySession?.status,
-            scanRef: session.scanRef,
-            // failureReason should be populated with a reason for verification failure
-            // iff the verification failed. If verification is in progress, it should be null.
-            failureReason,
+            status: session.idenfyVerificationStatus ?? null,
+            scanRef: session.idenfyScanRef ?? null,
+            authToken: session.idenfyAuthToken ?? null,
+            failureReason: session.verificationFailureReason ?? undefined,
           },
         });
       } else if (ambiguousSession.idvProvider === "onfido") {

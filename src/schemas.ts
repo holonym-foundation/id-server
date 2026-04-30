@@ -307,6 +307,14 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
+  // Raw iDenfy `status.overall` captured by the webhook handler.
+  // Surfaced via /session-status/v2 so the frontend verify page can detect
+  // completion (APPROVED) or failure (DENIED / SUSPECTED / EXPIRED) without
+  // needing a derived field.
+  idenfyVerificationStatus: {
+    type: String,
+    required: false,
+  },
   // Onfido applicant_id
   applicant_id: {
     type: String,
@@ -421,6 +429,10 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   idenfyScanRef: {
+    type: String,
+    required: false,
+  },
+  idenfyVerificationStatus: {
     type: String,
     required: false,
   },

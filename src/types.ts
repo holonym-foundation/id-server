@@ -176,6 +176,7 @@ export type ISession = {
   scanRef?: string;
   idenfyAuthToken?: string;
   idenfyScanRef?: string;
+  idenfyVerificationStatus?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
@@ -210,6 +211,7 @@ export type ISandboxSession = {
   paymentCommitment?: string;
   idenfyAuthToken?: string;
   idenfyScanRef?: string;
+  idenfyVerificationStatus?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
