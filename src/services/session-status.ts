@@ -5,7 +5,9 @@ import { HydratedDocument, Model } from "mongoose";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
-import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
+// TODO(U5): re-wire to services/idenfy/data.ts once new helpers land.
+// import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
+const getIdenfySession = async (_scanRef: string): Promise<undefined> => undefined;
 import { getOnfidoReports } from "../utils/onfido.js";
 import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";

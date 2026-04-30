@@ -4,7 +4,8 @@ import "./utils/axios-onfido-interceptor.js";
 import express from "express";
 import cors from "cors";
 import veriff from "./routes/veriff-kyc.js";
-import idenfy from "./routes/idenfy.js";
+// TODO(U7): re-enable iDenfy router once new implementation lands.
+// import idenfy from "./routes/idenfy.js";
 import onfido, { sandboxRouter as sandboxOnfido } from "./routes/onfido.js";
 import credentials, { sandboxRouter as sandboxCredentials } from "./routes/credentials.js";
 import proofMetadata from "./routes/proof-metadata.js";
@@ -84,7 +85,8 @@ app.use((req, res, next) => {
 app.use("/credentials", credentials);
 app.use("/proof-metadata", proofMetadata);
 app.use("/veriff", veriff);
-app.use("/idenfy", idenfy);
+// TODO(U7): re-enable iDenfy mount once new implementation lands.
+// app.use("/idenfy", idenfy);
 app.use("/onfido", onfido);
 app.use("/admin", admin);
 app.use("/session-status", sessionStatus);
