@@ -280,9 +280,12 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
 
       console.log("session", session);
 
-      // Only allow a user to create up to 6 sessions
+      // Only allow a user to create up to 12 sessions in the past 6 months
+      const sixMonthsAgo = new Date(Date.now() - 182 * 24 * 60 * 60 * 1000);
+      const sixMonthsAgoObjectId = ObjectId.createFromTime(Math.floor(sixMonthsAgo.getTime() / 1000));
       const existingSessions = await config.SessionModel.find({
         sigDigest: sigDigest,
+        _id: { $gte: sixMonthsAgoObjectId },
         status: {
           "$in": [
             sessionStatusEnum.IN_PROGRESS,
@@ -292,9 +295,9 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         }
       }).exec();
 
-      if (existingSessions.length >= 10) {
+      if (existingSessions.length >= 12) {
         return res.status(400).json({
-          error: "User has reached the maximum number of sessions (10)"
+          error: "User has reached the maximum number of sessions (12)"
         });
       }
 
@@ -431,9 +434,12 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         workflowId: workflowId,
       });
 
-      // Only allow a user to create up to 10 sessions
+      // Only allow a user to create up to 12 sessions in the past 6 months
+      const sixMonthsAgo = new Date(Date.now() - 182 * 24 * 60 * 60 * 1000);
+      const sixMonthsAgoObjectId = ObjectId.createFromTime(Math.floor(sixMonthsAgo.getTime() / 1000));
       const existingSessions = await config.SessionModel.find({
         sigDigest: sigDigest,
+        _id: { $gte: sixMonthsAgoObjectId },
         status: {
           "$in": [
             sessionStatusEnum.IN_PROGRESS,
@@ -443,9 +449,9 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         }
       }).exec();
 
-      if (existingSessions.length >= 10) {
+      if (existingSessions.length >= 12) {
         return res.status(400).json({
-          error: "User has reached the maximum number of sessions (10)"
+          error: "User has reached the maximum number of sessions (12)"
         });
       }
 
