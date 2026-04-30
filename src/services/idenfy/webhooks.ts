@@ -226,6 +226,14 @@ function createHandleIdenfyWebhookRouteHandler(
       if (newStatus) {
         session.status = newStatus;
         if (failureReason) session.verificationFailureReason = failureReason;
+      }
+      // Persist the raw iDenfy status regardless of whether `newStatus` mapped
+      // to an internal transition. The frontend verify page reads this field
+      // via /session-status/v2 to detect APPROVED vs DENIED/SUSPECTED/EXPIRED.
+      if (overall) {
+        session.idenfyVerificationStatus = overall;
+      }
+      if (newStatus || overall) {
         await session.save();
         webhookLogger.info(
           { scanRef, sessionId: session._id, newStatus },
