@@ -368,7 +368,7 @@ async function requestRefundSandbox(req: Request, res: Response) {
 
 /**
  * GET /payments/status
- * Check payment status (redeemed, unredeemed, or pending)
+ * Check payment status (redeemed, unredeemed, pending-redemption, pending-refund, refunded)
  */
 function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
@@ -400,25 +400,29 @@ function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(404).json({ error: "Payment not found onchain" });
       }
 
+      if (payment.refunded) {
+        return res.status(200).json({ status: "refunded", payment })
+      }
+
       const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
 
       // Check if already redeemed
       if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(200).json({ status: "redeemed" });
+        return res.status(200).json({ status: "redeemed", payment });
       }
 
       // Check if redemption is pending
       if (await isRedemptionPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-redemption" });
+        return res.status(200).json({ status: "pending-redemption", payment });
       }
 
       // Check if refund is pending
       if (await isRefundPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-refund" });
+        return res.status(200).json({ status: "pending-refund", payment });
       }
 
       // Payment exists but no redemption or pending operations
-      return res.status(200).json({ status: "unredeemed" });
+      return res.status(200).json({ status: "unredeemed", payment });
     } catch (error: any) {
       paymentsLogger.error({ error: error.message }, "Error checking payment status");
       return res.status(500).json({ error: error.message || "An unknown error occurred" });

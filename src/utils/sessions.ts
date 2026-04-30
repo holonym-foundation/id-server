@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { HydratedDocument } from "mongoose";
-import { IAmlChecksSession, ISession } from "../types.js";
+import { IAmlChecksSession, ISession, IZkPassportSession } from "../types.js";
 import { Session } from "../init.js";
 import { sessionStatusEnum } from "../constants/misc.js";
 
@@ -27,5 +27,14 @@ export async function failSession(
 ) {
   session.status = sessionStatusEnum.VERIFICATION_FAILED;
   if (failureReason) session.verificationFailureReason = failureReason;
-  await session.save() 
+  await session.save()
+}
+
+export async function failZKPassportSession(
+  session: HydratedDocument<IZkPassportSession>,
+  failureReason: string
+) {
+  session.status = sessionStatusEnum.VERIFICATION_FAILED;
+  if (failureReason) session.failureReason = failureReason;
+  await session.save();
 }

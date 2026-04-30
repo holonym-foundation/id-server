@@ -24,7 +24,8 @@ import {
 import { findUserVerification } from "../../utils/user-verifications.js";
 import { findOneNullifierAndCredsLast5Days } from "../../utils/zk-passport-nullifier-and-creds.js";
 import { issuev2ZKPassport } from "../../utils/issuance.js";
-import { makeUnknownErrorLoggable } from "../../utils/errors.js";
+import { makeUnknownErrorLoggable, toAlreadyRegisteredStr } from "../../utils/errors.js";
+import { failZKPassportSession } from "../../utils/sessions.js";
 import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
@@ -173,6 +174,7 @@ async function saveUserToDb(uuidV2: string) {
       sessionId: null,
       issuedAt: new Date(),
       expiresAt: dateElevenMonthsFromNow(),
+      createdByFlow: "paid-zk-passport",
     },
   });
   try {
@@ -308,6 +310,13 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         });
       }
 
+      if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({
+          code: "VERIFICATION_PREVIOUSLY_FAILED",
+          error: `Verification failed. Reason(s): ${session.failureReason}`,
+        });
+      }
+
       // Allow both IN_PROGRESS and ISSUED at this point so the 5-day
       // nullifier+uniqueIdentifier recovery branch below can idempotently
       // re-fetch creds. Post-recovery-branch, we re-tighten to IN_PROGRESS
@@ -400,10 +409,10 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
           "ZK Passport proof does not disclose required fields (firstname, lastname, dateOfBirth)"
         );
-        return res.status(400).json({
-          error:
-            "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.",
-        });
+        const errorMsg =
+          "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.";
+        await failZKPassportSession(session, errorMsg);
+        return res.status(400).json({ error: errorMsg });
       }
 
       const dob = formatDateOfBirth(dobRaw);
@@ -422,9 +431,11 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           "ZK Passport nationality not found in countryCodeToPrime"
         );
 
+        const errorMsg = `Unsupported country (${nationalityStr}) from ZK Passport proof`;
+        await failZKPassportSession(session, errorMsg);
         return res.status(400).json({
           code: "ZK_PASSPORT_UNSUPPORTED_DOCUMENT",
-          error: `Unsupported country (${nationalityStr}) from ZK Passport proof`,
+          error: errorMsg,
         });
       }
 
@@ -439,9 +450,9 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       if (nullifierAndCreds?.zkPassportUniqueIdentifier) {
         if (nullifierAndCreds.zkPassportUniqueIdentifier !== verificationResult.uniqueIdentifier) {
-          return res.status(400).json({
-            error: "The passport used does not match the one from the original issuance.",
-          });
+          const errorMsg = "The passport used does not match the one from the original issuance.";
+          await failZKPassportSession(session, errorMsg);
+          return res.status(400).json({ error: errorMsg });
         }
 
         // Recovery: same passport, same nullifier. Re-issue credentials.
@@ -454,9 +465,9 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
           });
           if (existingUser) {
             await saveCollisionMetadata(uuidV1, uuidV2);
-            return res.status(400).json({
-              error: `User has already registered. User ID: ${existingUser._id}`,
-            });
+            const errorMsg = toAlreadyRegisteredStr(existingUser._id.toString());
+            await failZKPassportSession(session, errorMsg);
+            return res.status(400).json({ error: errorMsg });
           }
         }
 
@@ -502,15 +513,20 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
             { uuidV2 },
             "User has already registered (cross-provider sybil check)"
           );
-          return res.status(400).json({
-            error: `User has already registered. User ID: ${existingUser._id}`,
-          });
+          const errorMsg = toAlreadyRegisteredStr(existingUser._id.toString());
+          await failZKPassportSession(session, errorMsg);
+          return res.status(400).json({ error: errorMsg });
         }
       }
 
-      // Store UUID for sybil resistance
-      const dbResponse = await saveUserToDb(uuidV2);
-      if (dbResponse.error) return res.status(400).json(dbResponse);
+      // Store UUID for sybil resistance. Skipped in sandbox so sandbox
+      // verifications do not pollute the live UserVerifications collection
+      // (and so a sandbox run cannot block the same identity from later
+      // verifying in live).
+      if (config.environment === "live") {
+        const dbResponse = await saveUserToDb(uuidV2);
+        if (dbResponse.error) return res.status(400).json(dbResponse);
+      }
 
       // --- Extract credentials and issue ---
 

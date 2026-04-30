@@ -256,9 +256,13 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
         }
       }
 
-      // Store UUID for Sybil resistance
-      const dbResponse = await saveUserToDb(uuidNew, check_id);
-      if (dbResponse.error) return res.status(400).json(dbResponse);
+      // Store UUID for Sybil resistance. Skipped in sandbox so sandbox runs
+      // do not pollute the live UserVerifications collection (matching the
+      // sandbox semantics we already apply to the existing-user check above).
+      if (config.environment == "live") {
+        const dbResponse = await saveUserToDb(uuidNew, check_id);
+        if (dbResponse.error) return res.status(400).json(dbResponse);
+      }
 
       const creds = extractCreds(documentReport);
       const response = issuev2KYC(config.issuerPrivateKey, issuanceNullifier, creds);

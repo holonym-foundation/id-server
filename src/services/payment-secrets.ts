@@ -99,8 +99,8 @@ async function storeOrUpdatePaymentSecret(
         createdAt: { $gte: oneYearAgo },
       }).exec();
 
-      if (count >= 10) {
-        return { error: "User has reached the limit of 10 payment secrets per year." };
+      if (count >= 20) {
+        return { error: "User has reached the limit of 20 payment secrets per year." };
       }
     } catch (err) {
       logger.error({ error: err }, "An error occurred while counting payment secrets");
