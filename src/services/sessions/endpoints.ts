@@ -146,10 +146,10 @@ async function postSession(req: Request, res: Response) {
     if (!sigDigest) {
       return res.status(400).json({ error: "sigDigest is required" });
     }
-    if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+    if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
       return res
         .status(400)
-        .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+        .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
     }
 
     let domain = null;
@@ -203,10 +203,10 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
-      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
         return res
           .status(400)
-          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
       }
 
       let domain = null;
@@ -360,10 +360,10 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
-      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
         return res
           .status(400)
-          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
       }
       if (!paymentSecret || typeof paymentSecret !== "string") {
         return res.status(400).json({ error: "paymentSecret is required" });
@@ -940,9 +940,9 @@ async function setIdvProvider(req: Request, res: Response) {
     const _id = req.params._id;
     const idvProvider = req.params.idvProvider;
 
-    // check the idvProvider is either veriff, onfido, or sumsub
-    if (!(idvProvider === "onfido" || idvProvider === "veriff" || idvProvider === "sumsub")) {
-      return res.status(400).json({ error: "IDV provider can only be onfido, veriff, or sumsub" });
+    // check the idvProvider is either veriff, onfido, sumsub, or idenfy
+    if (!(idvProvider === "onfido" || idvProvider === "veriff" || idvProvider === "sumsub" || idvProvider === "idenfy")) {
+      return res.status(400).json({ error: "IDV provider can only be onfido, veriff, sumsub, or idenfy" });
     }
 
     const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
