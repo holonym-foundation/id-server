@@ -14,7 +14,8 @@ import { ISession, INullifierAndCreds, ICleanHandsNullifierAndCreds } from "../.
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { deleteVeriffSession } from "../../utils/veriff.js";
 import { deleteOnfidoApplicant } from "../../utils/onfido.js";
-import { deleteIdenfySession } from "../../utils/idenfy.js";
+// TODO(U5): re-wire iDenfy session deletion against new services/idenfy helpers.
+// import { deleteIdenfySession } from "../../utils/idenfy.js";
 
 // const endpointLogger = logger.child({
 //   msgPrefix: "[DELETE /admin/delete-user-data] ",
@@ -53,12 +54,7 @@ async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
       }
       break;
     case "idenfy":
-      if (session.scanRef) {
-        const result = await deleteIdenfySession(session.scanRef);
-        if (result?.status == 200) {
-          setDeletedFromIDVProvider(session);
-        }
-      }
+      // TODO(U5): re-implement iDenfy session deletion via services/idenfy/data.ts helpers.
       break;
     default:
       break;

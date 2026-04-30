@@ -19,7 +19,8 @@ import {
   getRefundDetails as getPayPalRefundDetails,
 } from "../../utils/paypal.js";
 import { createVeriffSession } from "../../utils/veriff.js";
-import { createIdenfyToken } from "../../utils/idenfy.js";
+// TODO(U2): re-wire to services/idenfy/token.ts once new helper lands.
+// import { createIdenfyToken } from "../../utils/idenfy.js";
 import {
   createOnfidoApplicant,
   createOnfidoSdkToken,
@@ -64,24 +65,8 @@ async function handleIdvSessionCreation(
       id: veriffSession.verification.id,
     };
   } else if (session.idvProvider === "idenfy") {
-    const tokenData = await createIdenfyToken(session.sigDigest!);
-    if (!tokenData) {
-      throw new Error("Error creating iDenfy token");
-    }
-
-    session.scanRef = tokenData.scanRef;
-    session.idenfyAuthToken = tokenData.authToken;
-    await session.save();
-
-    logger.info(
-      { authToken: tokenData.authToken, idvProvider: "idenfy" },
-      "Created iDenfy session"
-    );
-
-    return {
-      url: `https://ivs.idenfy.com/api/v2/redirect?authToken=${tokenData.authToken}`,
-      scanRef: tokenData.scanRef,
-    };
+    // TODO(U2): rewrite this branch to call services/idenfy/token.ts.
+    throw new Error("iDenfy IDV session creation is temporarily disabled during rewrite");
   } else if (session.idvProvider === "onfido") {
     const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()
     if (rateLimitResult.limitExceeded) {
