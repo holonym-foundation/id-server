@@ -170,10 +170,9 @@ const idvSessionsSchema = new Schema<IIdvSessions>({
     },
     required: false,
   },
-  // U0 audit: idenfy block on sessionIdvSessionsSchema. Shape (sessions: [{scanRef, createdAt}])
-  // is provider-history audit metadata that other providers (veriff, onfido) follow. The new
-  // U4 webhook flow does not write to this block — it updates the Session row directly via
-  // idenfyScanRef. Kept as harmless placeholder for parity with veriff; safe to leave.
+  // Provider-history audit block (legacy parity with veriff/onfido). The
+  // current iDenfy flow does not write here — webhook updates the Session
+  // row directly via idenfyScanRef.
   idenfy: {
     type: {
       sessions: [
@@ -1302,8 +1301,6 @@ const DailyVerificationCountSchema = new Schema<IDailyVerificationCount>({
     },
     required: false,
   },
-  // U0 audit: idenfy block on DailyVerificationCount. Shape ({sessionCount: Number}) matches
-  // veriff. U2's getOrCreateIDVSession iDenfy branch increments idenfy.sessionCount here.
   idenfy: {
     type: {
       sessionCount: Number,

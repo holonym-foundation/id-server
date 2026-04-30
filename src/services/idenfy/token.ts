@@ -1,5 +1,10 @@
 import axios from "axios";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import {
+  IDENFY_BASE_URL,
+  getIdenfyCredentials,
+  idenfyBasicAuthHeader,
+} from "./http.js";
 
 /**
  * iDenfy /api/v2/token request body.
@@ -37,25 +42,6 @@ const tokenLogger = logger.child({
   },
 });
 
-const IDENFY_BASE_URL = "https://ivs.idenfy.com";
-
-function getCredentials(sandbox: boolean): { apiKey: string; apiSecret: string } {
-  if (sandbox) {
-    return {
-      apiKey: process.env.IDENFY_SANDBOX_API_KEY ?? "",
-      apiSecret: process.env.IDENFY_SANDBOX_API_SECRET ?? "",
-    };
-  }
-  return {
-    apiKey: process.env.IDENFY_API_KEY ?? "",
-    apiSecret: process.env.IDENFY_API_SECRET ?? "",
-  };
-}
-
-function basicAuthHeader(apiKey: string, apiSecret: string): string {
-  return `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`;
-}
-
 /**
  * Create a new iDenfy applicant token.
  *
@@ -66,7 +52,7 @@ export async function createIdenfyToken(args: {
   sandbox?: boolean;
 }): Promise<IdenfyTokenResponse> {
   const { clientId, sandbox = false } = args;
-  const { apiKey, apiSecret } = getCredentials(sandbox);
+  const { apiKey, apiSecret } = getIdenfyCredentials(sandbox);
 
   if (!apiKey || !apiSecret) {
     throw new Error(
@@ -85,7 +71,7 @@ export async function createIdenfyToken(args: {
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: basicAuthHeader(apiKey, apiSecret),
+          Authorization: idenfyBasicAuthHeader(apiKey, apiSecret),
         },
         timeout: 10_000,
       }

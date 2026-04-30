@@ -68,6 +68,10 @@ export type IdenfyVerificationData = {
     [key: string]: unknown;
   };
   fileUrls?: Record<string, string>;
+  // Top-level timing fields per iDenfy's webhook + data API. Either may be
+  // populated; we prefer finishTime (verification completion).
+  finishTime?: string;
+  creationTime?: string;
   [key: string]: unknown;
 };
 
@@ -130,8 +134,8 @@ export function extractCreds(idenfyData: IdenfyVerificationData) {
   // (per webhook payload). Top-level fields on the data response sometimes
   // include `finishTime` (ISO). Fall back to "" matching Onfido's pattern.
   // TODO(U11): pick the right field.
-  const finishTime = (idenfyData as any)?.finishTime as string | undefined;
-  const creationTime = (idenfyData as any)?.creationTime as string | undefined;
+  const finishTime = idenfyData?.finishTime;
+  const creationTime = idenfyData?.creationTime;
   const completedAtRaw = finishTime || creationTime || "";
   const completedAtStr = completedAtRaw ? completedAtRaw.split("T")[0] : "";
 
@@ -280,7 +284,7 @@ export async function saveCollisionMetadata(
     });
     await collisionMetadataDoc.save();
   } catch (err) {
-    console.log("Error recording collision metadata", err);
+    endpointLogger.error({ error: err, scanRef }, "Error recording collision metadata");
   }
 }
 
@@ -323,6 +327,6 @@ export async function updateSessionStatus(
     if (failureReason) metaSession.verificationFailureReason = failureReason;
     await metaSession.save();
   } catch (err) {
-    console.log("idenfy/credentials: Error updating session status", err);
+    endpointLogger.error({ error: err, scanRef, status }, "Error updating session status");
   }
 }
