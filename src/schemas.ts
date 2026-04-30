@@ -300,6 +300,13 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
+  // iDenfy scanRef (durable session id returned by /api/v2/token).
+  // Distinct from the legacy `scanRef` field above — the new flow keys lookups
+  // (webhook, credentials/v3) on this namespaced field.
+  idenfyScanRef: {
+    type: String,
+    required: false,
+  },
   // Onfido applicant_id
   applicant_id: {
     type: String,
@@ -405,6 +412,15 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   paymentCommitment: {
+    type: String,
+    required: false,
+  },
+  // iDenfy sandbox fields (mirror prod sessionSchema)
+  idenfyAuthToken: {
+    type: String,
+    required: false,
+  },
+  idenfyScanRef: {
     type: String,
     required: false,
   },
