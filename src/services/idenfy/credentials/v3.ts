@@ -99,6 +99,23 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
           sandbox,
         });
 
+        // Re-verify the cached scan is still APPROVED. A session that was
+        // APPROVED → cached → later flipped to DENIED/SUSPECTED/EXPIRED
+        // (status flap, manual review, fraud flag) must not re-issue creds
+        // via this nullifier-reuse path.
+        const overall =
+          (idenfyData as any)?.status?.overall ??
+          (idenfyData as any)?.verificationStatus;
+        if (overall !== "APPROVED") {
+          endpointLoggerV3.warn(
+            { scanRef: scanRefFromNullifier, overall },
+            "Nullifier-reuse branch: cached scan is no longer APPROVED; rejecting"
+          );
+          return res
+            .status(400)
+            .json({ error: `Verification not approved (status: ${overall ?? "unknown"})` });
+        }
+
         const uuidOld = uuidOldFromIdenfyData(idenfyData);
         const uuidNew = uuidNewFromIdenfyData(idenfyData);
 

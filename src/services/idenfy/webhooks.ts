@@ -124,16 +124,20 @@ function createHandleIdenfyWebhookRouteHandler(
   config: SandboxVsLiveKYCRouteHandlerConfig
 ) {
   return async (req: Request, res: Response) => {
-    // Body is a Buffer (raw-body middleware mounted on the webhook path only).
-    let rawBody: Buffer | string;
-    if (Buffer.isBuffer(req.body)) {
-      rawBody = req.body;
-    } else if (typeof req.body === "string") {
-      rawBody = req.body;
-    } else {
-      // If JSON middleware ran first (misconfiguration), reconstruct.
-      rawBody = JSON.stringify(req.body ?? {});
+    // Body must arrive as raw bytes — the raw-body middleware is mounted on
+    // /idenfy/webhook (and the sandbox parallel) for exactly this reason.
+    // If we got anything else (string or parsed JSON), the middleware order
+    // is broken and HMAC verification cannot be safe — re-serializing JSON
+    // would produce different bytes than iDenfy signed (key ordering,
+    // whitespace, escaping), causing silent 401 storms. Fail closed.
+    if (!Buffer.isBuffer(req.body)) {
+      webhookLogger.error(
+        { bodyType: typeof req.body },
+        "iDenfy webhook received non-Buffer body — raw-body middleware misconfigured"
+      );
+      return res.status(500).json({ error: "Webhook middleware misconfigured" });
     }
+    const rawBody: Buffer = req.body;
 
     // TODO(U11): the exact header name is documented as `Idenfy-Signature`
     // on the docs landing page. Express lower-cases all incoming headers.
@@ -247,9 +251,13 @@ function createHandleIdenfyWebhookRouteHandler(
         { error: err, scanRef },
         "Error processing iDenfy webhook"
       );
-      // Return 200 to prevent iDenfy retries from filling logs; we have audit
-      // trail in the error log.
-      return res.status(200).json({ received: true, error: "Processing error" });
+      // Return 500 so iDenfy retries the delivery — a transient DB blip must
+      // not silently strand the user's session. HMAC has already verified the
+      // payload at this point, so we know the retry will be a legitimate
+      // re-delivery from iDenfy.
+      return res
+        .status(500)
+        .json({ received: false, error: "Processing error" });
     }
   };
 }
