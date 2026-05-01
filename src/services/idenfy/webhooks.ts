@@ -189,59 +189,60 @@ function createHandleIdenfyWebhookRouteHandler(
     );
 
     try {
-      const session = await config.SessionModel.findOne({
+      const idenfySession = await config.IdenfySessionModel.findOne({
         idenfyScanRef: scanRef,
-        idvProvider: "idenfy",
       }).exec();
 
-      if (!session) {
+      if (!idenfySession) {
         webhookLogger.warn(
           { scanRef },
-          "No session found for scanRef in iDenfy webhook"
+          "No iDenfy session found for scanRef in webhook"
         );
         return res.status(404).json({ error: "Session not found" });
       }
 
-      const { newStatus, failureReason } = mapIdenfyStatusToSessionStatus(overall);
+      const { failureReason } = mapIdenfyStatusToSessionStatus(overall);
 
-      // Idempotency: if the session is already in a terminal state matching
-      // the incoming status, return 200 without re-saving.
-      if (newStatus && session.status === newStatus) {
+      // Map raw iDenfy status to standalone-collection lifecycle.
+      // APPROVED → 'complete'; DENIED/SUSPECTED/EXPIRED → 'failed'; else unchanged.
+      let nextLifecycle: string | undefined;
+      if (overall === "APPROVED") nextLifecycle = "complete";
+      else if (overall === "DENIED" || overall === "SUSPECTED" || overall === "EXPIRED") {
+        nextLifecycle = "failed";
+      }
+
+      // Idempotency: if already in the matching terminal state, no-op.
+      if (
+        nextLifecycle &&
+        idenfySession.status === nextLifecycle &&
+        idenfySession.idenfyVerificationStatus === overall
+      ) {
         webhookLogger.info(
-          { scanRef, sessionId: session._id, newStatus },
+          { scanRef, idenfySessionId: idenfySession._id, overall },
           "iDenfy webhook is idempotent no-op (status already set)"
         );
         return res.status(200).json({ received: true });
       }
 
-      // Out-of-order: log a warning if a prior terminal state is being
-      // overwritten (last-write-wins per plan U4).
-      if (
-        session.status === sessionStatusEnum.VERIFICATION_FAILED &&
-        newStatus &&
-        newStatus !== sessionStatusEnum.VERIFICATION_FAILED
-      ) {
-        webhookLogger.warn(
-          { scanRef, sessionId: session._id, oldStatus: session.status, newStatus },
-          "iDenfy webhook overwrites prior terminal failure state (last-write-wins)"
-        );
-      }
-
-      if (newStatus) {
-        session.status = newStatus;
-        if (failureReason) session.verificationFailureReason = failureReason;
-      }
-      // Persist the raw iDenfy status regardless of whether `newStatus` mapped
-      // to an internal transition. The frontend verify page reads this field
-      // via /session-status/v2 to detect APPROVED vs DENIED/SUSPECTED/EXPIRED.
       if (overall) {
-        session.idenfyVerificationStatus = overall;
+        idenfySession.idenfyVerificationStatus = overall;
       }
-      if (newStatus || overall) {
-        await session.save();
+      if (nextLifecycle) {
+        idenfySession.status = nextLifecycle;
+      }
+      if (failureReason) {
+        idenfySession.verificationFailureReason = failureReason;
+      }
+      if (overall || nextLifecycle || failureReason) {
+        await idenfySession.save();
         webhookLogger.info(
-          { scanRef, sessionId: session._id, newStatus },
-          "Updated session from iDenfy webhook"
+          {
+            scanRef,
+            idenfySessionId: idenfySession._id,
+            overall,
+            nextLifecycle,
+          },
+          "Updated iDenfy session from webhook"
         );
       }
 

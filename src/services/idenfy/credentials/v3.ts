@@ -76,7 +76,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
         endpointLoggerV3.error(
           {
-            scanRef: session.idenfyScanRef,
+            idenfySessionId: session.idenfySessionId,
             session_status: session.status,
             failure_reason: session.verificationFailureReason,
           },
@@ -159,12 +159,21 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       }
 
       // Step 2 — session lookup branch.
-      const scanRef = session.idenfyScanRef;
-      if (!scanRef) {
+      // Read scanRef from the standalone IIdenfySession via session.idenfySessionId.
+      if (!session.idenfySessionId) {
         return res
           .status(400)
-          .json({ error: "Unexpected: No idenfyScanRef in session" });
+          .json({ error: "Unexpected: No idenfySessionId on session" });
       }
+      const idenfySessionDoc = await config.IdenfySessionModel.findById(
+        session.idenfySessionId
+      ).exec();
+      if (!idenfySessionDoc?.idenfyScanRef) {
+        return res
+          .status(400)
+          .json({ error: "Unexpected: No idenfyScanRef on idenfy session" });
+      }
+      const scanRef = idenfySessionDoc.idenfyScanRef;
 
       // Webhook must have moved the session to IN_PROGRESS (APPROVED).
       // If still NEEDS_PAYMENT or otherwise pre-IN_PROGRESS, the verification

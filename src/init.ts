@@ -11,6 +11,8 @@ import { initSumsubClient } from "./utils/sumsub.js";
 import {
   onfidoSessionSchema,
   sandboxOnfidoSessionSchema,
+  idenfySessionSchema,
+  sandboxIdenfySessionSchema,
   userVerificationsSchema,
   idvSessionsSchema,
   sandboxIdvSessionsSchema,
@@ -64,6 +66,8 @@ import dotenv from "dotenv";
 import {
   IOnfidoSession,
   ISandboxOnfidoSession,
+  IIdenfySession,
+  ISandboxIdenfySession,
   IDailyVerificationCount,
   IDailyVerificationDeletions,
   IUserVerifications,
@@ -298,6 +302,10 @@ async function initializeMongoDb() {
 
   const SandboxOnfidoSession = mongoose.model("SandboxOnfidoSession", sandboxOnfidoSessionSchema, "sandboxonfidosessions");
 
+  const IdenfySession = mongoose.model("IdenfySession", idenfySessionSchema, "idenfysessions");
+
+  const SandboxIdenfySession = mongoose.model("SandboxIdenfySession", sandboxIdenfySessionSchema, "sandboxidenfysessions");
+
   const SessionRefundMutex = mongoose.model(
     "SessionRefundMutex",
     sessionRefundMutexSchema
@@ -531,6 +539,8 @@ async function initializeMongoDb() {
     SandboxSession,
     OnfidoSession,
     SandboxOnfidoSession,
+    IdenfySession,
+    SandboxIdenfySession,
     SessionRefundMutex,
     UserCredentials,
     UserCredentialsV2,
@@ -590,6 +600,8 @@ let UserVerifications: Model<IUserVerifications>,
   SandboxSession: Model<ISandboxSession>,
   OnfidoSession: Model<IOnfidoSession>,
   SandboxOnfidoSession: Model<ISandboxOnfidoSession>,
+  IdenfySession: Model<IIdenfySession>,
+  SandboxIdenfySession: Model<ISandboxIdenfySession>,
   SessionRefundMutex: Model<ISessionRefundMutex>,
   UserCredentials: Model<IUserCredentials>,
   UserCredentialsV2: Model<IUserCredentialsV2>,
@@ -647,6 +659,8 @@ initializeMongoDb().then((result) => {
     SandboxSession = result.SandboxSession;
     OnfidoSession = result.OnfidoSession;
     SandboxOnfidoSession = result.SandboxOnfidoSession;
+    IdenfySession = result.IdenfySession;
+    SandboxIdenfySession = result.SandboxIdenfySession;
     SessionRefundMutex = result.SessionRefundMutex;
     UserCredentials = result.UserCredentials;
     UserCredentialsV2 = result.UserCredentialsV2;
@@ -740,6 +754,8 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
       // Onfido sessions
       OnfidoSessionModel: SandboxOnfidoSession,
+      // iDenfy sessions
+      IdenfySessionModel: SandboxIdenfySession,
       // Sumsub config
       sumsubWebhookSecret: process.env.SUMSUB_SANDBOX_WEBHOOK_SECRET!,
       // iDenfy config (sandbox)
@@ -777,6 +793,8 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
     // Onfido sessions
     OnfidoSessionModel: OnfidoSession,
+    // iDenfy sessions
+    IdenfySessionModel: IdenfySession,
     // Sumsub config
     sumsubWebhookSecret: process.env.SUMSUB_WEBHOOK_SECRET!,
     // iDenfy config (live)
@@ -795,6 +813,8 @@ export {
   SandboxSession,
   OnfidoSession,
   SandboxOnfidoSession,
+  IdenfySession,
+  SandboxIdenfySession,
   SessionRefundMutex,
   UserCredentials,
   UserCredentialsV2,

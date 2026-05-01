@@ -5,15 +5,20 @@ import { HydratedDocument, Model } from "mongoose";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
 import { getVeriffSessionDecision } from "../utils/veriff.js";
-// TODO(U5): re-wire to services/idenfy/data.ts once new helpers land.
-// import { getIdenfySessionStatus as getIdenfySession } from "../utils/idenfy.js";
-const getIdenfySession = async (_scanRef: string): Promise<undefined> => undefined;
+// Legacy v1 path: getIdenfySession used to fetch iDenfy state from the
+// per-user IDVSessions array. After the iDenfy decoupling refactor (see
+// docs/plans/2026-05-01-001-refactor-decouple-idenfy-from-gov-id-flow-plan.md),
+// iDenfy state lives on IIdenfySession only. The v1 /session-status endpoint
+// is kept for backward compat but its idenfy branch is now a stub.
 import { getOnfidoReports } from "../utils/onfido.js";
 import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
-import { fetchIdenfyStatus } from "./idenfy/status.js";
+import {
+  getIdenfySessionById,
+  getIdenfyStatusForSession,
+} from "./idenfy-sessions/functions.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
@@ -59,59 +64,11 @@ async function getVeriffSessionStatus(
 }
 
 async function getIdenfySessionStatus(
-  sessions: HydratedDocument<IIdvSessions> | null
+  _sessions: HydratedDocument<IIdvSessions> | null
 ) {
-  if (!sessions?.idenfy?.sessions || sessions.idenfy.sessions.length === 0) {
-    return;
-  }
-
-  // Get each session. If one is "APPROVED", return "APPROVED".
-  // Otherwise, return the status of the latest session.
-
-  const sessionsWithTimestamps = [];
-  for (const sessionMetadata of sessions.idenfy.sessions) {
-    const session = await getIdenfySession(sessionMetadata.scanRef as string);
-    if (!session) continue;
-    sessionsWithTimestamps.push({
-      session,
-      createdAt: sessionMetadata.createdAt ?? new Date(0),
-    });
-    if (session?.status === "APPROVED") {
-      return { status: session?.status, scanRef: sessionMetadata.scanRef };
-    }
-  }
-
-  // Find the decision with the most recent createdAt timestamp
-  const latestSession =
-    sessionsWithTimestamps.length > 0
-      ? sessionsWithTimestamps.reduce((prev, current) =>
-          prev.createdAt > current.createdAt ? prev : current
-        ).session
-      : null;
-
-  let failureReason = undefined;
-  if (
-    (latestSession?.fraudTags ?? []).length > 0 ||
-    (latestSession?.mismatchTags ?? []).length > 0 ||
-    (latestSession?.manualDocument &&
-      latestSession.manualDocument !== "DOC_VALIDATED") ||
-    (latestSession?.manualFace && latestSession.manualFace !== "DOC_VALIDATED")
-  ) {
-    failureReason = {
-      fraudTags: latestSession?.fraudTags,
-      mismatchTags: latestSession?.mismatchTags,
-      manualDocument: latestSession?.manualDocument,
-      manualFace: latestSession?.manualFace,
-    };
-  }
-
-  return {
-    status: latestSession?.status,
-    scanRef: latestSession?.scanRef,
-    // failureReason should be populated with a reason for verification failure
-    // iff the verification failed. If verification is in progress, it should be null.
-    failureReason,
-  };
+  // Legacy v1 stub. Modern callers must use /session-status/v2 with a session
+  // sid; that path reads from the standalone IIdenfySession collection.
+  return undefined;
 }
 
 // @deprecated - Use getOnfidoCheckAsync instead
@@ -347,42 +304,40 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           },
         });
       } else if (ambiguousSession.idvProvider === "idenfy") {
-        // The webhook handler normally persists the raw iDenfy status on
-        // `session.idenfyVerificationStatus`. When the webhook hasn't reached
-        // us (e.g. localhost dev where iDenfy can't call back), fall back to
-        // polling iDenfy's /api/v2/data with the persisted scanRef and
-        // mirror the result onto the session row.
-        const session = ambiguousSession as HydratedDocument<ISession>;
-
-        if (!session.idenfyVerificationStatus && session.idenfyScanRef) {
-          try {
-            const data = await fetchIdenfyStatus({
-              scanRef: session.idenfyScanRef,
-              sandbox: config.environment === "sandbox",
-            });
-            if (data.status) {
-              session.idenfyVerificationStatus = data.status;
-              await session.save();
-            }
-          } catch (err: any) {
-            endpointLoggerV2.warn(
-              {
-                sid: session._id,
-                scanRef: session.idenfyScanRef,
-                error: err?.message,
-              },
-              "iDenfy /api/v2/status fallback poll failed — returning unpopulated status"
-            );
-          }
+        // Read everything from the standalone IIdenfySession via
+        // ambiguousSession.idenfySessionId. getIdenfyStatusForSession lazily
+        // polls iDenfy's /api/v2/status when the webhook hasn't fired yet.
+        if (!ambiguousSession.idenfySessionId) {
+          return res.status(200).json({
+            idenfy: {
+              sid: ambiguousSession._id,
+              status: null,
+              scanRef: null,
+              authToken: null,
+            },
+          });
         }
+
+        const idenfyDoc = await getIdenfySessionById(
+          config,
+          ambiguousSession.idenfySessionId
+        );
+        if (!idenfyDoc) {
+          return res.status(404).json({ error: "iDenfy session not found" });
+        }
+
+        const resolved = await getIdenfyStatusForSession(
+          config,
+          idenfyDoc.toObject()
+        );
 
         return res.status(200).json({
           idenfy: {
-            sid: session._id,
-            status: session.idenfyVerificationStatus ?? null,
-            scanRef: session.idenfyScanRef ?? null,
-            authToken: session.idenfyAuthToken ?? null,
-            failureReason: session.verificationFailureReason ?? undefined,
+            sid: ambiguousSession._id,
+            status: resolved?.idenfyVerificationStatus ?? null,
+            scanRef: resolved?.idenfyScanRef ?? null,
+            authToken: resolved?.idenfyAuthToken ?? null,
+            failureReason: resolved?.verificationFailureReason ?? undefined,
           },
         });
       } else if (ambiguousSession.idvProvider === "onfido") {

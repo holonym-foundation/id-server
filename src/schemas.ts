@@ -11,6 +11,8 @@ import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 import {
   IOnfidoSession,
   ISandboxOnfidoSession,
+  IIdenfySession,
+  ISandboxIdenfySession,
   IUserVerifications,
   IIdvSessions,
   ISandboxIdvSessions,
@@ -93,6 +95,38 @@ const sandboxOnfidoSessionSchema = new Schema<ISandboxOnfidoSession>({
   createdBySessionId: { type: Schema.Types.ObjectId, required: true },
   createdAt: { type: Date, default: Date.now },
 });
+
+// ---------- iDenfy Sessions ----------
+
+const idenfySessionSchema = new Schema<IIdenfySession>({
+  sigDigest: { type: String, required: true },
+  idenfyAuthToken: { type: String, required: true },
+  idenfyScanRef: { type: String, required: true },
+  idenfyVerificationStatus: { type: String, required: false },
+  verificationFailureReason: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+idenfySessionSchema.index({ sigDigest: 1 });
+idenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
+idenfySessionSchema.index({ sigDigest: 1, status: 1, createdAt: -1 });
+
+const sandboxIdenfySessionSchema = new Schema<ISandboxIdenfySession>({
+  sigDigest: { type: String, required: true },
+  idenfyAuthToken: { type: String, required: true },
+  idenfyScanRef: { type: String, required: true },
+  idenfyVerificationStatus: { type: String, required: false },
+  verificationFailureReason: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+sandboxIdenfySessionSchema.index({ sigDigest: 1 });
+sandboxIdenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
+sandboxIdenfySessionSchema.index({ sigDigest: 1, status: 1, createdAt: -1 });
 
 // ---------- User Verifications ----------
 
@@ -290,24 +324,6 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
-  idenfyAuthToken: {
-    type: String,
-    required: false,
-  },
-  // iDenfy scanRef (durable session id returned by /api/v2/token). Used as
-  // the lookup key for the webhook and credentials/v3 endpoints.
-  idenfyScanRef: {
-    type: String,
-    required: false,
-  },
-  // Raw iDenfy `status.overall` captured by the webhook handler.
-  // Surfaced via /session-status/v2 so the frontend verify page can detect
-  // completion (APPROVED) or failure (DENIED / SUSPECTED / EXPIRED) without
-  // needing a derived field.
-  idenfyVerificationStatus: {
-    type: String,
-    required: false,
-  },
   // Onfido applicant_id
   applicant_id: {
     type: String,
@@ -386,6 +402,10 @@ const sessionSchema = new Schema<ISession>({
     type: Schema.Types.ObjectId,
     required: false,
   },
+  idenfySessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
 });
 sessionSchema.index({ sigDigest: 1 })
 sessionSchema.index({ check_id: 1 })
@@ -413,19 +433,6 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   paymentCommitment: {
-    type: String,
-    required: false,
-  },
-  // iDenfy sandbox fields (mirror prod sessionSchema)
-  idenfyAuthToken: {
-    type: String,
-    required: false,
-  },
-  idenfyScanRef: {
-    type: String,
-    required: false,
-  },
-  idenfyVerificationStatus: {
     type: String,
     required: false,
   },
@@ -491,6 +498,10 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
+  idenfySessionId: {
     type: Schema.Types.ObjectId,
     required: false,
   },
@@ -1762,6 +1773,8 @@ const SandboxHumanIDCreditsPriceOverrideSchema = new Schema<ISandboxHumanIDCredi
 export {
   onfidoSessionSchema,
   sandboxOnfidoSessionSchema,
+  idenfySessionSchema,
+  sandboxIdenfySessionSchema,
   userVerificationsSchema,
   idvSessionsSchema,
   sandboxIdvSessionsSchema,
