@@ -83,7 +83,9 @@ export type IdenfyVerificationData = {
  * ZK circuits depend on it byte-for-byte.
  */
 export function extractCreds(idenfyData: IdenfyVerificationData) {
-  const data = idenfyData?.data ?? {};
+  // /api/v2/data returns document fields flat at the top level
+  // (docFirstName, docLastName, docDob, etc.) — not nested under `data`.
+  const data = idenfyData as Record<string, unknown>;
 
   // Country code parity with Onfido (services/onfido/credentials/utils.ts:292):
   // Onfido reads `issuing_country` from the document report, so iDenfy must
@@ -250,7 +252,7 @@ export function extractCreds(idenfyData: IdenfyVerificationData) {
  * Matches Onfido/Sumsub: sha256(firstName + lastName + dob).
  */
 export function uuidOldFromIdenfyData(idenfyData: IdenfyVerificationData) {
-  const data = idenfyData?.data ?? {};
+  const data = idenfyData as Record<string, unknown>;
   const firstName = (data.docFirstName as string) || "";
   const lastName = (data.docLastName as string) || "";
   const dob = (data.docDob as string) || "";
@@ -263,7 +265,7 @@ export function uuidOldFromIdenfyData(idenfyData: IdenfyVerificationData) {
  * shared govIdUUID function (cross-provider Sybil resistance).
  */
 export function uuidNewFromIdenfyData(idenfyData: IdenfyVerificationData) {
-  const data = idenfyData?.data ?? {};
+  const data = idenfyData as Record<string, unknown>;
   const firstName = (data.docFirstName as string) || "";
   const lastName = (data.docLastName as string) || "";
   const dob = (data.docDob as string) || "";
