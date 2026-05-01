@@ -173,7 +173,6 @@ export type ISession = {
   paymentCommitment?: string;
   sessionId?: string;
   veriffUrl?: string;
-  scanRef?: string;
   idenfyAuthToken?: string;
   idenfyScanRef?: string;
   idenfyVerificationStatus?: string;

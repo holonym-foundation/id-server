@@ -117,7 +117,7 @@ async function setSessionIdvProvider(req: Request, res: Response) {
     // with a provider the user has already verified with (for this session), we check that
     // the IDV session ID (e.g. Veriff's "sessionId") is null. If it's not null, that means
     // an IDV session has already been created with that provider.
-    if (newIdvProvider === "idenfy" && session.scanRef) {
+    if (newIdvProvider === "idenfy" && session.idenfyScanRef) {
       return res.status(400).json({
         message:
           "Cannot change IDV provider to iDenfy. User has already verified with iDenfy",
