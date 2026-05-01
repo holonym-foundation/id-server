@@ -109,6 +109,13 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
             { scanRef: scanRefFromNullifier, overall },
             "Nullifier-reuse branch: cached scan is no longer APPROVED; rejecting"
           );
+          // Symmetric with the Step-2 failure path below: fail the current
+          // session so frontend status polling stops and the user can be
+          // routed to a fresh verification attempt.
+          await failSession(
+            session,
+            `Verification not approved (status: ${overall ?? "unknown"})`
+          );
           return res
             .status(400)
             .json({ error: `Verification not approved (status: ${overall ?? "unknown"})` });
@@ -149,11 +156,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
           "Issuing credentials (nullifier lookup)"
         );
 
-        await updateSessionStatus(
-          config.SessionModel,
-          scanRefFromNullifier,
-          sessionStatusEnum.ISSUED
-        );
+        await updateSessionStatus(session, sessionStatusEnum.ISSUED);
 
         return res.status(200).json(response);
       }
@@ -254,11 +257,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       });
       await newNullifierAndCreds.save();
 
-      await updateSessionStatus(
-        config.SessionModel,
-        scanRef,
-        sessionStatusEnum.ISSUED
-      );
+      await updateSessionStatus(session, sessionStatusEnum.ISSUED);
 
       return res.status(200).json(response);
     } catch (err: any) {

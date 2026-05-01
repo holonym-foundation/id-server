@@ -117,13 +117,10 @@ async function setSessionIdvProvider(req: Request, res: Response) {
     // with a provider the user has already verified with (for this session), we check that
     // the IDV session ID (e.g. Veriff's "sessionId") is null. If it's not null, that means
     // an IDV session has already been created with that provider.
-    if (newIdvProvider === "idenfy" && session.idenfySessionId) {
-      return res.status(400).json({
-        message:
-          "Cannot change IDV provider to iDenfy. User has already verified with iDenfy",
-      });
-    }
-
+    // Note: 'idenfy' is intentionally absent from supportedIdvProviders above
+    // (TODO U2) — admin re-routing into iDenfy must be re-wired against
+    // services/idenfy/token.ts before re-enabling. Any inline 'idenfy' branch
+    // below this point is unreachable.
     if (newIdvProvider === "veriff" && session.sessionId) {
       return res.status(400).json({
         message:
@@ -161,12 +158,6 @@ async function setSessionIdvProvider(req: Request, res: Response) {
       //   id: veriffSession.verification.id,
       // });
       return res.status(200).json({ message: "Veriff session created" });
-    } else if (newIdvProvider === "idenfy") {
-      // TODO(U2): re-wire iDenfy admin set-session-idv-provider against new
-      // services/idenfy/token.ts helper.
-      return res
-        .status(503)
-        .json({ error: "iDenfy admin path is temporarily disabled during rewrite" });
     } else if (newIdvProvider === "onfido") {
       const applicant = await createOnfidoApplicant(liveConfig.onfidoAPIKey);
       if (!applicant) {

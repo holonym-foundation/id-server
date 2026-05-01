@@ -179,7 +179,18 @@ function createHandleIdenfyWebhookRouteHandler(
     const overall = body.status?.overall;
 
     if (!scanRef) {
-      webhookLogger.warn({ payload: body }, "iDenfy webhook missing scanRef");
+      // Do not log the full body — iDenfy webhooks carry KYC PII
+      // (data.docFirstName/docLastName/docDob/docNumber/docNationality/address).
+      // HMAC has already passed by this point, so any payload here is a real
+      // KYC document, not attacker noise.
+      webhookLogger.warn(
+        {
+          overall,
+          clientId: (body as { clientId?: unknown }).clientId,
+          payloadKeys: Object.keys(body ?? {}),
+        },
+        "iDenfy webhook missing scanRef"
+      );
       return res.status(400).json({ error: "Missing scanRef" });
     }
 

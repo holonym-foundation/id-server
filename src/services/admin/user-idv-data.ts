@@ -54,7 +54,13 @@ async function deleteDataFromIDVProvider(session: HydratedDocument<ISession>) {
       }
       break;
     case "idenfy":
-      // TODO(U5): re-implement iDenfy session deletion via services/idenfy/data.ts helpers.
+      // TODO(U5): re-implement iDenfy session deletion via services/idenfy
+      // helpers. While this branch is a no-op, the data-retention daemon will
+      // NOT remove iDenfy-side records for sessions whose idvProvider is
+      // 'idenfy' — relevant for GDPR/data-retention compliance. Track in U5
+      // and either implement before iDenfy goes to mainnet, or document the
+      // out-of-band cleanup process. The 'sumsub' / 'facetec' default-arm
+      // gaps share this property.
       break;
     default:
       break;
