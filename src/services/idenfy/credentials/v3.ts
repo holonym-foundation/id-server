@@ -24,6 +24,7 @@ import {
   updateSessionStatus,
 } from "./utils.js";
 import { fetchIdenfyVerificationData } from "../data.js";
+import { fetchIdenfyStatus } from "../status.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../../types.js";
 
 const endpointLoggerV3 = logger.child({
@@ -94,18 +95,15 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const scanRefFromNullifier =
         (nullifierAndCreds?.idvSessionIds as any)?.idenfy?.scanRef;
       if (scanRefFromNullifier) {
-        const idenfyData = await fetchIdenfyVerificationData({
-          scanRef: scanRefFromNullifier,
-          sandbox,
-        });
-
         // Re-verify the cached scan is still APPROVED. A session that was
         // APPROVED → cached → later flipped to DENIED/SUSPECTED/EXPIRED
         // (status flap, manual review, fraud flag) must not re-issue creds
         // via this nullifier-reuse path.
-        const overall =
-          (idenfyData as any)?.status?.overall ??
-          (idenfyData as any)?.verificationStatus;
+        const statusResp = await fetchIdenfyStatus({
+          scanRef: scanRefFromNullifier,
+          sandbox,
+        });
+        const overall = statusResp.status;
         if (overall !== "APPROVED") {
           endpointLoggerV3.warn(
             { scanRef: scanRefFromNullifier, overall },
@@ -115,6 +113,11 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
             .status(400)
             .json({ error: `Verification not approved (status: ${overall ?? "unknown"})` });
         }
+
+        const idenfyData = await fetchIdenfyVerificationData({
+          scanRef: scanRefFromNullifier,
+          sandbox,
+        });
 
         const uuidOld = uuidOldFromIdenfyData(idenfyData);
         const uuidNew = uuidNewFromIdenfyData(idenfyData);
@@ -188,7 +191,8 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
           .json({ error: "iDenfy data scanRef does not match session scanRef" });
       }
 
-      const overall = idenfyData.status?.overall || idenfyData.verificationStatus;
+      const statusResp = await fetchIdenfyStatus({ scanRef, sandbox });
+      const overall = statusResp.status;
       if (overall !== "APPROVED") {
         const reason = `iDenfy verificationStatus is '${overall}'`;
         await failSession(session, reason);

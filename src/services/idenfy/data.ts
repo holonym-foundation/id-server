@@ -90,16 +90,9 @@ export async function fetchIdenfyVerificationData(args: {
     );
     throw new Error("iDenfy /api/v2/data scanRef mismatch");
   }
-  // Either status.overall or top-level verificationStatus must be present.
-  // TODO(U11): confirm exact field name — different iDenfy doc pages list
-  // different keys.
-  if (!data.status?.overall && !data.verificationStatus) {
-    dataLogger.error(
-      { responseShape: Object.keys(data) },
-      "iDenfy /api/v2/data response missing status.overall and verificationStatus"
-    );
-    throw new Error("iDenfy /api/v2/data response missing verification status");
-  }
+  // /api/v2/data does NOT carry the overall verification decision — that
+  // lives on /api/v2/status. Callers that need the decision must fetch it
+  // separately via fetchIdenfyStatus.
 
   return data;
 }
