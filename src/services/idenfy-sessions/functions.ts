@@ -90,14 +90,22 @@ export async function getIdenfySessionById(
   return config.IdenfySessionModel.findById(id).exec();
 }
 
+// iDenfy reports these as the final decision on /api/v2/status (and webhook).
+// Anything else (ACTIVE, REVIEWING, null) is in-progress — keep polling.
+const IDENFY_TERMINAL_STATUSES = new Set([
+  "APPROVED",
+  "DENIED",
+  "SUSPECTED",
+  "EXPIRED",
+]);
+
 /**
  * Resolve the verification status for an iDenfy session.
  *
- * If `idenfyVerificationStatus` is already populated (webhook fired), returns
- * the existing fields. Otherwise polls iDenfy's `/api/v2/status` with the
- * persisted scanRef, mirrors the result onto the row, and returns the updated
- * fields. Used as a webhook fallback for environments where iDenfy can't call
- * back to us (e.g. localhost dev).
+ * Polls iDenfy's `/api/v2/status` whenever the persisted status is empty OR
+ * non-terminal (ACTIVE / REVIEWING). Once a terminal value is set
+ * (APPROVED/DENIED/SUSPECTED/EXPIRED) — either by the webhook or a previous
+ * poll — we stop hitting the API and return the cached row.
  */
 export async function getIdenfyStatusForSession(
   config: SandboxVsLiveKYCRouteHandlerConfig,
@@ -105,7 +113,10 @@ export async function getIdenfyStatusForSession(
 ) {
   if (!idenfySession) return null;
 
-  if (idenfySession.idenfyVerificationStatus) {
+  if (
+    idenfySession.idenfyVerificationStatus &&
+    IDENFY_TERMINAL_STATUSES.has(idenfySession.idenfyVerificationStatus)
+  ) {
     return idenfySession;
   }
 
