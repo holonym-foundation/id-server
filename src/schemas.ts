@@ -290,18 +290,12 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
-  // iDenfy scanRef
-  scanRef: {
-    type: String,
-    required: false,
-  },
   idenfyAuthToken: {
     type: String,
     required: false,
   },
-  // iDenfy scanRef (durable session id returned by /api/v2/token).
-  // Distinct from the legacy `scanRef` field above — the new flow keys lookups
-  // (webhook, credentials/v3) on this namespaced field.
+  // iDenfy scanRef (durable session id returned by /api/v2/token). Used as
+  // the lookup key for the webhook and credentials/v3 endpoints.
   idenfyScanRef: {
     type: String,
     required: false,
