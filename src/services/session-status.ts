@@ -13,6 +13,7 @@ import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
+import { fetchIdenfyVerificationData } from "./idenfy/data.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
@@ -346,13 +347,36 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           },
         });
       } else if (ambiguousSession.idvProvider === "idenfy") {
-        // The new iDenfy flow stores everything we need on the session row
-        // itself. The webhook handler persists the raw iDenfy status on
-        // `session.idenfyVerificationStatus`, so the frontend can detect
-        // APPROVED/DENIED/SUSPECTED/EXPIRED without us round-tripping to
-        // iDenfy's /api/v2/data here. The verify page also needs `authToken`
-        // to construct the iframe URL.
+        // The webhook handler normally persists the raw iDenfy status on
+        // `session.idenfyVerificationStatus`. When the webhook hasn't reached
+        // us (e.g. localhost dev where iDenfy can't call back), fall back to
+        // polling iDenfy's /api/v2/data with the persisted scanRef and
+        // mirror the result onto the session row.
         const session = ambiguousSession as HydratedDocument<ISession>;
+
+        if (!session.idenfyVerificationStatus && session.idenfyScanRef) {
+          try {
+            const data = await fetchIdenfyVerificationData({
+              scanRef: session.idenfyScanRef,
+              sandbox: config.environment === "sandbox",
+            });
+            const overall = data.status?.overall ?? data.verificationStatus;
+            if (overall) {
+              session.idenfyVerificationStatus = overall as string;
+              await session.save();
+            }
+          } catch (err: any) {
+            endpointLoggerV2.warn(
+              {
+                sid: session._id,
+                scanRef: session.idenfyScanRef,
+                error: err?.message,
+              },
+              "iDenfy /api/v2/data fallback poll failed — returning unpopulated status"
+            );
+          }
+        }
+
         return res.status(200).json({
           idenfy: {
             sid: session._id,
