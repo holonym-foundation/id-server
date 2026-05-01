@@ -19,8 +19,6 @@ import {
   getRefundDetails as getPayPalRefundDetails,
 } from "../../utils/paypal.js";
 import { createVeriffSession } from "../../utils/veriff.js";
-import { createIdenfyToken } from "../../services/idenfy/token.js";
-import { DailyVerificationCount } from "../../init.js";
 import {
   createOnfidoApplicant,
   createOnfidoSdkToken,
@@ -63,58 +61,6 @@ async function handleIdvSessionCreation(
     return {
       url: veriffSession.verification.url,
       id: veriffSession.verification.id,
-    };
-  } else if (session.idvProvider === "idenfy") {
-    // Idempotent: if both fields already exist, skip the network call.
-    if (session.idenfyAuthToken && session.idenfyScanRef) {
-      logger.info(
-        { idvProvider: "idenfy", scanRef: session.idenfyScanRef },
-        "Returning existing iDenfy session (idempotent)"
-      );
-      return {
-        url: `https://ui.idenfy.com/?authToken=${session.idenfyAuthToken}`,
-        scanRef: session.idenfyScanRef,
-        authToken: session.idenfyAuthToken,
-      };
-    }
-
-    // clientId — see services/idenfy/token.ts for collision rationale.
-    const clientId = session._id?.toString() ?? session.sigDigest!;
-    const tokenData = await createIdenfyToken({
-      clientId,
-      sandbox: config.environment === "sandbox",
-    });
-
-    // Persist both fields atomically (single save call). Throws above the assignment
-    // ensure no partial-write state.
-    session.idenfyAuthToken = tokenData.authToken;
-    session.idenfyScanRef = tokenData.scanRef;
-    await session.save();
-
-    // Increment daily counter (best-effort; mirrors veriff/onfido pattern).
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      await DailyVerificationCount.updateOne(
-        { date: today },
-        { $inc: { "idenfy.sessionCount": 1 } },
-        { upsert: true }
-      );
-    } catch (counterErr) {
-      logger.warn(
-        { error: counterErr, idvProvider: "idenfy" },
-        "Failed to increment idenfy daily session count"
-      );
-    }
-
-    logger.info(
-      { idvProvider: "idenfy", scanRef: tokenData.scanRef },
-      "Created iDenfy session"
-    );
-
-    return {
-      url: `https://ui.idenfy.com/?authToken=${tokenData.authToken}`,
-      scanRef: tokenData.scanRef,
-      authToken: tokenData.authToken,
     };
   } else if (session.idvProvider === "onfido") {
     const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()

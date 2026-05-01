@@ -18,14 +18,12 @@ describe("idenfy extractCreds", () => {
   it("matches the Onfido shape (rawCreds keys, fieldsInLeaf order)", () => {
     const result = extractCreds({
       scanRef: "abc",
-      data: {
-        docFirstName: "John",
-        docLastName: "Doe",
-        docDob: "1990-01-15",
-        docNationality: "USA",
-        docIssuingCountry: "USA",
-      },
-    });
+      docFirstName: "John",
+      docLastName: "Doe",
+      docDob: "1990-01-15",
+      docNationality: "USA",
+      docIssuingCountry: "USA",
+    } as any);
 
     expect(result.rawCreds).toMatchObject({
       firstName: "John",
@@ -91,13 +89,11 @@ describe("idenfy extractCreds", () => {
   it("handles empty middle name (passport docs)", () => {
     const result = extractCreds({
       scanRef: "x",
-      data: {
-        docFirstName: "Alice",
-        docLastName: "Smith",
-        docDob: "1985-06-20",
-        docNationality: "DEU",
-      },
-    });
+      docFirstName: "Alice",
+      docLastName: "Smith",
+      docDob: "1985-06-20",
+      docNationality: "DEU",
+    } as any);
     expect(result.rawCreds.middleName).toBe("");
     expect(result.derivedCreds.nameHash.value).toBeTruthy();
   });

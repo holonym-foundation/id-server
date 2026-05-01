@@ -40,12 +40,11 @@ describe("fetchIdenfyVerificationData", () => {
     ).rejects.toThrow(/scanRef mismatch/i);
   });
 
-  it("throws when status fields are absent", async () => {
+  it("returns data even when overall status is absent (status comes from /api/v2/status, not /api/v2/data)", async () => {
     (axios as any).post = async () => ({ data: { scanRef: "abc" } });
     const { fetchIdenfyVerificationData } = await import("./data.js");
-    await expect(
-      fetchIdenfyVerificationData({ scanRef: "abc" })
-    ).rejects.toThrow(/verification status/i);
+    const result = await fetchIdenfyVerificationData({ scanRef: "abc" });
+    expect(result.scanRef).toBe("abc");
   });
 
   it("throws when credentials are missing", async () => {

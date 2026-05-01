@@ -44,6 +44,10 @@ import {
   createOnfidoSession,
   findReusableOnfidoSession,
 } from "../onfido-sessions/functions.js";
+import {
+  createIdenfySession,
+  findReusableIdenfySession,
+} from "../idenfy-sessions/functions.js";
 import { rateLimitByTier, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
@@ -525,7 +529,53 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         });
       }
 
-      // Non-onfido providers: delegate to existing handler
+      if (idvProvider === "idenfy") {
+        // Check for reusable iDenfy session
+        const reusable = await findReusableIdenfySession(config, sigDigest);
+
+        if (reusable) {
+          session.idenfySessionId = reusable._id;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, idenfySessionId: reusable._id },
+            "Reusing existing iDenfy session"
+          );
+        } else {
+          // Save session first so we have an _id for createIdenfySession's clientId
+          await session.save();
+
+          const idenfySession = await createIdenfySession(
+            config,
+            sigDigest,
+            "gov-id",
+            session._id!
+          );
+
+          session.idenfySessionId = idenfySession._id;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, idenfySessionId: idenfySession._id },
+            "Created new iDenfy session"
+          );
+        }
+
+        // Complete payment redemption after successful session creation
+        await completeRedemption({
+          reservationToken: reservationToken!,
+          service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+          fulfillmentReceipt: `gov-id-session:${session._id}`,
+          config,
+        });
+
+        return res.status(201).json({
+          session,
+          idenfySessionId: session.idenfySessionId,
+        });
+      }
+
+      // Other providers (veriff, sumsub, facetec): delegate to existing handler
       const _idvSession = await handleIdvSessionCreation(config, session, postSessionsV3Logger);
 
       // Complete payment redemption after successful session creation
