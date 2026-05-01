@@ -158,6 +158,16 @@ async function handleIdvSessionCreation(
     return {
       sumsub_applicant_id: applicant.id,
     };
+  } else if (session.idvProvider === "idos") {
+    // idOS does not require provider-side session/applicant creation. The user grants
+    // access to a pre-existing credential from their idOS profile (or completes Fractal
+    // KYC inside an iframe) — no token, no applicant, no webhook lifecycle. The
+    // grant lookup happens later in GET /idos/credentials/v3/:_id/:nullifier.
+    await session.save();
+
+    logger.info({ idvProvider: "idos" }, "Created idOS session (no provider-side init)");
+
+    return { idvProvider: "idos" };
   } else {
     throw new Error("Invalid idvProvider");
   }
