@@ -13,7 +13,7 @@ import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
-import { fetchIdenfyVerificationData } from "./idenfy/data.js";
+import { fetchIdenfyStatus } from "./idenfy/status.js";
 
 const endpointLogger = logger.child({ msgPrefix: "[GET /session-status] " });
 const endpointLoggerV2 = logger.child({ msgPrefix: "[GET /session-status/v2] " });
@@ -356,13 +356,12 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
         if (!session.idenfyVerificationStatus && session.idenfyScanRef) {
           try {
-            const data = await fetchIdenfyVerificationData({
+            const data = await fetchIdenfyStatus({
               scanRef: session.idenfyScanRef,
               sandbox: config.environment === "sandbox",
             });
-            const overall = data.status?.overall ?? data.verificationStatus;
-            if (overall) {
-              session.idenfyVerificationStatus = overall as string;
+            if (data.status) {
+              session.idenfyVerificationStatus = data.status;
               await session.save();
             }
           } catch (err: any) {
@@ -372,7 +371,7 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
                 scanRef: session.idenfyScanRef,
                 error: err?.message,
               },
-              "iDenfy /api/v2/data fallback poll failed — returning unpopulated status"
+              "iDenfy /api/v2/status fallback poll failed — returning unpopulated status"
             );
           }
         }
