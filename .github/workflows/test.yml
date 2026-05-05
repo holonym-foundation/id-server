@@ -15,6 +15,14 @@ jobs:
       PRIVATE_KEY: "0x0fd6767c661a6a144a78cce98bf64aab13c48bd7fc595f80ca7148cf58688cca" # random private key
       ADDRESS: "0xbAd15e99f9A94DbF931Ae788e10eA8350025b18a" # random address
       ENVIRONMENT: dev
+      NODE_ENV: development
+      HOLONYM_ISSUER_PRIVKEY: "0x0fd6767c661a6a144a78cce98bf64aab13c48bd7fc595f80ca7148cf58688cca"
+      VERIFF_PUBLIC_API_KEY: "test-veriff-public"
+      VERIFF_SECRET_API_KEY: "test-veriff-secret"
+      MONGO_DB_CONNECTION_STR: "mongodb://localhost:27017/test"
+      IDENFY_API_KEY: "test-idenfy-key"
+      IDENFY_API_SECRET: "test-idenfy-secret"
+      IDENFY_WEBHOOK_SIGNING_KEY: "test-idenfy-webhook-key"
     steps:
       - uses: actions/checkout@v3
       - name: Install Bun
