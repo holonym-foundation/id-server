@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import crypto from "crypto";
-import { verifyIdenfyWebhookSignature } from "./webhooks.js";
+import { verifyIdenfyWebhookSignature } from "./webhook-signature.js";
 
 describe("verifyIdenfyWebhookSignature", () => {
   const signingKey = "test-signing-key-12345";
