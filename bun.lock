@@ -2111,6 +2111,8 @@
 
     "zen-observable-ts": ["zen-observable-ts@1.2.5", "", { "dependencies": { "zen-observable": "0.8.15" } }, "sha512-QZWQekv6iB72Naeake9hS1KxHlotfRpe+WGNbNx5/ta+R3DNjVO2bswf63gXlWDcs+EMd7XY8HfVQyP1X6T4Zg=="],
 
+    "zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
+
     "zokrates-js": ["zokrates-js@1.1.4", "", {}, "sha512-xvfwJqWCsglFpRPdOwYHNV1Ge/ygT3upWI/6xjX3S6t0+rXG0+50yA0ZGuaBgGNGGDbnSLY2n6YZmWKG4gu95g=="],
 
     "@aws-crypto/crc32/@aws-sdk/types": ["@aws-sdk/types@3.201.0", "", {}, "sha512-RCQj2pQyHD330Jd4c5CHJ87k2ZqC3Mmtl6nhwH1dy3vbnGUpc3q+3yinOKoTAY934kIa7ia32Y/2EjuyHxaj1A=="],
