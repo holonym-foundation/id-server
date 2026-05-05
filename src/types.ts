@@ -370,6 +370,11 @@ export type INullifierAndCreds = {
     sumsub?: {
       applicantId?: string;
     };
+    // idOS uses the granted credential's data_id (UUID) as the lookup key
+    // since there is no provider-side check or applicant.
+    idos?: {
+      dataId?: string;
+    };
   };
   uuidV2?: string;
 };
@@ -384,6 +389,9 @@ export type ISandboxNullifierAndCreds = {
     };
     sumsub?: {
       applicantId?: string;
+    };
+    idos?: {
+      dataId?: string;
     };
   };
   uuidV2?: string;

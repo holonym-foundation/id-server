@@ -888,6 +888,12 @@ const NullifierAndCredsSchema = new Schema<INullifierAndCreds>({
         },
         required: false,
       },
+      idos: {
+        type: {
+          dataId: String,
+        },
+        required: false,
+      },
     },
     required: false,
   },
@@ -911,6 +917,12 @@ const SandboxNullifierAndCredsSchema = new Schema<ISandboxNullifierAndCreds>({
       sumsub: {
         type: {
           applicantId: String,
+        },
+        required: false,
+      },
+      idos: {
+        type: {
+          dataId: String,
         },
         required: false,
       },
