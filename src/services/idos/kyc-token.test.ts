@@ -73,7 +73,7 @@ describe("signKycToken", () => {
 
     expect(decoded.clientId).toBe(TEST_CLIENT_ID);
     expect(decoded.kyc).toBe(true);
-    expect(decoded.level).toBe("basic+uniqueness+idos");
+    expect(decoded.level).toBe("basic+idos");
     expect(decoded.state).toBe("optional");
     expect(decoded.walletAddress).toBeUndefined();
     expect(decoded.externalUserId).toBeUndefined();

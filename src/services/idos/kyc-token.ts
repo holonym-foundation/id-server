@@ -22,10 +22,17 @@ import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 
 type Environment = "live" | "sandbox";
 
+// Fractal rejects "basic+uniqueness+idos" with "Can't create KYC session
+// with both KYC and Uniqueness" — kyc: true already implies KYC, and the
+// "+uniqueness" component must be a separate session. We keep `kyc: true`
+// + `level: "basic+idos"` (KYC + idOS profile creation) and skip the
+// uniqueness check at this layer; uniqueness is enforced by the
+// downstream sybil-resistance UUID + UserVerifications insert in
+// `services/idos/credentials/v3.ts`.
 interface KycTokenPayload {
   clientId: string;
   kyc: true;
-  level: "basic+uniqueness+idos";
+  level: "basic+idos";
   state: "optional";
   walletAddress?: string;
   externalUserId?: string;
@@ -75,7 +82,7 @@ export function signKycToken(
   const payload: KycTokenPayload = {
     clientId: readClientId(env),
     kyc: true,
-    level: "basic+uniqueness+idos",
+    level: "basic+idos",
     state: "optional",
     ...(opts.walletAddress ? { walletAddress: opts.walletAddress } : {}),
     ...(opts.externalUserId ? { externalUserId: opts.externalUserId } : {}),
