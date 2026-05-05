@@ -1,7 +1,7 @@
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import { poseidon } from "circomlibjs-old";
-import { Model } from "mongoose";
+import { HydratedDocument } from "mongoose";
 import {
   UserVerifications,
   VerificationCollisionMetadata,
@@ -314,21 +314,28 @@ export async function saveUserToDb(uuidV2: string, scanRef: string) {
   return { success: true };
 }
 
+/**
+ * Update the parent Session row's status (e.g. -> ISSUED).
+ *
+ * Takes the live session document directly rather than looking it up. The
+ * Session schema has no scanRef field of its own — scanRef lives on the
+ * standalone IdenfySession collection (see ee3e0aa) — so a `findOne({
+ * idenfyScanRef })` on SessionModel would silently return null. Callers
+ * already hold the session document, so pass it in.
+ */
 export async function updateSessionStatus(
-  SessionModel: Model<ISession | ISandboxSession>,
-  scanRef: string,
+  session: HydratedDocument<ISession | ISandboxSession>,
   status: string,
   failureReason?: string
 ) {
   try {
-    const metaSession = await SessionModel.findOne({
-      idenfyScanRef: scanRef,
-    }).exec();
-    if (!metaSession) throw new Error("Session not found");
-    metaSession.status = status;
-    if (failureReason) metaSession.verificationFailureReason = failureReason;
-    await metaSession.save();
+    session.status = status;
+    if (failureReason) session.verificationFailureReason = failureReason;
+    await session.save();
   } catch (err) {
-    endpointLogger.error({ error: err, scanRef, status }, "Error updating session status");
+    endpointLogger.error(
+      { error: err, sessionId: session._id?.toString(), status },
+      "Error updating session status"
+    );
   }
 }
