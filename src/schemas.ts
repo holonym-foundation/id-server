@@ -11,6 +11,8 @@ import { SanctionsResultSchema } from "./schemas/sanctions-results.js"
 import {
   IOnfidoSession,
   ISandboxOnfidoSession,
+  IIdenfySession,
+  ISandboxIdenfySession,
   IUserVerifications,
   IIdvSessions,
   ISandboxIdvSessions,
@@ -94,6 +96,38 @@ const sandboxOnfidoSessionSchema = new Schema<ISandboxOnfidoSession>({
   createdAt: { type: Date, default: Date.now },
 });
 
+// ---------- iDenfy Sessions ----------
+
+const idenfySessionSchema = new Schema<IIdenfySession>({
+  sigDigest: { type: String, required: true },
+  idenfyAuthToken: { type: String, required: true },
+  idenfyScanRef: { type: String, required: true },
+  idenfyVerificationStatus: { type: String, required: false },
+  verificationFailureReason: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+idenfySessionSchema.index({ sigDigest: 1 });
+idenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
+idenfySessionSchema.index({ sigDigest: 1, status: 1, createdAt: -1 });
+
+const sandboxIdenfySessionSchema = new Schema<ISandboxIdenfySession>({
+  sigDigest: { type: String, required: true },
+  idenfyAuthToken: { type: String, required: true },
+  idenfyScanRef: { type: String, required: true },
+  idenfyVerificationStatus: { type: String, required: false },
+  verificationFailureReason: { type: String, required: false },
+  status: { type: String, required: true },
+  createdByFlow: { type: String, required: true },
+  createdBySessionId: { type: Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+sandboxIdenfySessionSchema.index({ sigDigest: 1 });
+sandboxIdenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
+sandboxIdenfySessionSchema.index({ sigDigest: 1, status: 1, createdAt: -1 });
+
 // ---------- User Verifications ----------
 
 // Note: `govId.uuid` (v1 of the govId-namespace UUID) was removed from
@@ -170,6 +204,9 @@ const idvSessionsSchema = new Schema<IIdvSessions>({
     },
     required: false,
   },
+  // Provider-history audit block (legacy parity with veriff/onfido). The
+  // current iDenfy flow does not write here — webhook updates the Session
+  // row directly via idenfyScanRef.
   idenfy: {
     type: {
       sessions: [
@@ -287,15 +324,6 @@ const sessionSchema = new Schema<ISession>({
     type: String,
     required: false,
   },
-  // iDenfy scanRef
-  scanRef: {
-    type: String,
-    required: false,
-  },
-  idenfyAuthToken: {
-    type: String,
-    required: false,
-  },
   // Onfido applicant_id
   applicant_id: {
     type: String,
@@ -371,6 +399,10 @@ const sessionSchema = new Schema<ISession>({
     required: false,
   },
   onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
+  idenfySessionId: {
     type: Schema.Types.ObjectId,
     required: false,
   },
@@ -466,6 +498,10 @@ const sandboxSessionSchema = new Schema<ISandboxSession>({
     required: false,
   },
   onfidoSessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
+  idenfySessionId: {
     type: Schema.Types.ObjectId,
     required: false,
   },
@@ -1737,6 +1773,8 @@ const SandboxHumanIDCreditsPriceOverrideSchema = new Schema<ISandboxHumanIDCredi
 export {
   onfidoSessionSchema,
   sandboxOnfidoSessionSchema,
+  idenfySessionSchema,
+  sandboxIdenfySessionSchema,
   userVerificationsSchema,
   idvSessionsSchema,
   sandboxIdvSessionsSchema,

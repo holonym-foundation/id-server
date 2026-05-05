@@ -11,6 +11,8 @@ import { initSumsubClient } from "./utils/sumsub.js";
 import {
   onfidoSessionSchema,
   sandboxOnfidoSessionSchema,
+  idenfySessionSchema,
+  sandboxIdenfySessionSchema,
   userVerificationsSchema,
   idvSessionsSchema,
   sandboxIdvSessionsSchema,
@@ -64,6 +66,8 @@ import dotenv from "dotenv";
 import {
   IOnfidoSession,
   ISandboxOnfidoSession,
+  IIdenfySession,
+  ISandboxIdenfySession,
   IDailyVerificationCount,
   IDailyVerificationDeletions,
   IUserVerifications,
@@ -145,6 +149,21 @@ function validateEnv() {
   assert.ok(
     process.env.MONGO_DB_CONNECTION_STR,
     "MONGO_DB_CONNECTION_STR environment variable is not set"
+  );
+
+  // iDenfy (production credentials). Sandbox credentials are validated lazily —
+  // sandbox endpoints are not required to be configured for prod-only deployments.
+  assert.ok(
+    process.env.IDENFY_API_KEY,
+    "IDENFY_API_KEY environment variable is not set"
+  );
+  assert.ok(
+    process.env.IDENFY_API_SECRET,
+    "IDENFY_API_SECRET environment variable is not set"
+  );
+  assert.ok(
+    process.env.IDENFY_WEBHOOK_SIGNING_KEY,
+    "IDENFY_WEBHOOK_SIGNING_KEY environment variable is not set"
   );
 
   if (process.env.NODE_ENV !== "development") {
@@ -282,6 +301,10 @@ async function initializeMongoDb() {
   const OnfidoSession = mongoose.model("OnfidoSession", onfidoSessionSchema, "onfidosessions");
 
   const SandboxOnfidoSession = mongoose.model("SandboxOnfidoSession", sandboxOnfidoSessionSchema, "sandboxonfidosessions");
+
+  const IdenfySession = mongoose.model("IdenfySession", idenfySessionSchema, "idenfysessions");
+
+  const SandboxIdenfySession = mongoose.model("SandboxIdenfySession", sandboxIdenfySessionSchema, "sandboxidenfysessions");
 
   const SessionRefundMutex = mongoose.model(
     "SessionRefundMutex",
@@ -516,6 +539,8 @@ async function initializeMongoDb() {
     SandboxSession,
     OnfidoSession,
     SandboxOnfidoSession,
+    IdenfySession,
+    SandboxIdenfySession,
     SessionRefundMutex,
     UserCredentials,
     UserCredentialsV2,
@@ -575,6 +600,8 @@ let UserVerifications: Model<IUserVerifications>,
   SandboxSession: Model<ISandboxSession>,
   OnfidoSession: Model<IOnfidoSession>,
   SandboxOnfidoSession: Model<ISandboxOnfidoSession>,
+  IdenfySession: Model<IIdenfySession>,
+  SandboxIdenfySession: Model<ISandboxIdenfySession>,
   SessionRefundMutex: Model<ISessionRefundMutex>,
   UserCredentials: Model<IUserCredentials>,
   UserCredentialsV2: Model<IUserCredentialsV2>,
@@ -632,6 +659,8 @@ initializeMongoDb().then((result) => {
     SandboxSession = result.SandboxSession;
     OnfidoSession = result.OnfidoSession;
     SandboxOnfidoSession = result.SandboxOnfidoSession;
+    IdenfySession = result.IdenfySession;
+    SandboxIdenfySession = result.SandboxIdenfySession;
     SessionRefundMutex = result.SessionRefundMutex;
     UserCredentials = result.UserCredentials;
     UserCredentialsV2 = result.UserCredentialsV2;
@@ -725,8 +754,14 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
       HumanIDCreditsPriceOverrideModel: SandboxHumanIDCreditsPriceOverride,
       // Onfido sessions
       OnfidoSessionModel: SandboxOnfidoSession,
+      // iDenfy sessions
+      IdenfySessionModel: SandboxIdenfySession,
       // Sumsub config
       sumsubWebhookSecret: process.env.SUMSUB_SANDBOX_WEBHOOK_SECRET!,
+      // iDenfy config (sandbox)
+      idenfyApiKey: process.env.IDENFY_SANDBOX_API_KEY,
+      idenfyApiSecret: process.env.IDENFY_SANDBOX_API_SECRET,
+      idenfyWebhookSigningKey: process.env.IDENFY_SANDBOX_WEBHOOK_SIGNING_KEY,
     }
   }
 
@@ -758,8 +793,14 @@ function getRouteHandlerConfig(environment: "sandbox" | "live"): SandboxVsLiveKY
     HumanIDCreditsPriceOverrideModel: HumanIDCreditsPriceOverride,
     // Onfido sessions
     OnfidoSessionModel: OnfidoSession,
+    // iDenfy sessions
+    IdenfySessionModel: IdenfySession,
     // Sumsub config
     sumsubWebhookSecret: process.env.SUMSUB_WEBHOOK_SECRET!,
+    // iDenfy config (live)
+    idenfyApiKey: process.env.IDENFY_API_KEY,
+    idenfyApiSecret: process.env.IDENFY_API_SECRET,
+    idenfyWebhookSigningKey: process.env.IDENFY_WEBHOOK_SIGNING_KEY,
   }
 }
 
@@ -772,6 +813,8 @@ export {
   SandboxSession,
   OnfidoSession,
   SandboxOnfidoSession,
+  IdenfySession,
+  SandboxIdenfySession,
   SessionRefundMutex,
   UserCredentials,
   UserCredentialsV2,

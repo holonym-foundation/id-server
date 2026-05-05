@@ -81,6 +81,23 @@ export type IOnfidoSession = {
 
 export type ISandboxOnfidoSession = IOnfidoSession;
 
+// ---------------- iDenfy Sessions ----------------
+
+export type IIdenfySession = {
+  _id?: Types.ObjectId;
+  sigDigest: string;
+  idenfyAuthToken: string;
+  idenfyScanRef: string;
+  idenfyVerificationStatus?: string;     // 'APPROVED' | 'DENIED' | 'SUSPECTED' | 'REVIEWING' | 'EXPIRED'
+  verificationFailureReason?: string;
+  status: string;                        // 'in_progress' | 'complete' | 'failed'
+  createdByFlow: string;                 // 'gov-id' | 'clean-hands'
+  createdBySessionId: Types.ObjectId;
+  createdAt: Date;
+};
+
+export type ISandboxIdenfySession = IIdenfySession;
+
 // ---------------- MongoDB schemas ----------------
 
 export type IUserVerifications = {
@@ -173,8 +190,6 @@ export type ISession = {
   paymentCommitment?: string;
   sessionId?: string;
   veriffUrl?: string;
-  scanRef?: string;
-  idenfyAuthToken?: string;
   applicant_id?: string;
   check_id?: string;
   check_status?: string;
@@ -195,6 +210,8 @@ export type ISession = {
   sumsub_last_updated_at?: Date;
   // Reference to standalone IOnfidoSession (Phase 3 decoupling)
   onfidoSessionId?: Types.ObjectId;
+  // Reference to standalone IIdenfySession
+  idenfySessionId?: Types.ObjectId;
 };
 
 export type ISandboxSession = {
@@ -225,6 +242,8 @@ export type ISandboxSession = {
   sumsub_last_updated_at?: Date;
   // Reference to standalone IOnfidoSession (Phase 3 decoupling)
   onfidoSessionId?: Types.ObjectId;
+  // Reference to standalone IIdenfySession
+  idenfySessionId?: Types.ObjectId;
 };
 
 export type IAmlChecksSession = {
@@ -252,6 +271,8 @@ export type IAmlChecksSession = {
   };
   // Reference to standalone IOnfidoSession (Phase 3 decoupling)
   onfidoSessionId?: Types.ObjectId;
+  // Reference to standalone IIdenfySession (parallel to onfidoSessionId)
+  idenfySessionId?: Types.ObjectId;
   // Which identity-verification provider this AML session uses. Missing value
   // is treated as 'onfido' so pre-existing documents keep their original
   // semantics. See docs/plans/2026-04-23-feat-zk-passport-clean-hands-flow-plan.md (U1).
@@ -768,6 +789,12 @@ export type SandboxVsLiveKYCRouteHandlerConfig = {
   HumanIDCreditsPriceOverrideModel: Model<IHumanIDCreditsPriceOverride | ISandboxHumanIDCreditsPriceOverride>
   // Onfido sessions
   OnfidoSessionModel: Model<IOnfidoSession | ISandboxOnfidoSession>
+  // iDenfy sessions
+  IdenfySessionModel: Model<IIdenfySession | ISandboxIdenfySession>
   // Sumsub config
   sumsubWebhookSecret?: string;
+  // iDenfy config
+  idenfyApiKey?: string;
+  idenfyApiSecret?: string;
+  idenfyWebhookSigningKey?: string;
 }

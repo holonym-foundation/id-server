@@ -1,18 +1,39 @@
 import express from "express";
-import { getCredentials } from "../services/idenfy/credentials.js";
-import { v1CreateSession, v2CreateSession } from "../services/idenfy/session.js";
-import { webhook } from "../services/idenfy/webhooks.js";
-import { verificationStatus } from "../services/idenfy/status.js";
+import {
+  getCredentialsV3Prod,
+  getCredentialsV3Sandbox,
+} from "../services/idenfy/credentials/v3.js";
+import {
+  handleIdenfyWebhookLive,
+  handleIdenfyWebhookSandbox,
+} from "../services/idenfy/webhooks.js";
 
-const router = express.Router();
+/**
+ * iDenfy IDV provider routes.
+ *
+ * Note on removed endpoints (deprecated in this rewrite — see PR #30):
+ *
+ *   - GET  /idenfy/credentials              (legacy — used UserVerifications/IDVSessions)
+ *   - POST /idenfy/session                  (legacy — used deprecated session model)
+ *   - POST /idenfy/v2/session               (legacy — pre-Sumsub-template attempt)
+ *   - GET  /idenfy/webhook                  (was GET; webhook is now POST per iDenfy docs)
+ *   - GET  /idenfy/verification-status      (legacy — replaced by /session-status/v2)
+ *
+ * The current flow is keyed on `session.idenfyScanRef` + per-session
+ * `session.idenfyAuthToken` + `session.idenfyVerificationStatus`. Old code
+ * paths were never wired to the current Sumsub-style payment/verification
+ * lifecycle, so removing them is non-breaking for live callers.
+ */
 
-router.get("/credentials", getCredentials);
+const prodRouter = express.Router();
 
-// TODO: Remove the following 2 endpoints once pay-first frontend is live
-router.post("/session", v1CreateSession);
-router.post("/v2/session", v2CreateSession);
+prodRouter.get("/credentials/v3/:_id/:nullifier", getCredentialsV3Prod);
+prodRouter.post("/webhook", handleIdenfyWebhookLive);
 
-router.get("/webhook", webhook);
-router.get("/verification-status", verificationStatus);
+const sandboxRouter = express.Router();
 
-export default router;
+sandboxRouter.get("/credentials/v3/:_id/:nullifier", getCredentialsV3Sandbox);
+sandboxRouter.post("/webhook", handleIdenfyWebhookSandbox);
+
+export default prodRouter;
+export { sandboxRouter };
