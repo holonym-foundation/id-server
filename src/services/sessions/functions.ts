@@ -19,7 +19,6 @@ import {
   getRefundDetails as getPayPalRefundDetails,
 } from "../../utils/paypal.js";
 import { createVeriffSession } from "../../utils/veriff.js";
-import { createIdenfyToken } from "../../utils/idenfy.js";
 import {
   createOnfidoApplicant,
   createOnfidoSdkToken,
@@ -62,25 +61,6 @@ async function handleIdvSessionCreation(
     return {
       url: veriffSession.verification.url,
       id: veriffSession.verification.id,
-    };
-  } else if (session.idvProvider === "idenfy") {
-    const tokenData = await createIdenfyToken(session.sigDigest!);
-    if (!tokenData) {
-      throw new Error("Error creating iDenfy token");
-    }
-
-    session.scanRef = tokenData.scanRef;
-    session.idenfyAuthToken = tokenData.authToken;
-    await session.save();
-
-    logger.info(
-      { authToken: tokenData.authToken, idvProvider: "idenfy" },
-      "Created iDenfy session"
-    );
-
-    return {
-      url: `https://ivs.idenfy.com/api/v2/redirect?authToken=${tokenData.authToken}`,
-      scanRef: tokenData.scanRef,
     };
   } else if (session.idvProvider === "onfido") {
     const rateLimitResult = await onfidoSDKTokenAndApplicantRateLimiter()

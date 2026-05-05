@@ -3,7 +3,8 @@ import { HydratedDocument } from "mongoose";
 import { ObjectId } from "mongodb";
 import { Session, UserVerifications } from "../../init.js";
 import { createVeriffSession } from "../../utils/veriff.js";
-import { createIdenfyToken } from "../../utils/idenfy.js";
+// TODO(U2): re-wire to services/idenfy/token.ts.
+// import { createIdenfyToken } from "../../utils/idenfy.js";
 import {
   createOnfidoApplicant,
   createOnfidoSdkToken,
@@ -116,7 +117,7 @@ async function setSessionIdvProvider(req: Request, res: Response) {
     // with a provider the user has already verified with (for this session), we check that
     // the IDV session ID (e.g. Veriff's "sessionId") is null. If it's not null, that means
     // an IDV session has already been created with that provider.
-    if (newIdvProvider === "idenfy" && session.scanRef) {
+    if (newIdvProvider === "idenfy" && session.idenfySessionId) {
       return res.status(400).json({
         message:
           "Cannot change IDV provider to iDenfy. User has already verified with iDenfy",
@@ -161,25 +162,11 @@ async function setSessionIdvProvider(req: Request, res: Response) {
       // });
       return res.status(200).json({ message: "Veriff session created" });
     } else if (newIdvProvider === "idenfy") {
-      const tokenData = await createIdenfyToken(session.sigDigest!);
-      if (!tokenData) {
-        return res.status(500).json({ error: "Error creating iDenfy token" });
-      }
-
-      session.scanRef = tokenData.scanRef;
-      session.idenfyAuthToken = tokenData.authToken;
-      await session.save();
-
-      postEndpointLogger.info(
-        { authToken: tokenData.authToken, idvProvider: "idenfy" },
-        "Created iDenfy session"
-      );
-
-      // return res.status(200).json({
-      //   url: `https://ivs.idenfy.com/api/v2/redirect?authToken=${tokenData.authToken}`,
-      //   scanRef: tokenData.scanRef,
-      // });
-      return res.status(200).json({ message: "iDenfy session created" });
+      // TODO(U2): re-wire iDenfy admin set-session-idv-provider against new
+      // services/idenfy/token.ts helper.
+      return res
+        .status(503)
+        .json({ error: "iDenfy admin path is temporarily disabled during rewrite" });
     } else if (newIdvProvider === "onfido") {
       const applicant = await createOnfidoApplicant(liveConfig.onfidoAPIKey);
       if (!applicant) {

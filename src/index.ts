@@ -4,7 +4,7 @@ import "./utils/axios-onfido-interceptor.js";
 import express from "express";
 import cors from "cors";
 import veriff from "./routes/veriff-kyc.js";
-import idenfy from "./routes/idenfy.js";
+import idenfy, { sandboxRouter as sandboxIdenfy } from "./routes/idenfy.js";
 import onfido, { sandboxRouter as sandboxOnfido } from "./routes/onfido.js";
 import credentials, { sandboxRouter as sandboxCredentials } from "./routes/credentials.js";
 import proofMetadata from "./routes/proof-metadata.js";
@@ -28,6 +28,7 @@ import sumsub, { sandboxRouter as sandboxSumsub } from "./routes/sumsub.js";
 import zkPassport, { sandboxRouter as sandboxZkPassport } from "./routes/zk-passport.js";
 import offChainAttestations, { sandboxRouter as sandboxOffChainAttestations } from "./routes/off-chain-attestations.js";
 import onfidoSessions, { sandboxRouter as sandboxOnfidoSessions } from "./routes/onfido-sessions.js";
+import idenfySessions, { sandboxRouter as sandboxIdenfySessions } from "./routes/idenfy-sessions.js";
 
 const app = express();
 
@@ -40,6 +41,8 @@ app.use(cors(corsOptions));
 // Middleware to capture raw body for webhook signature verification
 app.use('/onfido/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use('/sumsub/webhooks', express.raw({ type: 'application/json', limit: '1mb' }));
+app.use('/idenfy/webhook', express.raw({ type: '*/*', limit: '1mb' }));
+app.use('/sandbox/idenfy/webhook', express.raw({ type: '*/*', limit: '1mb' }));
 
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
@@ -107,6 +110,7 @@ app.use("/sumsub", sumsub);
 app.use("/zk-passport", zkPassport);
 app.use("/off-chain-attestations", offChainAttestations);
 app.use("/onfido-sessions", onfidoSessions);
+app.use("/idenfy-sessions", idenfySessions);
 
 // ---------- Sandbox routes ----------
 app.use("/sandbox/sessions", sandboxSessions);
@@ -120,9 +124,11 @@ app.use("/sandbox/phone", phoneRouterSandbox);
 app.use("/sandbox/payments", sandboxPayments);
 app.use("/sandbox/payment-secrets", sandboxPaymentSecrets);
 app.use("/sandbox/sumsub", sandboxSumsub);
+app.use("/sandbox/idenfy", sandboxIdenfy);
 app.use("/sandbox/zk-passport", sandboxZkPassport);
 app.use("/sandbox/off-chain-attestations", sandboxOffChainAttestations);
 app.use("/sandbox/onfido-sessions", sandboxOnfidoSessions);
+app.use("/sandbox/idenfy-sessions", sandboxIdenfySessions);
 
 // Trust the X-Forwarded-For header from the load balancer or the user's proxy
 app.set("trust proxy", true);

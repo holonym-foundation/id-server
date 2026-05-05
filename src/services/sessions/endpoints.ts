@@ -44,6 +44,10 @@ import {
   createOnfidoSession,
   findReusableOnfidoSession,
 } from "../onfido-sessions/functions.js";
+import {
+  createIdenfySession,
+  findReusableIdenfySession,
+} from "../idenfy-sessions/functions.js";
 import { rateLimitByTier, onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getSessionById } from "../../utils/sessions.js";
@@ -149,10 +153,10 @@ async function postSession(req: Request, res: Response) {
     if (!sigDigest) {
       return res.status(400).json({ error: "sigDigest is required" });
     }
-    if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+    if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
       return res
         .status(400)
-        .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+        .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
     }
 
     let domain = null;
@@ -206,10 +210,10 @@ function createPostSessionV2RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
-      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
         return res
           .status(400)
-          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
       }
 
       let domain = null;
@@ -366,10 +370,10 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
       if (!sigDigest) {
         return res.status(400).json({ error: "sigDigest is required" });
       }
-      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub"].indexOf(idvProvider) === -1) {
+      if (!idvProvider || ["veriff", "onfido", "facetec", "sumsub", "idenfy"].indexOf(idvProvider) === -1) {
         return res
           .status(400)
-          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', or 'sumsub'" });
+          .json({ error: "idvProvider must be one of 'veriff', 'onfido', 'facetec', 'sumsub', or 'idenfy'" });
       }
       if (!paymentSecret || typeof paymentSecret !== "string") {
         return res.status(400).json({ error: "paymentSecret is required" });
@@ -525,7 +529,53 @@ function createPostSessionV3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         });
       }
 
-      // Non-onfido providers: delegate to existing handler
+      if (idvProvider === "idenfy") {
+        // Check for reusable iDenfy session
+        const reusable = await findReusableIdenfySession(config, sigDigest);
+
+        if (reusable) {
+          session.idenfySessionId = reusable._id;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, idenfySessionId: reusable._id },
+            "Reusing existing iDenfy session"
+          );
+        } else {
+          // Save session first so we have an _id for createIdenfySession's clientId
+          await session.save();
+
+          const idenfySession = await createIdenfySession(
+            config,
+            sigDigest,
+            "gov-id",
+            session._id!
+          );
+
+          session.idenfySessionId = idenfySession._id;
+          await session.save();
+
+          postSessionsV3Logger.info(
+            { sessionId: session._id, idenfySessionId: idenfySession._id },
+            "Created new iDenfy session"
+          );
+        }
+
+        // Complete payment redemption after successful session creation
+        await completeRedemption({
+          reservationToken: reservationToken!,
+          service: PAYMENT_SERVICE_GOV_ID_VERIFICATION,
+          fulfillmentReceipt: `gov-id-session:${session._id}`,
+          config,
+        });
+
+        return res.status(201).json({
+          session,
+          idenfySessionId: session.idenfySessionId,
+        });
+      }
+
+      // Other providers (veriff, sumsub, facetec): delegate to existing handler
       const _idvSession = await handleIdvSessionCreation(config, session, postSessionsV3Logger);
 
       // Complete payment redemption after successful session creation
@@ -949,9 +999,9 @@ async function setIdvProvider(req: Request, res: Response) {
     const _id = req.params._id;
     const idvProvider = req.params.idvProvider;
 
-    // check the idvProvider is either veriff, onfido, or sumsub
-    if (!(idvProvider === "onfido" || idvProvider === "veriff" || idvProvider === "sumsub")) {
-      return res.status(400).json({ error: "IDV provider can only be onfido, veriff, or sumsub" });
+    // check the idvProvider is either veriff, onfido, sumsub, or idenfy
+    if (!(idvProvider === "onfido" || idvProvider === "veriff" || idvProvider === "sumsub" || idvProvider === "idenfy")) {
+      return res.status(400).json({ error: "IDV provider can only be onfido, veriff, sumsub, or idenfy" });
     }
 
     const { session: potentialSession, error: getSessionError } = await getSessionById(_id);
