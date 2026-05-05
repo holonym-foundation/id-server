@@ -82,7 +82,7 @@ export function signKycToken(
   const payload: KycTokenPayload = {
     clientId: readClientId(env),
     kyc: true,
-    level: "basic+idos",
+    level: "basic+liveness+idos",
     state: "optional",
     ...(opts.walletAddress ? { walletAddress: opts.walletAddress } : {}),
     ...(opts.externalUserId ? { externalUserId: opts.externalUserId } : {}),
