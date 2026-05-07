@@ -31,6 +31,7 @@ import {
 import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 import {
   zkPassport,
+  buildCleanHandsOriginalQuery,
   classifyZkPassportError,
   formatDateOfBirth,
 } from "../zk-passport/verify-and-issue.js";
@@ -2618,7 +2619,11 @@ function createVerifyAndIssueZkPassportRouteHandler(
 
       let verificationResult: any;
       try {
-        verificationResult = await zkPassport.verify({ proofs, queryResult });
+        verificationResult = await zkPassport.verify({
+          proofs,
+          originalQuery: buildCleanHandsOriginalQuery(),
+          queryResult,
+        });
       } catch (err) {
         verifyAndIssueZkPassportLogger.error(
           { error: makeUnknownErrorLoggable(err) },
@@ -2647,9 +2652,7 @@ function createVerifyAndIssueZkPassportRouteHandler(
       const firstName = queryResult.firstname?.disclose?.result;
       const lastName = queryResult.lastname?.disclose?.result;
       const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality =
-        queryResult.nationality?.disclose?.result ??
-        queryResult.issuing_country?.disclose?.result;
+      const nationality = queryResult.nationality?.disclose?.result;
 
       if (!firstName || !lastName || !dobRaw) {
         verifyAndIssueZkPassportLogger.error(
