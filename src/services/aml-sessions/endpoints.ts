@@ -290,6 +290,7 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         silkDiffWallet,
         paymentCommitment: reservation.commitment,
         chainId: chainIdNum,
+        idvProvider: "onfido",
       });
       await session.save();
 
