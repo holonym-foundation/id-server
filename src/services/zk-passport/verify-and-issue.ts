@@ -46,7 +46,39 @@ const endpointLogger = logger.child({
 const zkPassportDomain = process.env.NODE_ENV === 'development' ? 'localhost' : "id.human.tech";
 const zkPassport = new ZKPassport(zkPassportDomain);
 
-export { zkPassport };
+// SDK 0.14 requires verify() callers to pass the originalQuery so the SDK can
+// confirm the queryResult matches the server's expected disclosure set. The
+// helpers below mirror the frontend's QueryBuilder chains in human-id/frontend.
+//
+// Used by /zk-passport/verify-and-issue (paid) and /off-chain-attestations
+// (free) — both build: disclose(firstname/lastname/birthdate/nationality) +
+// facematch('regular').
+function buildIssuanceOriginalQuery() {
+  return zkPassport
+    .createQuery()
+    .disclose("firstname")
+    .disclose("lastname")
+    .disclose("birthdate")
+    .disclose("nationality")
+    .facematch("regular")
+    .done().query;
+}
+
+// Used by the Clean Hands ZK Passport branch — adds .sanctions() on top of the
+// issuance chain.
+function buildCleanHandsOriginalQuery() {
+  return zkPassport
+    .createQuery()
+    .disclose("firstname")
+    .disclose("lastname")
+    .disclose("birthdate")
+    .disclose("nationality")
+    .sanctions()
+    .facematch("regular")
+    .done().query;
+}
+
+export { zkPassport, buildIssuanceOriginalQuery, buildCleanHandsOriginalQuery };
 
 /**
  * Extract credentials from ZK Passport disclosed fields.
@@ -370,6 +402,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       try {
         verificationResult = await zkPassport.verify({
           proofs,
+          originalQuery: buildIssuanceOriginalQuery(),
           queryResult,
         });
       } catch (err) {
@@ -401,8 +434,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
       const firstName = queryResult.firstname?.disclose?.result;
       const lastName = queryResult.lastname?.disclose?.result;
       const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality = queryResult.nationality?.disclose?.result
-        ?? queryResult.issuing_country?.disclose?.result;
+      const nationality = queryResult.nationality?.disclose?.result;
 
       if (!firstName || !lastName || !dobRaw) {
         endpointLogger.error(
@@ -419,7 +451,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       if (!nationality) {
         endpointLogger.warn(
-          "ZK Passport proof does not disclose nationality or issuing_country. Using empty country."
+          "ZK Passport proof does not disclose nationality. Using empty country."
         );
       }
 

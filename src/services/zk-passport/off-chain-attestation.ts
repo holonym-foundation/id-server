@@ -3,6 +3,7 @@ import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import {
   zkPassport,
+  buildIssuanceOriginalQuery,
   classifyZkPassportError,
   formatDateOfBirth,
 } from "./verify-and-issue.js";
@@ -119,7 +120,11 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
 
       let verificationResult;
       try {
-        verificationResult = await zkPassport.verify({ proofs, queryResult });
+        verificationResult = await zkPassport.verify({
+          proofs,
+          originalQuery: buildIssuanceOriginalQuery(),
+          queryResult,
+        });
       } catch (err) {
         endpointLogger.error(
           { error: makeUnknownErrorLoggable(err) },
@@ -144,9 +149,7 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
       const firstName = queryResult.firstname?.disclose?.result;
       const lastName = queryResult.lastname?.disclose?.result;
       const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality =
-        queryResult.nationality?.disclose?.result ??
-        queryResult.issuing_country?.disclose?.result;
+      const nationality = queryResult.nationality?.disclose?.result;
 
       if (!firstName || !lastName || !dobRaw) {
         return res.status(400).json({

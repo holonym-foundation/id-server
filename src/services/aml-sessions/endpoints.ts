@@ -31,6 +31,7 @@ import {
 import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 import {
   zkPassport,
+  buildCleanHandsOriginalQuery,
   classifyZkPassportError,
   formatDateOfBirth,
 } from "../zk-passport/verify-and-issue.js";
@@ -290,6 +291,7 @@ function createPostSessionv3RouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         silkDiffWallet,
         paymentCommitment: reservation.commitment,
         chainId: chainIdNum,
+        idvProvider: "onfido",
       });
       await session.save();
 
@@ -543,6 +545,15 @@ async function createPayPalOrder(req: Request, res: Response) {
   }
 }
 
+const payForSessionLogger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/pay] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * ENDPOINT.
  * Pay for session and create a Veriff session.
@@ -574,6 +585,7 @@ async function payForSession(req: Request, res: Response) {
     const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
+      payForSessionLogger.warn({ _id }, "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
 
@@ -622,6 +634,15 @@ async function payForSession(req: Request, res: Response) {
   }
 }
 
+const payForSessionV2Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/pay/v2] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * ENDPOINT.
  */
@@ -649,6 +670,7 @@ async function payForSessionV2(req: Request, res: Response) {
     const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
+      payForSessionV2Logger.warn({ _id }, "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
 
@@ -723,6 +745,15 @@ async function payForSessionV2(req: Request, res: Response) {
   }
 }
 
+const payForSessionV3Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/v3] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * ENDPOINT.
  * Use on-chain payment. Does not validate
@@ -761,6 +792,7 @@ async function payForSessionV3(req: Request, res: Response) {
     const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
 
     if (!session) {
+      payForSessionV3Logger.warn({ _id }, "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
 
@@ -885,6 +917,7 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
       }).exec();
 
       if (!session) {
+        payForSessionV4Logger.warn({ _id }, "Session not found");
         return res.status(404).json({ error: "Session not found" });
       }
 
@@ -984,6 +1017,15 @@ async function payForSessionV4Sandbox(req: Request, res: Response) {
   return createPayForSessionV4RouteHandler(config)(req, res);
 }
 
+const refundLogger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/refund (legacy v1)] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * ENDPOINT.
  * Allows a user to request a refund for a failed session.
@@ -1006,6 +1048,7 @@ async function refund(req: Request, res: Response) {
     }
     const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
     if (!session) {
+      refundLogger.warn({ _id }, "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
     if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
@@ -1050,6 +1093,15 @@ async function refund(req: Request, res: Response) {
   }
 }
 
+const refundV2Logger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/refund/v2] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * ENDPOINT.
  */
@@ -1068,6 +1120,7 @@ async function refundV2(req: Request, res: Response) {
     }
     const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
     if (!session) {
+      refundV2Logger.warn({ _id }, "Session not found");
       return res.status(404).json({ error: "Session not found" });
     }
     if (session.status !== sessionStatusEnum.VERIFICATION_FAILED) {
@@ -1998,8 +2051,9 @@ function createIssueCredsV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerConf
       }
 
       const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
-    
+
       if (!session) {
+        issueCredsV4Logger.warn({ _id }, "Session not found");
         return res.status(404).json({ error: "Session not found" });
       }
 
@@ -2502,6 +2556,7 @@ function createVerifyAndIssueZkPassportRouteHandler(
         _id: objectId,
       }).exec();
       if (!session) {
+        verifyAndIssueZkPassportLogger.warn({ _id }, "Session not found");
         return res.status(404).json({ error: "Session not found" });
       }
 
@@ -2564,7 +2619,11 @@ function createVerifyAndIssueZkPassportRouteHandler(
 
       let verificationResult: any;
       try {
-        verificationResult = await zkPassport.verify({ proofs, queryResult });
+        verificationResult = await zkPassport.verify({
+          proofs,
+          originalQuery: buildCleanHandsOriginalQuery(),
+          queryResult,
+        });
       } catch (err) {
         verifyAndIssueZkPassportLogger.error(
           { error: makeUnknownErrorLoggable(err) },
@@ -2593,9 +2652,7 @@ function createVerifyAndIssueZkPassportRouteHandler(
       const firstName = queryResult.firstname?.disclose?.result;
       const lastName = queryResult.lastname?.disclose?.result;
       const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality =
-        queryResult.nationality?.disclose?.result ??
-        queryResult.issuing_country?.disclose?.result;
+      const nationality = queryResult.nationality?.disclose?.result;
 
       if (!firstName || !lastName || !dobRaw) {
         verifyAndIssueZkPassportLogger.error(
@@ -2884,6 +2941,15 @@ async function verifyAndIssueZkPassportSandbox(req: Request, res: Response) {
   return createVerifyAndIssueZkPassportRouteHandler(config)(req, res);
 }
 
+const confirmStatementLogger = logger.child({
+  msgPrefix: "[POST /aml-sessions/:_id/statement/confirm] ",
+  base: {
+    ...pinoOptions.base,
+    feature: "holonym",
+    subFeature: "clean-hands",
+  },
+});
+
 /**
  * Endpoint to allow the user to confirm the statement stored under "userDeclaration"
  * in the Clean Hands session. For v4 issuance.
@@ -2901,8 +2967,9 @@ function createConfirmStatementRouteHandler(config: SandboxVsLiveKYCRouteHandler
       }
 
       const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
-    
+
       if (!session) {
+        confirmStatementLogger.warn({ _id }, "Session not found");
         return res.status(404).json({ error: "Session not found" });
       }
 
@@ -3019,6 +3086,7 @@ function createRefundCleanHandsSessionRouteHandler(
 
       const session = await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec();
       if (!session) {
+        refundCleanHandsLogger.warn({ _id: sid }, "Session not found");
         return res.status(404).json({ error: "Session not found" });
       }
       if (session.sigDigest !== sigDigest) {
