@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { ObjectId } from "mongodb";
+import fs from "fs";
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import { poseidon } from "circomlibjs-old";
@@ -79,6 +80,31 @@ function buildCleanHandsOriginalQuery() {
 }
 
 export { zkPassport, buildIssuanceOriginalQuery, buildCleanHandsOriginalQuery };
+
+// Diagnostic: dump the pre-verify payload synchronously to disk so it survives a
+// native-backend crash (pino's transport worker may lose in-flight lines when
+// the process dies). Capture both call sites of zkPassport.verify(). Path is
+// overridable via ZK_PASSPORT_PAYLOAD_DUMP_PATH; defaults to /tmp.
+export function dumpZkPassportPayload(
+  source: string,
+  payload: { proofs: unknown; queryResult: unknown; sid?: unknown },
+) {
+  try {
+    const dumpPath =
+      process.env.ZK_PASSPORT_PAYLOAD_DUMP_PATH || "/tmp/zk-passport-payloads.jsonl";
+    const line =
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        source,
+        sid: payload.sid ?? null,
+        proofs: payload.proofs,
+        queryResult: payload.queryResult,
+      }) + "\n";
+    fs.appendFileSync(dumpPath, line);
+  } catch {
+    /* best-effort — never block the request on the dump failing */
+  }
+}
 
 /**
  * Extract credentials from ZK Passport disclosed fields.
@@ -396,7 +422,18 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // --- Verify ZK Passport proofs server-side ---
 
-      endpointLogger.info("Verifying ZK Passport proofs");
+      endpointLogger.info(
+        {
+          sid: session._id,
+          proofCount: Array.isArray(proofs) ? proofs.length : null,
+          proofSizes: Array.isArray(proofs)
+            ? proofs.map((p) => JSON.stringify(p ?? null).length)
+            : null,
+          queryResultKeys: queryResult ? Object.keys(queryResult) : null,
+        },
+        "Verifying ZK Passport proofs (pre-verify diagnostic)",
+      );
+      dumpZkPassportPayload("verify-and-issue", { proofs, queryResult, sid: session._id });
 
       let verificationResult;
       try {
