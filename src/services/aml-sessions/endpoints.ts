@@ -34,6 +34,7 @@ import {
   buildCleanHandsOriginalQuery,
   classifyZkPassportError,
   formatDateOfBirth,
+  dumpZkPassportPayload,
 } from "../zk-passport/verify-and-issue.js";
 import {
   getDateAsInt,
@@ -2615,7 +2616,18 @@ function createVerifyAndIssueZkPassportRouteHandler(
 
       // --- Verify ZK Passport proofs ---
 
-      verifyAndIssueZkPassportLogger.info("Verifying ZK Passport proofs");
+      verifyAndIssueZkPassportLogger.info(
+        {
+          sid: session._id,
+          proofCount: Array.isArray(proofs) ? proofs.length : null,
+          proofSizes: Array.isArray(proofs)
+            ? proofs.map((p: unknown) => JSON.stringify(p ?? null).length)
+            : null,
+          queryResultKeys: queryResult ? Object.keys(queryResult) : null,
+        },
+        "Verifying ZK Passport proofs (pre-verify diagnostic)",
+      );
+      dumpZkPassportPayload("aml-sessions", { proofs, queryResult, sid: session._id });
 
       let verificationResult: any;
       try {
