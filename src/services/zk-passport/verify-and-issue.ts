@@ -45,7 +45,7 @@ const endpointLogger = logger.child({
 // The domain scopes proof validation and the uniqueIdentifier to the application.
 // We use the frontend domain (id.human.tech), NOT the server's own hostname.
 const zkPassportDomain = process.env.NODE_ENV === 'development' ? 'localhost' : "id.human.tech";
-const zkPassport = new ZKPassport(zkPassportDomain);
+const zkPassport = new ZKPassport(zkPassportDomain, { disableProofStorage: true });
 
 // SDK 0.14 requires verify() callers to pass the originalQuery so the SDK can
 // confirm the queryResult matches the server's expected disclosure set. The
