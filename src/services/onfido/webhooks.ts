@@ -59,6 +59,24 @@ async function handleCheckCompleted(payload: any, config: SandboxVsLiveKYCRouteH
       check_id: checkId,
     }).exec();
 
+    // Always log webhook arrival, keyed by session, so we can answer
+    // "did the webhook ever arrive for this user?" from one query.
+    webhookLogger.info(
+      {
+        event: "onfido_check_completed_received",
+        checkId,
+        status,
+        result,
+        onfidoSessionId: onfidoSession?._id?.toString(),
+        sessionId: onfidoSession?.createdBySessionId?.toString(),
+        sigDigest: onfidoSession?.sigDigest,
+        msSinceSessionCreation: onfidoSession?.createdAt
+          ? Date.now() - new Date(onfidoSession.createdAt).getTime()
+          : undefined,
+      },
+      "Received Onfido check.completed webhook"
+    );
+
     if (onfidoSession) {
       onfidoSession.check_status = status;
       onfidoSession.check_last_updated_at = new Date();
