@@ -3,6 +3,9 @@ import { HydratedDocument } from "mongoose";
 import { IAmlChecksSession, ISession, IZkPassportSession } from "../types.js";
 import { Session } from "../init.js";
 import { sessionStatusEnum } from "../constants/misc.js";
+import { logger } from "./logger.js";
+
+const failSessionLogger = logger.child({ msgPrefix: "[failSession] " });
 
 export async function getSessionById(_id: string) {
   let objectId = null;
@@ -25,16 +28,45 @@ export async function failSession(
   session: HydratedDocument<ISession | IAmlChecksSession>,
   failureReason: string
 ) {
+  const previousStatus = session.status;
   session.status = sessionStatusEnum.VERIFICATION_FAILED;
   if (failureReason) session.verificationFailureReason = failureReason;
-  await session.save()
+  await session.save();
+
+  failSessionLogger.info(
+    {
+      event: "session_failed",
+      sessionId: session._id?.toString(),
+      sigDigest: session.sigDigest,
+      previousStatus,
+      failureReason,
+      idvProvider: (session as ISession).idvProvider,
+      paymentCommitment: (session as ISession).paymentCommitment,
+      chainId: (session as ISession).chainId,
+    },
+    "Session marked VERIFICATION_FAILED"
+  );
 }
 
 export async function failZKPassportSession(
   session: HydratedDocument<IZkPassportSession>,
   failureReason: string
 ) {
+  const previousStatus = session.status;
   session.status = sessionStatusEnum.VERIFICATION_FAILED;
   if (failureReason) session.failureReason = failureReason;
   await session.save();
+
+  failSessionLogger.info(
+    {
+      event: "zk_passport_session_failed",
+      sessionId: session._id?.toString(),
+      sigDigest: session.sigDigest,
+      previousStatus,
+      failureReason,
+      paymentCommitment: session.paymentCommitment,
+      chainId: session.chainId,
+    },
+    "ZKPassport session marked VERIFICATION_FAILED"
+  );
 }
