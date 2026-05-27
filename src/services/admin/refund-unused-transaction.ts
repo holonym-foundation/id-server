@@ -25,7 +25,7 @@ const postEndpointLogger = logger.child({
 
 export async function refundUnusedTransaction(req: Request, res: Response) {
   return res.status(400).json({
-    error: 'This endpoint has been superseded by endpoints that use the smart-contract based' +
+    error: 'This endpoint has been superseded by endpoints that use the smart-contract based ' +
       'Human ID Payments system. This endpoint used' +
       ' the old session-based payment system.',
   });
