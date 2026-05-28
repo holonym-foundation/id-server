@@ -1,6 +1,6 @@
 # TODO Multistage build?
 FROM zokrates/zokrates:0.8.2 AS zokrates
-FROM node:20.11.1-bullseye-slim
+FROM node:20-trixie-slim
 
 RUN apt-get update -y
 RUN apt-get install -y python3
