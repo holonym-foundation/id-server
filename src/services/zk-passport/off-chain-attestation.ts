@@ -137,6 +137,10 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
       }
 
       if (!verificationResult.verified) {
+        endpointLogger.error(
+          { queryResultErrors: verificationResult.queryResultErrors },
+          "ZK Passport proof verification returned verified=false"
+        );
         return res.status(400).json({
           code: classifyZkPassportError(verificationResult.queryResultErrors),
           error: "ZK Passport proof verification failed.",
@@ -152,6 +156,10 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
       const nationality = queryResult.nationality?.disclose?.result;
 
       if (!firstName || !lastName || !dobRaw) {
+        endpointLogger.error(
+          { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
+          "ZK Passport proof does not disclose required fields"
+        );
         return res.status(400).json({
           error:
             "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.",
@@ -165,6 +173,10 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
         nationalityStr &&
         !countryCodeToPrime[nationalityStr as keyof typeof countryCodeToPrime]
       ) {
+        endpointLogger.warn(
+          { nationality: nationalityStr },
+          "ZK Passport nationality not found in countryCodeToPrime"
+        );
         return res.status(400).json({
           code: "ZK_PASSPORT_UNSUPPORTED_DOCUMENT",
           error: `Unsupported country (${nationalityStr}) from ZK Passport proof`,
