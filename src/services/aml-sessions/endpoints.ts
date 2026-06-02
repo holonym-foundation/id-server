@@ -377,7 +377,7 @@ const postSessionsV4Logger = logger.child({
   },
 });
 
-const VALID_IDV_PROVIDERS = ["onfido", "zk-passport"] as const;
+const VALID_IDV_PROVIDERS = ["onfido", "zk-passport", "idenfy"] as const;
 type IdvProvider = (typeof VALID_IDV_PROVIDERS)[number];
 
 function resolveIdvProvider(raw: unknown): IdvProvider | null {

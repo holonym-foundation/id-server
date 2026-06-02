@@ -276,7 +276,7 @@ export type IAmlChecksSession = {
   // Which identity-verification provider this AML session uses. Missing value
   // is treated as 'onfido' so pre-existing documents keep their original
   // semantics. See docs/plans/2026-04-23-feat-zk-passport-clean-hands-flow-plan.md (U1).
-  idvProvider?: 'onfido' | 'zk-passport';
+  idvProvider?: 'onfido' | 'zk-passport' | 'idenfy';
   // Populated only when idvProvider === 'zk-passport'. Mirrors the fields we
   // need to reach parity with the Onfido branch for sanctions/PEP + issuance.
   zkPassport?: {
