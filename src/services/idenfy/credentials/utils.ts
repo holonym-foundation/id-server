@@ -266,6 +266,28 @@ export function extractCreds(idenfyData: IdenfyVerificationData) {
 }
 
 /**
+ * Pull just first name, last name, and DOB from an iDenfy verification payload.
+ *
+ * Used by the Clean Hands (AML) iDenfy branch, whose credential only needs
+ * name + DOB (no country/address). Reads document fields whether flat or nested
+ * (see idenfyDocFields). DOB is returned verbatim as iDenfy's `docDob`, which is
+ * documented as YYYY-MM-DD — the format getDateAsInt / sanctions screening
+ * require downstream.
+ */
+export function extractIdenfyNameDob(idenfyData: IdenfyVerificationData): {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+} {
+  const data = idenfyDocFields(idenfyData);
+  return {
+    firstName: (data.docFirstName as string) || "",
+    lastName: (data.docLastName as string) || "",
+    dateOfBirth: (data.docDob as string) || "",
+  };
+}
+
+/**
  * Generate the legacy ("old") UUID from iDenfy verification data.
  * Matches Onfido/Sumsub: sha256(firstName + lastName + dob).
  */

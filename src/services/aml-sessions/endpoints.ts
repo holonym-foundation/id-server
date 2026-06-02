@@ -79,7 +79,12 @@ import {
 import {
   createIdenfySession,
   findReusableIdenfySession,
+  getIdenfySessionById,
 } from "../idenfy-sessions/functions.js";
+import { fetchIdenfyStatus } from "../idenfy/status.js";
+import { fetchIdenfyVerificationData } from "../idenfy/data.js";
+import { extractIdenfyNameDob } from "../idenfy/credentials/utils.js";
+import { runSanctionsScreening } from "./sanctions-screening.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
 import { ISanctionsResult } from "../../types.js";
@@ -2989,6 +2994,318 @@ async function verifyAndIssueZkPassportSandbox(req: Request, res: Response) {
   return createVerifyAndIssueZkPassportRouteHandler(config)(req, res);
 }
 
+const issueCredsIdenfyV4Logger = upgradeLogger(
+  logger.child({
+    msgPrefix: "[GET /aml-sessions/:_id/credentials/idenfy/v4/:nullifier] ",
+    base: {
+      ...pinoOptions.base,
+      feature: "holonym",
+      subFeature: "clean-hands",
+      idvProvider: "idenfy",
+    },
+  }),
+);
+
+/**
+ * GET /aml-sessions/:_id/credentials/idenfy/v4/:nullifier
+ *
+ * iDenfy branch of Clean Hands issuance. Server-polled (like the Onfido
+ * credentials/v4 endpoint, not the ZK Passport POST): the store page polls this
+ * until creds are ready. The handler re-confirms the iDenfy decision live via
+ * fetchIdenfyStatus (never trusting only the webhook-cached status), pulls
+ * name + DOB from the iDenfy data API, runs the shared sanctions/PEP screening,
+ * and issues Clean Hands creds in the same shape as the Onfido/ZK branches.
+ *
+ * Idempotent: a prior issuance for the same nullifier (within 5 days) re-issues
+ * the same creds instead of double-issuing, so repeated polls / racing tabs are
+ * safe.
+ */
+function createIssueCredsIdenfyV4RouteHandler(
+  config: SandboxVsLiveKYCRouteHandlerConfig,
+) {
+  return async (req: Request, res: Response) => {
+    try {
+      const _id = req.params._id;
+      const issuanceNullifier = req.params.nullifier;
+
+      // --- Validate request ---
+
+      if (!issuanceNullifier) {
+        return res.status(400).json({ error: "Missing nullifier (issuance nullifier)" });
+      }
+      try {
+        BigInt(issuanceNullifier);
+      } catch {
+        return res.status(400).json({
+          error: `Invalid issuance nullifier (${issuanceNullifier}). It must be a number`,
+        });
+      }
+
+      let objectId: ObjectId | null = null;
+      try {
+        objectId = new ObjectId(_id);
+      } catch {
+        return res.status(400).json({ error: "Invalid _id" });
+      }
+
+      // --- Load + gate the session ---
+
+      const session = await config.AMLChecksSessionModel.findOne({
+        _id: objectId,
+      }).exec();
+      if (!session) {
+        issueCredsIdenfyV4Logger.warn({ _id }, "Session not found");
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      if (session.idvProvider !== "idenfy") {
+        return res.status(400).json({
+          error: `Session idvProvider is '${session.idvProvider ?? "onfido"}'. This endpoint only handles 'idenfy' sessions.`,
+        });
+      }
+
+      if (session.status === sessionStatusEnum.VERIFICATION_FAILED) {
+        return res.status(400).json({
+          error: `Verification failed. Reason(s): ${session.verificationFailureReason}`,
+        });
+      }
+
+      if (session.status === cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION) {
+        return res.status(202).json({
+          message:
+            "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+          statement: session?.userDeclaration?.statement,
+        });
+      }
+
+      // Allow IN_PROGRESS (fresh issuance) and ISSUED (recovery re-fetch). Any
+      // other status (e.g. NEEDS_PAYMENT) means the session is not paid — never
+      // issue from an unpaid session.
+      if (
+        session.status !== sessionStatusEnum.IN_PROGRESS &&
+        session.status !== sessionStatusEnum.ISSUED
+      ) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}' or '${sessionStatusEnum.ISSUED}'.`,
+        });
+      }
+
+      // --- Re-confirm the iDenfy decision live (not the webhook-cached status) ---
+
+      if (!session.idenfySessionId) {
+        issueCredsIdenfyV4Logger.error(
+          { sid: session._id },
+          "iDenfy AML session has no idenfySessionId",
+        );
+        return res.status(400).json({ error: "Session has no associated iDenfy session" });
+      }
+
+      const idenfySession = await getIdenfySessionById(config, session.idenfySessionId);
+      if (!idenfySession?.idenfyScanRef) {
+        return res.status(400).json({ error: "iDenfy session not found or missing scanRef" });
+      }
+      const scanRef = idenfySession.idenfyScanRef;
+
+      let idenfyStatus: string;
+      try {
+        const statusResp = await fetchIdenfyStatus({
+          scanRef,
+          sandbox: config.environment === "sandbox",
+        });
+        idenfyStatus = statusResp.status;
+      } catch (err: any) {
+        issueCredsIdenfyV4Logger.error(
+          { sid: session._id, scanRef, error: makeUnknownErrorLoggable(err) },
+          "Failed to fetch iDenfy status",
+        );
+        return res.status(502).json({ error: "Failed to verify iDenfy status" });
+      }
+
+      if (
+        idenfyStatus === "DENIED" ||
+        idenfyStatus === "SUSPECTED" ||
+        idenfyStatus === "EXPIRED"
+      ) {
+        await failSession(session, `iDenfy verification ${idenfyStatus}`);
+        return res.status(400).json({ error: `iDenfy verification ${idenfyStatus}` });
+      }
+
+      if (idenfyStatus !== "APPROVED") {
+        // ACTIVE / REVIEWING / null — keep polling.
+        return res.status(202).json({
+          message: "iDenfy verification still in progress",
+          status: idenfyStatus ?? null,
+        });
+      }
+
+      // --- Pull disclosed identity (name + DOB) ---
+
+      let idenfyData;
+      try {
+        idenfyData = await fetchIdenfyVerificationData({
+          scanRef,
+          sandbox: config.environment === "sandbox",
+        });
+      } catch (err: any) {
+        issueCredsIdenfyV4Logger.error(
+          { sid: session._id, scanRef, error: makeUnknownErrorLoggable(err) },
+          "Failed to fetch iDenfy verification data",
+        );
+        return res.status(502).json({ error: "Failed to fetch iDenfy verification data" });
+      }
+
+      const { firstName, lastName, dateOfBirth } = extractIdenfyNameDob(idenfyData);
+
+      // Reject empty PII: never run sanctions screening on an empty name (an
+      // empty-name query is a silent no-match — a bad-issuance path in AML).
+      if (!firstName || !lastName || !dateOfBirth) {
+        issueCredsIdenfyV4Logger.error(
+          { sid: session._id, firstName: !!firstName, lastName: !!lastName, dob: !!dateOfBirth },
+          "iDenfy verification data missing required identity fields",
+        );
+        await failSession(
+          session,
+          "iDenfy verification did not return required identity fields",
+        );
+        return res.status(400).json({
+          error: "iDenfy verification did not disclose firstName, lastName, and dateOfBirth.",
+        });
+      }
+
+      const uuid = govIdUUID(firstName, lastName, dateOfBirth);
+
+      // --- Idempotent recovery: same nullifier already issued within 5 days ---
+
+      const nullifierAndCreds = await findOneNullifierAndCredsLast5Days(
+        config.CleanHandsNullifierAndCredsModel,
+        issuanceNullifier,
+      );
+      if (nullifierAndCreds) {
+        const creds = extractCreds({ firstName, lastName, dateOfBirth });
+        const response = issuev2CleanHands(
+          config.cleanHandsIssuerPrivateKey,
+          issuanceNullifier,
+          creds,
+        );
+        response.metadata = creds;
+        if (session.status !== sessionStatusEnum.ISSUED) {
+          session.status = sessionStatusEnum.ISSUED;
+          try { await session.save(); } catch { /* non-fatal */ }
+        }
+        issueCredsIdenfyV4Logger.info(
+          { uuid, sid: session._id },
+          "Re-issuing Clean Hands credentials (iDenfy recovery branch)",
+        );
+        return res.status(200).json(response);
+      }
+
+      // --- Fresh issuance: session must be IN_PROGRESS (paid, not yet issued) ---
+
+      if (session.status !== sessionStatusEnum.IN_PROGRESS) {
+        return res.status(400).json({
+          error: `Session status is '${session.status}'. Expected '${sessionStatusEnum.IN_PROGRESS}' for fresh issuance.`,
+        });
+      }
+
+      // --- Shared sanctions.io / PEP screening ---
+
+      const screening = await runSanctionsScreening({
+        firstName,
+        lastName,
+        dateOfBirth,
+        session,
+        config,
+      });
+
+      if (screening.outcome === "blocked") {
+        await failSession(session, screening.failureReason);
+        return res.status(400).json({ error: "Sanctions match found" });
+      }
+
+      if (screening.outcome === "declaration-required") {
+        session.status = cleanHandsSessionStatusEnum.NEEDS_USER_DECLARATION;
+        session.userDeclaration = {
+          statement: screening.statement,
+          confirmed: false,
+          statementGeneratedAt: new Date(),
+        };
+        await session.save();
+        issueCredsIdenfyV4Logger.info(
+          { sessionId: session._id },
+          "Clean Hands session requires user declaration",
+        );
+        return res.status(202).json({
+          message:
+            "User action required. User must confirm that they are not any of the PEPs mentioned in the results.",
+          statement: screening.statement,
+        });
+      }
+
+      // --- Uniqueness check (11-month window) ---
+
+      if (config.environment === "live") {
+        const user = await findUserVerification(uuid, "aml", {
+          issuedAt: { after: dateElevenMonthsAgo() },
+          expiresAt: { after: new Date() },
+        });
+        if (user) {
+          issueCredsIdenfyV4Logger.alreadyRegistered(uuid);
+          await failSession(session, toAlreadyRegisteredStr(user._id.toString()));
+          return res
+            .status(400)
+            .json({ error: toAlreadyRegisteredStr(user._id.toString()) });
+        }
+      }
+
+      const dbResponse = await saveUserToDb(uuid);
+      if (dbResponse.error) return res.status(400).json(dbResponse);
+
+      // --- Issue credentials ---
+
+      const creds = extractCreds({ firstName, lastName, dateOfBirth });
+      const response = issuev2CleanHands(
+        config.cleanHandsIssuerPrivateKey,
+        issuanceNullifier,
+        creds,
+      );
+      response.metadata = creds;
+
+      const newNullifierAndCreds = new config.CleanHandsNullifierAndCredsModel({
+        holoUserId: session.sigDigest,
+        issuanceNullifier,
+        uuid,
+      });
+      await newNullifierAndCreds.save();
+
+      session.status = sessionStatusEnum.ISSUED;
+      await session.save();
+
+      issueCredsIdenfyV4Logger.info(
+        { uuid, sid: session._id },
+        "Issuing Clean Hands credentials (iDenfy branch)",
+      );
+
+      return res.status(200).json(response);
+    } catch (err: any) {
+      console.error(
+        "GET /aml-sessions/:_id/credentials/idenfy/v4/:nullifier: Error encountered",
+        makeUnknownErrorLoggable(err),
+      );
+      return res.status(500).json({ error: "An unknown error occurred" });
+    }
+  };
+}
+
+async function issueCredsIdenfyV4Live(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("live");
+  return createIssueCredsIdenfyV4RouteHandler(config)(req, res);
+}
+
+async function issueCredsIdenfyV4Sandbox(req: Request, res: Response) {
+  const config = getRouteHandlerConfig("sandbox");
+  return createIssueCredsIdenfyV4RouteHandler(config)(req, res);
+}
+
 const confirmStatementLogger = logger.child({
   msgPrefix: "[POST /aml-sessions/:_id/statement/confirm] ",
   base: {
@@ -3267,6 +3584,8 @@ export {
   issueCredsV4Sandbox,
   verifyAndIssueZkPassportLive as verifyAndIssueZkPassport,
   verifyAndIssueZkPassportSandbox,
+  issueCredsIdenfyV4Live as issueCredsIdenfyV4,
+  issueCredsIdenfyV4Sandbox,
   confirmStatementLive as confirmStatement,
   confirmStatementSandbox,
   getSessionsLive as getSessions,

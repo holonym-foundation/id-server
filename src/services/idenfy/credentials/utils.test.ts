@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { extractCreds } from "./utils.js";
+import { extractCreds, extractIdenfyNameDob } from "./utils.js";
 
 /**
  * Parity test: iDenfy extractCreds output must equal Onfido extractCreds for
@@ -106,6 +106,33 @@ describe("idenfy extractCreds", () => {
     // Hashes are computed deterministically from empty buffers — must still
     // be valid strings.
     expect(typeof result.derivedCreds.nameHash.value).toBe("string");
+  });
+
+  // extractIdenfyNameDob feeds the Clean Hands (AML) branch, whose empty-PII
+  // guard depends on it returning "" (not undefined) for missing fields.
+  describe("extractIdenfyNameDob", () => {
+    it("pulls name + dob from a flat payload", () => {
+      const r = extractIdenfyNameDob({
+        scanRef: "x",
+        docFirstName: "John",
+        docLastName: "Doe",
+        docDob: "1990-01-15",
+      } as any);
+      expect(r).toEqual({ firstName: "John", lastName: "Doe", dateOfBirth: "1990-01-15" });
+    });
+
+    it("pulls name + dob from a nested payload", () => {
+      const r = extractIdenfyNameDob({
+        scanRef: "x",
+        data: { docFirstName: "Jane", docLastName: "Roe", docDob: "1985-06-20" },
+      } as any);
+      expect(r).toEqual({ firstName: "Jane", lastName: "Roe", dateOfBirth: "1985-06-20" });
+    });
+
+    it("returns empty strings (not undefined) for missing fields", () => {
+      const r = extractIdenfyNameDob({ scanRef: "x" } as any);
+      expect(r).toEqual({ firstName: "", lastName: "", dateOfBirth: "" });
+    });
   });
 
   // Defensive: iDenfy's real /api/v2/data shape (flat vs nested under `data`)

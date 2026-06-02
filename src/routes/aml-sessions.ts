@@ -25,6 +25,8 @@ import {
   issueCredsV4Sandbox,
   verifyAndIssueZkPassport,
   verifyAndIssueZkPassportSandbox,
+  issueCredsIdenfyV4,
+  issueCredsIdenfyV4Sandbox,
   confirmStatement,
   confirmStatementSandbox,
   getSessions,
@@ -51,6 +53,7 @@ router.get("/:_id/credentials/:nullifier", issueCreds);
 router.get("/:_id/credentials/v2/:nullifier", issueCredsV2);
 router.get("/:_id/credentials/v3/:nullifier", issueCredsV3);
 router.get("/:_id/credentials/v4/:nullifier", issueCredsV4);
+router.get("/:_id/credentials/idenfy/v4/:nullifier", issueCredsIdenfyV4);
 router.post("/:_id/verify-and-issue", verifyAndIssueZkPassport);
 router.post("/:_id/statement/confirm", confirmStatement);
 
@@ -68,6 +71,7 @@ sandboxRouter.get("/", getSessionsSandbox);
 // sandboxRouter.post("/:_id/v3", payForSessionV3Sandbox);
 // sandboxRouter.post("/:_id/refund/v2", refundV2Sandbox);
 sandboxRouter.get("/:_id/credentials/v4/:nullifier", issueCredsV4Sandbox);
+sandboxRouter.get("/:_id/credentials/idenfy/v4/:nullifier", issueCredsIdenfyV4Sandbox);
 sandboxRouter.post("/:_id/verify-and-issue", verifyAndIssueZkPassportSandbox);
 sandboxRouter.post("/:_id/statement/confirm", confirmStatementSandbox);
 sandboxRouter.post("/:_id/refund", refundCleanHandsSessionSandbox);
