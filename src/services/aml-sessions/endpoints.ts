@@ -76,6 +76,10 @@ import {
   createOnfidoSession,
   findReusableOnfidoSession,
 } from "../onfido-sessions/functions.js";
+import {
+  createIdenfySession,
+  findReusableIdenfySession,
+} from "../idenfy-sessions/functions.js";
 import { getOnfidoCheck, getOnfidoReports } from "../../utils/onfido.js";
 import { validateCheck, validateReports, onfidoValidationToUserErrorMessage } from "../onfido/credentials/utils.js";
 import { ISanctionsResult } from "../../types.js";
@@ -930,6 +934,9 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
 
       // Missing idvProvider on legacy/pre-v4 docs is treated as 'onfido'.
       const idvProvider: IdvProvider = (session.idvProvider as IdvProvider) ?? "onfido";
+      // Pricing by provider: zk-passport is $3; onfido and idenfy are both the
+      // standard $5 Clean Hands verification service (idenfy is a drop-in
+      // replacement for the onfido gov-id-scan branch, so it reuses the price).
       const service =
         idvProvider === "zk-passport"
           ? PAYMENT_SERVICE_CLEAN_HANDS_ZK_PASSPORT_VERIFICATION
@@ -948,6 +955,7 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
       session.chainId = chainIdNum;
 
       let onfidoSessionId: any = undefined;
+      let idenfySessionId: any = undefined;
       if (idvProvider === "onfido") {
         const reusable = await findReusableOnfidoSession(config, session.sigDigest!);
         if (reusable) {
@@ -971,6 +979,34 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
             "Created new Onfido session for Clean Hands (v4)",
           );
         }
+      } else if (idvProvider === "idenfy") {
+        // Mirror the Onfido branch. Reuse is intentionally NOT scoped by flow
+        // (matches Onfido: a recent gov-id iDenfy verification is reused for
+        // Clean Hands), which is safe because the iDenfy issuance handler (U4)
+        // re-runs sanctions/PEP screening regardless of reuse — reuse only
+        // supplies the verified identity, never a sanctions pass.
+        const reusable = await findReusableIdenfySession(config, session.sigDigest!);
+        if (reusable) {
+          idenfySessionId = reusable._id;
+          session.idenfySessionId = reusable._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, idenfySessionId: reusable._id },
+            "Reusing existing iDenfy session for Clean Hands (v4)",
+          );
+        } else {
+          const idenfySession = await createIdenfySession(
+            config,
+            session.sigDigest!,
+            "clean-hands",
+            session._id!,
+          );
+          idenfySessionId = idenfySession._id;
+          session.idenfySessionId = idenfySession._id;
+          payForSessionV4Logger.info(
+            { sessionId: session._id, idenfySessionId: idenfySession._id },
+            "Created new iDenfy session for Clean Hands (v4)",
+          );
+        }
       }
 
       await session.save();
@@ -982,7 +1018,7 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
         config,
       });
 
-      return res.status(200).json({ session, onfidoSessionId });
+      return res.status(200).json({ session, onfidoSessionId, idenfySessionId });
     } catch (err: any) {
       if (reservationToken) {
         try {
