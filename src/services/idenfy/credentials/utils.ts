@@ -76,6 +76,25 @@ export type IdenfyVerificationData = {
 };
 
 /**
+ * iDenfy's /api/v2/data has been observed in documentation to present document
+ * fields either flat at the top level (docFirstName, docDob, …) OR nested under
+ * a `data` object, depending on account/endpoint. Until a real sandbox response
+ * is captured (U11), read defensively: prefer the nested `data` object when it
+ * is present and object-shaped, otherwise treat the payload itself as the field
+ * bag. This prevents silently issuing empty-PII credentials if the real shape
+ * turns out to be nested — which the falsy-country guard below would NOT catch.
+ */
+function idenfyDocFields(
+  idenfyData: IdenfyVerificationData
+): Record<string, unknown> {
+  const root = idenfyData as Record<string, unknown>;
+  if (root.data && typeof root.data === "object") {
+    return root.data as Record<string, unknown>;
+  }
+  return root;
+}
+
+/**
  * Extract credentials from an iDenfy verification payload, normalized to the
  * shape produced by Onfido's extractCreds (see services/onfido/credentials/utils.ts:291).
  *
@@ -83,9 +102,8 @@ export type IdenfyVerificationData = {
  * ZK circuits depend on it byte-for-byte.
  */
 export function extractCreds(idenfyData: IdenfyVerificationData) {
-  // /api/v2/data returns document fields flat at the top level
-  // (docFirstName, docLastName, docDob, etc.) — not nested under `data`.
-  const data = idenfyData as Record<string, unknown>;
+  // Document fields may be flat or nested under `data` (see idenfyDocFields).
+  const data = idenfyDocFields(idenfyData);
 
   // Country code parity with Onfido (services/onfido/credentials/utils.ts:292):
   // Onfido reads `issuing_country` from the document report, so iDenfy must
@@ -252,7 +270,7 @@ export function extractCreds(idenfyData: IdenfyVerificationData) {
  * Matches Onfido/Sumsub: sha256(firstName + lastName + dob).
  */
 export function uuidOldFromIdenfyData(idenfyData: IdenfyVerificationData) {
-  const data = idenfyData as Record<string, unknown>;
+  const data = idenfyDocFields(idenfyData);
   const firstName = (data.docFirstName as string) || "";
   const lastName = (data.docLastName as string) || "";
   const dob = (data.docDob as string) || "";
@@ -265,7 +283,7 @@ export function uuidOldFromIdenfyData(idenfyData: IdenfyVerificationData) {
  * shared govIdUUID function (cross-provider Sybil resistance).
  */
 export function uuidNewFromIdenfyData(idenfyData: IdenfyVerificationData) {
-  const data = idenfyData as Record<string, unknown>;
+  const data = idenfyDocFields(idenfyData);
   const firstName = (data.docFirstName as string) || "";
   const lastName = (data.docLastName as string) || "";
   const dob = (data.docDob as string) || "";

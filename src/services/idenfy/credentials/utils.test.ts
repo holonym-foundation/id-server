@@ -108,6 +108,39 @@ describe("idenfy extractCreds", () => {
     expect(typeof result.derivedCreds.nameHash.value).toBe("string");
   });
 
+  // Defensive: iDenfy's real /api/v2/data shape (flat vs nested under `data`)
+  // is unconfirmed (U11). extractCreds must read PII regardless. A nested
+  // payload must yield the SAME creds as the equivalent flat payload — proving
+  // we never silently emit empty PII if the real shape turns out to be nested.
+  it("reads document fields whether flat or nested under `data`", () => {
+    const flat = extractCreds({
+      scanRef: "abc",
+      docFirstName: "John",
+      docLastName: "Doe",
+      docDob: "1990-01-15",
+      docIssuingCountry: "USA",
+    } as any);
+
+    const nested = extractCreds({
+      scanRef: "abc",
+      data: {
+        docFirstName: "John",
+        docLastName: "Doe",
+        docDob: "1990-01-15",
+        docIssuingCountry: "USA",
+      },
+    } as any);
+
+    expect(nested.rawCreds.firstName).toBe("John");
+    expect(nested.rawCreds.lastName).toBe("Doe");
+    expect(nested.rawCreds.birthdate).toBe("1990-01-15");
+    // Same logical input → byte-identical derived hashes regardless of nesting.
+    expect(nested.derivedCreds.nameHash.value).toBe(flat.derivedCreds.nameHash.value);
+    expect(
+      nested.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
+    ).toBe(flat.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value);
+  });
+
   // TODO(U11): once we have a captured Onfido extractCreds output for "John
   // Doe / 1990-01-15 / USA / no address", add a parity assertion comparing the
   // four derivedCreds hashes byte-for-byte. The hash composition is identical
