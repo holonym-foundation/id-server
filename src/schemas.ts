@@ -588,12 +588,18 @@ const amlChecksSessionSchema = new Schema<IAmlChecksSession>({
     type: Schema.Types.ObjectId,
     required: false,
   },
+  // Populated only when idvProvider === 'idenfy'. Points at the standalone
+  // IdenfySession row (scanRef/authToken/status), parallel to onfidoSessionId.
+  idenfySessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
   // Which identity-verification provider this AML session uses. Missing value
   // is treated as 'onfido' by callers so pre-existing documents keep their
   // original semantics. Enum-validated at the Mongoose layer.
   idvProvider: {
     type: String,
-    enum: ['onfido', 'zk-passport'],
+    enum: ['onfido', 'zk-passport', 'idenfy'],
     required: false,
   },
   // Populated only when idvProvider === 'zk-passport'. Holds fields disclosed
@@ -683,9 +689,13 @@ const sandboxAmlChecksSessionSchema = new Schema<ISandboxAmlChecksSession>({
     type: Schema.Types.ObjectId,
     required: false,
   },
+  idenfySessionId: {
+    type: Schema.Types.ObjectId,
+    required: false,
+  },
   idvProvider: {
     type: String,
-    enum: ['onfido', 'zk-passport'],
+    enum: ['onfido', 'zk-passport', 'idenfy'],
     required: false,
   },
   zkPassport: {
