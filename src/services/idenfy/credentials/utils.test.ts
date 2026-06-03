@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { extractCreds } from "./utils.js";
+import { extractCreds, extractIdenfyNameDob } from "./utils.js";
 
 /**
  * Parity test: iDenfy extractCreds output must equal Onfido extractCreds for
@@ -106,6 +106,66 @@ describe("idenfy extractCreds", () => {
     // Hashes are computed deterministically from empty buffers — must still
     // be valid strings.
     expect(typeof result.derivedCreds.nameHash.value).toBe("string");
+  });
+
+  // extractIdenfyNameDob feeds the Clean Hands (AML) branch, whose empty-PII
+  // guard depends on it returning "" (not undefined) for missing fields.
+  describe("extractIdenfyNameDob", () => {
+    it("pulls name + dob from a flat payload", () => {
+      const r = extractIdenfyNameDob({
+        scanRef: "x",
+        docFirstName: "John",
+        docLastName: "Doe",
+        docDob: "1990-01-15",
+      } as any);
+      expect(r).toEqual({ firstName: "John", lastName: "Doe", dateOfBirth: "1990-01-15" });
+    });
+
+    it("pulls name + dob from a nested payload", () => {
+      const r = extractIdenfyNameDob({
+        scanRef: "x",
+        data: { docFirstName: "Jane", docLastName: "Roe", docDob: "1985-06-20" },
+      } as any);
+      expect(r).toEqual({ firstName: "Jane", lastName: "Roe", dateOfBirth: "1985-06-20" });
+    });
+
+    it("returns empty strings (not undefined) for missing fields", () => {
+      const r = extractIdenfyNameDob({ scanRef: "x" } as any);
+      expect(r).toEqual({ firstName: "", lastName: "", dateOfBirth: "" });
+    });
+  });
+
+  // Defensive: iDenfy's real /api/v2/data shape (flat vs nested under `data`)
+  // is unconfirmed (U11). extractCreds must read PII regardless. A nested
+  // payload must yield the SAME creds as the equivalent flat payload — proving
+  // we never silently emit empty PII if the real shape turns out to be nested.
+  it("reads document fields whether flat or nested under `data`", () => {
+    const flat = extractCreds({
+      scanRef: "abc",
+      docFirstName: "John",
+      docLastName: "Doe",
+      docDob: "1990-01-15",
+      docIssuingCountry: "USA",
+    } as any);
+
+    const nested = extractCreds({
+      scanRef: "abc",
+      data: {
+        docFirstName: "John",
+        docLastName: "Doe",
+        docDob: "1990-01-15",
+        docIssuingCountry: "USA",
+      },
+    } as any);
+
+    expect(nested.rawCreds.firstName).toBe("John");
+    expect(nested.rawCreds.lastName).toBe("Doe");
+    expect(nested.rawCreds.birthdate).toBe("1990-01-15");
+    // Same logical input → byte-identical derived hashes regardless of nesting.
+    expect(nested.derivedCreds.nameHash.value).toBe(flat.derivedCreds.nameHash.value);
+    expect(
+      nested.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value
+    ).toBe(flat.derivedCreds.nameDobCitySubdivisionZipStreetExpireHash.value);
   });
 
   // TODO(U11): once we have a captured Onfido extractCreds output for "John
