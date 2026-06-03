@@ -264,7 +264,14 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
         return res.status(400).json({ error: "Invalid sid" });
       }
 
-      const ambiguousSession = await config.SessionModel.findOne({ _id: objectId }).exec();
+      // Gov-id flows live in SessionModel. Clean Hands (AML) sessions live in a
+      // separate collection but share the iDenfy status-resolution path (the
+      // shared /idenfy/verify page polls this endpoint with the AML session _id
+      // for the iDenfy Clean Hands branch). Fall back to the AML collection when
+      // the gov-id lookup misses so `provider=idenfy` resolves either kind.
+      const ambiguousSession: any =
+        (await config.SessionModel.findOne({ _id: objectId }).exec()) ??
+        (await config.AMLChecksSessionModel.findOne({ _id: objectId }).exec());
 
       if (!ambiguousSession) {
         return res.status(404).json({ error: "Session not found" });
