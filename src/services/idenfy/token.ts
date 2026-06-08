@@ -7,6 +7,17 @@ import {
 } from "./http.js";
 
 /**
+ * UUID of the KYC branding theme applied to every iDenfy session so the hosted
+ * verification UI matches Human ID branding rather than iDenfy's stock look.
+ * Created in the iDenfy dashboard (Settings → KYC → Branding); the same ID must
+ * exist in both the live and sandbox iDenfy accounts. Sent as `theme` on
+ * /api/v2/token — iDenfy falls back to its built-in "Default" theme if omitted.
+ *
+ * @see https://documentation.idenfy.com/KYC/GeneratingIdentificationToken/
+ */
+const IDENFY_KYC_THEME_UUID = "dd51a655-ecaa-47f4-8096-747cadad183f";
+
+/**
  * iDenfy /api/v2/token request body.
  *
  * `clientId` is a partner-supplied identifier. iDenfy treats reused clientIds
@@ -19,10 +30,11 @@ import {
  */
 type CreateIdenfyTokenRequest = {
   clientId: string;
-  // TODO(impl): iDenfy's token endpoint accepts many optional fields
-  // (firstName, lastName, locale, country, expiryTime, tokenType,
-  // documents[], generateDigitString, etc.). Add as needed during integration
-  // testing — none are required for the minimal happy path.
+  /** UUID of the KYC branding theme to apply. @see IDENFY_KYC_THEME_UUID */
+  theme?: string;
+  // iDenfy's token endpoint accepts many other optional fields (firstName,
+  // lastName, locale, country, expiryTime, tokenType, documents[],
+  // generateDigitString, etc.). Add as needed — none are required.
 };
 
 export type IdenfyTokenResponse = {
@@ -62,7 +74,10 @@ export async function createIdenfyToken(args: {
     );
   }
 
-  const reqBody: CreateIdenfyTokenRequest = { clientId };
+  const reqBody: CreateIdenfyTokenRequest = {
+    clientId,
+    theme: IDENFY_KYC_THEME_UUID,
+  };
 
   try {
     const resp = await axios.post<IdenfyTokenResponse>(
