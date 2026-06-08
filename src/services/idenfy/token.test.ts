@@ -46,7 +46,10 @@ describe("createIdenfyToken", () => {
     expect(result.authToken).toBe("AUTH123");
     expect(result.scanRef).toBe("SCAN123");
     expect(capturedUrl).toBe("https://ivs.idenfy.com/api/v2/token");
-    expect(capturedBody).toEqual({ clientId: "client-1" });
+    expect(capturedBody).toEqual({
+      clientId: "client-1",
+      theme: "dd51a655-ecaa-47f4-8096-747cadad183f",
+    });
     const expected = `Basic ${Buffer.from("test-key:test-secret").toString("base64")}`;
     expect(capturedAuthHeader).toBe(expected);
   });
