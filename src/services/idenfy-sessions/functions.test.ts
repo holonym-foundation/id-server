@@ -80,7 +80,11 @@ afterEach(() => {
 
 // A fake config whose IdenfySessionModel records updates and can return a
 // re-read document for the lock-miss path.
-function makeConfig(environment: "sandbox" | "live", reReadDoc?: any) {
+function makeConfig(
+  environment: "sandbox" | "live",
+  reReadDoc?: any,
+  updateMatchedCount: number = 1
+) {
   const updates: Array<{ filter: any; update: any }> = [];
   return {
     config: {
@@ -88,7 +92,10 @@ function makeConfig(environment: "sandbox" | "live", reReadDoc?: any) {
       IdenfySessionModel: {
         updateOne: async (filter: any, update: any) => {
           updates.push({ filter, update });
-          return { modifiedCount: 1 };
+          return {
+            matchedCount: updateMatchedCount,
+            modifiedCount: updateMatchedCount,
+          };
         },
         findById: (_id: any) => ({
           exec: async () => (reReadDoc ? { toObject: () => reReadDoc } : null),
@@ -151,7 +158,7 @@ describe("getIdenfyStatusForSession — EXPIRED recovery", () => {
     expect(await tryAcquireIdenfyRecreateLock("idenfy-row-1", "live")).toBe(true);
   });
 
-  it("freshly fetched EXPIRED (no cached webhook state) recovers without persisting failed", async () => {
+  it("freshly fetched EXPIRED persists an EXPIRED sentinel, then recovers, never writing failed", async () => {
     statusToReturn = "EXPIRED";
     const { config, updates } = makeConfig("live");
     // no cached verification status -> falls through to /api/v2/status poll
@@ -162,9 +169,35 @@ describe("getIdenfyStatusForSession — EXPIRED recovery", () => {
 
     expect(tokenCalls).toBe(1);
     expect(result.idenfyAuthToken).toBe("AUTH_NEW_1");
-    // the only persisted update is the re-mint, never a status:"failed" write
-    expect(updates.length).toBe(1);
-    expect(updates[0].update.$set.status).toBe("in_progress");
+    // First write is the sentinel (verification-status only — NOT status:failed),
+    // so concurrent pollers + the cap short-circuit see authoritative state.
+    expect(updates[0].update.$set).toEqual({ idenfyVerificationStatus: "EXPIRED" });
+    // Second write is the re-mint.
+    expect(updates[1].update.$set.idenfyAuthToken).toBe("AUTH_NEW_1");
+    expect(updates[1].update.$set.status).toBe("in_progress");
+    // The row is never left in status:"failed".
+    expect(updates.some((u) => u.update.$set && u.update.$set.status === "failed")).toBe(false);
+  });
+
+  it("0-match re-mint returns persisted peer state, not the orphaned billed token", async () => {
+    // Simulate the TTL-overrun race: our updateOne matches 0 rows because a peer
+    // already re-minted and advanced the scanRef. The re-read returns the peer's
+    // fresh row; we must return THAT, not our just-minted (orphaned) token.
+    const peerRow = expiredSession({
+      idenfyVerificationStatus: null,
+      status: "in_progress",
+      idenfyAuthToken: "AUTH_PEER",
+      idenfyScanRef: "SCAN_PEER",
+      recreationCount: 1,
+    });
+    const { config } = makeConfig("live", peerRow, 0); // updateOne matchedCount = 0
+    const result: any = await getIdenfyStatusForSession(config, expiredSession());
+
+    expect(tokenCalls).toBe(1); // a token was minted (billed) ...
+    expect(result.idenfyAuthToken).toBe("AUTH_PEER"); // ... but we return the persisted peer token
+    expect(result.idenfyAuthToken).not.toBe("AUTH_NEW_1"); // never the orphaned one
+    // lock released even on the 0-match path
+    expect(await tryAcquireIdenfyRecreateLock("idenfy-row-1", "live")).toBe(true);
   });
 
   it("at the cap, returns EXPIRED and does NOT mint", async () => {
@@ -254,6 +287,18 @@ describe("getIdenfyStatusForSession — non-EXPIRED behavior unchanged", () => {
     );
     expect(tokenCalls).toBe(0);
     expect(result.idenfyVerificationStatus).toBe("DENIED");
+  });
+
+  it("cached SUSPECTED returns as-is, no recovery, no lock", async () => {
+    const { config, updates } = makeConfig("live");
+    const result: any = await getIdenfyStatusForSession(
+      config,
+      expiredSession({ idenfyVerificationStatus: "SUSPECTED", status: "failed" })
+    );
+    expect(tokenCalls).toBe(0);
+    expect(result.idenfyVerificationStatus).toBe("SUSPECTED");
+    expect(updates.length).toBe(0);
+    expect(lockStore.size).toBe(0);
   });
 
   it("non-terminal fetched status (ACTIVE) persists and returns without minting or locking", async () => {

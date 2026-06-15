@@ -4,6 +4,7 @@ import { pinoOptions, logger } from "../../utils/logger.js";
 import {
   IIdenfySession,
   ISandboxIdenfySession,
+  IdenfySessionView,
   SandboxVsLiveKYCRouteHandlerConfig,
 } from "../../types.js";
 import { createIdenfyToken } from "../idenfy/token.js";
@@ -182,10 +183,23 @@ const IDENFY_TERMINAL_STATUSES = new Set([
 async function recreateExpiredIdenfySession(
   config: SandboxVsLiveKYCRouteHandlerConfig,
   idenfySession: IIdenfySession | ISandboxIdenfySession
-): Promise<IIdenfySession | ISandboxIdenfySession> {
+): Promise<IdenfySessionView> {
   const env = config.environment;
   const id = idenfySession._id!;
   const currentCount = idenfySession.recreationCount ?? 0;
+
+  // Pending shape returned when we must withhold the stale token (lock-miss or
+  // a row that moved under us). Frontend treats null status as "preparing".
+  const pending = (
+    base: IIdenfySession | ISandboxIdenfySession
+  ): IdenfySessionView =>
+    ({
+      ...base,
+      idenfyVerificationStatus: null,
+      verificationFailureReason: null,
+      idenfyAuthToken: null,
+      idenfyScanRef: null,
+    }) as IdenfySessionView;
 
   // Cap reached — stop minting, surface EXPIRED (existing dead-end UI).
   if (currentCount >= IDENFY_RECREATE_CAP) {
@@ -196,7 +210,7 @@ async function recreateExpiredIdenfySession(
     return {
       ...idenfySession,
       idenfyVerificationStatus: "EXPIRED",
-    } as IIdenfySession | ISandboxIdenfySession;
+    } as IdenfySessionView;
   }
 
   const acquired = await tryAcquireIdenfyRecreateLock(id, env);
@@ -218,13 +232,7 @@ async function recreateExpiredIdenfySession(
       return refreshedObj;
     }
 
-    return {
-      ...refreshedObj,
-      idenfyVerificationStatus: null,
-      verificationFailureReason: null,
-      idenfyAuthToken: null,
-      idenfyScanRef: null,
-    } as unknown as IIdenfySession | ISandboxIdenfySession;
+    return pending(refreshedObj);
   }
 
   try {
@@ -233,7 +241,7 @@ async function recreateExpiredIdenfySession(
       sandbox: env === "sandbox",
     });
 
-    const update = {
+    const update: Partial<IdenfySessionView> = {
       idenfyAuthToken: tokenData.authToken,
       idenfyScanRef: tokenData.scanRef,
       status: "in_progress",
@@ -244,10 +252,25 @@ async function recreateExpiredIdenfySession(
     // Conditional on the OLD scanRef so a concurrent webhook write for the
     // expired session can't be clobbered ambiguously — we only update the row
     // we actually read.
-    await config.IdenfySessionModel.updateOne(
+    const updateRes = await config.IdenfySessionModel.updateOne(
       { _id: id, idenfyScanRef: idenfySession.idenfyScanRef },
       { $set: update, $inc: { recreationCount: 1 } }
     );
+
+    // The row moved under us between read and write — e.g. the lock TTL expired
+    // mid-mint and a second poller already persisted a fresh session. Our
+    // just-minted token was never recorded (its webhook would 404), so do NOT
+    // return it as success. Return whatever actually landed in the DB instead.
+    if (updateRes.matchedCount === 0) {
+      idenfySessionLogger.warn(
+        { idenfySessionId: id, oldScanRef: idenfySession.idenfyScanRef },
+        "iDenfy re-mint matched no row (concurrent re-mint?) — returning persisted state, not the orphaned token"
+      );
+      const persisted = await getIdenfySessionById(config, id);
+      return persisted
+        ? (persisted.toObject() as IdenfySessionView)
+        : pending(idenfySession);
+    }
 
     idenfySessionLogger.info(
       {
@@ -262,7 +285,7 @@ async function recreateExpiredIdenfySession(
       ...idenfySession,
       ...update,
       recreationCount: currentCount + 1,
-    } as unknown as IIdenfySession | ISandboxIdenfySession;
+    } as IdenfySessionView;
   } catch (err: any) {
     idenfySessionLogger.error(
       { idenfySessionId: id, error: err?.message },
@@ -271,7 +294,7 @@ async function recreateExpiredIdenfySession(
     return {
       ...idenfySession,
       idenfyVerificationStatus: "EXPIRED",
-    } as IIdenfySession | ISandboxIdenfySession;
+    } as IdenfySessionView;
   } finally {
     await releaseIdenfyRecreateLock(id, env);
   }
@@ -292,7 +315,7 @@ async function recreateExpiredIdenfySession(
 export async function getIdenfyStatusForSession(
   config: SandboxVsLiveKYCRouteHandlerConfig,
   idenfySession: IIdenfySession | ISandboxIdenfySession | null | undefined
-) {
+): Promise<IdenfySessionView | null> {
   if (!idenfySession) return null;
 
   const cachedStatus = idenfySession.idenfyVerificationStatus;
@@ -317,9 +340,17 @@ export async function getIdenfyStatusForSession(
       sandbox: config.environment === "sandbox",
     });
     if (data.status) {
-      // Freshly fetched EXPIRED — route into recovery WITHOUT first persisting
-      // status:"failed" (that would re-cache EXPIRED and read as a dead-end).
+      // Freshly fetched EXPIRED (no webhook fired). Persist the EXPIRED sentinel
+      // — verification-status only, NOT status:"failed" — BEFORE recovery so
+      // concurrent pollers and the cap short-circuit see authoritative state.
+      // Without it, a lock-losing peer would re-read an in_progress row and hand
+      // back the stale expired token, and a capped row would re-hit
+      // /api/v2/status on every poll.
       if (data.status === "EXPIRED") {
+        await config.IdenfySessionModel.updateOne(
+          { _id: idenfySession._id },
+          { $set: { idenfyVerificationStatus: "EXPIRED" } }
+        );
         return recreateExpiredIdenfySession(config, {
           ...idenfySession,
           idenfyVerificationStatus: "EXPIRED",
@@ -342,7 +373,7 @@ export async function getIdenfyStatusForSession(
       return {
         ...idenfySession,
         ...update,
-      } as IIdenfySession | ISandboxIdenfySession;
+      } as IdenfySessionView;
     }
   } catch (err: any) {
     idenfySessionLogger.warn(

@@ -99,6 +99,24 @@ export type IIdenfySession = {
 
 export type ISandboxIdenfySession = IIdenfySession;
 
+// Shape returned by getIdenfyStatusForSession / recreateExpiredIdenfySession.
+// The resolver legitimately returns rows whose token fields are null during the
+// EXPIRED-recovery window (the lock-miss "pending" branch withholds the stale
+// token), so those fields are widened to `string | null` here instead of being
+// cast away. Callers already coalesce with `?? null`.
+export type IdenfySessionView = Omit<
+  IIdenfySession,
+  | "idenfyAuthToken"
+  | "idenfyScanRef"
+  | "idenfyVerificationStatus"
+  | "verificationFailureReason"
+> & {
+  idenfyAuthToken: string | null;
+  idenfyScanRef: string | null;
+  idenfyVerificationStatus?: string | null;
+  verificationFailureReason?: string | null;
+};
+
 // ---------------- MongoDB schemas ----------------
 
 export type IUserVerifications = {
