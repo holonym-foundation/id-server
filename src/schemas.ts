@@ -108,6 +108,7 @@ const idenfySessionSchema = new Schema<IIdenfySession>({
   createdByFlow: { type: String, required: true },
   createdBySessionId: { type: Schema.Types.ObjectId, required: true },
   createdAt: { type: Date, default: Date.now },
+  recreationCount: { type: Number, default: 0 },
 });
 idenfySessionSchema.index({ sigDigest: 1 });
 idenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
@@ -123,6 +124,7 @@ const sandboxIdenfySessionSchema = new Schema<ISandboxIdenfySession>({
   createdByFlow: { type: String, required: true },
   createdBySessionId: { type: Schema.Types.ObjectId, required: true },
   createdAt: { type: Date, default: Date.now },
+  recreationCount: { type: Number, default: 0 },
 });
 sandboxIdenfySessionSchema.index({ sigDigest: 1 });
 sandboxIdenfySessionSchema.index({ idenfyScanRef: 1 }, { sparse: true });
