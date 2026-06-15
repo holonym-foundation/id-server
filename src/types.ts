@@ -94,6 +94,7 @@ export type IIdenfySession = {
   createdByFlow: string;                 // 'gov-id' | 'clean-hands'
   createdBySessionId: Types.ObjectId;
   createdAt: Date;
+  recreationCount?: number;              // # of fresh iDenfy sessions minted for this row after EXPIRED; capped at 10
 };
 
 export type ISandboxIdenfySession = IIdenfySession;
