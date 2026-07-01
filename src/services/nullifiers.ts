@@ -37,7 +37,7 @@ async function validatePutNullifierArgs(
  */
 function createGetNullifiersRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
-    const holoUserId = resolveHoloUserId(req, req?.query?.holoUserId);
+    const holoUserId = resolveHoloUserId(req);
 
     if (!holoUserId) {
       getEndpointLogger.error("No holoUserId specified.");

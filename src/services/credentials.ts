@@ -99,7 +99,7 @@ async function storeOrUpdateUserCredentials(
  * Get user's encrypted credentials and symmetric key from document store.
  */
 async function getCredentials(req: Request, res: Response) {
-  const sigDigest = resolveHoloUserId(req, req?.query?.sigDigest);
+  const sigDigest = resolveHoloUserId(req);
 
   if (!sigDigest) {
     getEndpointLogger.error("No sigDigest specified.");

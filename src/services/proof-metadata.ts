@@ -10,7 +10,7 @@ const getEndpointLogger = logger.child({ msgPrefix: "[GET /proof-metadata] " });
  * Get user's encrypted proof metadata and symmetric key from document store.
  */
 async function getProofMetadata(req: Request, res: Response) {
-  const sigDigest = resolveHoloUserId(req, req?.query?.sigDigest);
+  const sigDigest = resolveHoloUserId(req);
 
   if (!sigDigest) {
     getEndpointLogger.error("No sigDigest specified.");
