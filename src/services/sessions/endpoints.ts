@@ -1416,7 +1416,7 @@ async function refundV2(req: Request, res: Response) {
 function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
+      const sigDigest = resolveHoloUserId(req);
       const id = req.query.id;
       const last5days = req.query.last5days === "true" || false;
 

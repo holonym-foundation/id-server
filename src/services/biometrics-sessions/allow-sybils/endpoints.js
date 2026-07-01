@@ -102,7 +102,7 @@ async function postSessionV2(req, res) {
  */
 async function getSessions(req, res) {
   try {
-    const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
+    const sigDigest = resolveHoloUserId(req);
     const id = req.query.id;
 
     if (!sigDigest && !id) {
