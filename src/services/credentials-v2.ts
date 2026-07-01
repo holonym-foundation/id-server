@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Model } from "mongoose";
 import { UserCredentialsV2, getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 import {
   ISandboxUserCredentialsV2,
   IUserCredentialsV2,
@@ -208,7 +209,7 @@ async function storeOrUpdateBiometricsAllowSybilsCredentials(
  */
 function createGetCredentials(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
-    const holoUserId = req?.query?.holoUserId;
+    const holoUserId = resolveHoloUserId(req, req?.query?.holoUserId);
 
     if (!holoUserId) {
       getEndpointLogger.error("No holoUserId specified.");

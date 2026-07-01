@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Model, Types } from "mongoose";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 import {
   ISandboxPaymentSecret,
   IPaymentSecret,
@@ -139,7 +140,7 @@ async function storeOrUpdatePaymentSecret(
  */
 function createGetPaymentSecrets(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
-    const holoUserId = req?.query?.holoUserId;
+    const holoUserId = resolveHoloUserId(req, req?.query?.holoUserId);
     const checkRedemptionParam = req?.query?.checkRedemption;
     const checkRedemption = checkRedemptionParam === "true" || String(checkRedemptionParam) === "true";
 

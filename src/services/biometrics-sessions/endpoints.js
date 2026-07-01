@@ -10,6 +10,7 @@ import {
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { v4 as uuidV4 } from "uuid";
 import { rateLimitByTier } from "../../utils/rate-limiting.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
 import { isAlreadyRegisteredFailure } from "../../utils/errors.js";
 import {
@@ -140,7 +141,7 @@ async function postSessionV2(req, res) {
  */
 async function getSessions(req, res) {
   try {
-    const sigDigest = req.query.sigDigest;
+    const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
     const id = req.query.id;
 
     if (!sigDigest && !id) {

@@ -6,6 +6,7 @@ import {
   getIdenfySessionById,
   getIdenfyStatusForSession,
 } from "./functions.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[/idenfy-sessions] ",
@@ -54,7 +55,7 @@ function getStatusHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
 function findBySignDigestHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { sigDigest } = req.query;
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
 
       if (!sigDigest || typeof sigDigest !== "string") {
         return res

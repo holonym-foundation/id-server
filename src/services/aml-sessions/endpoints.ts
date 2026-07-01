@@ -14,6 +14,7 @@ import {
   getRouteHandlerConfig
 } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig, IOnfidoSession, ISandboxOnfidoSession } from "../../types.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 import { 
   getAccessToken as getPayPalAccessToken,
   capturePayPalOrder,
@@ -3378,7 +3379,7 @@ async function confirmStatementSandbox(req: Request, res: Response) {
 function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = req.query.sigDigest;
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
       const id = req.query.id;
 
       if (!sigDigest && !id) {

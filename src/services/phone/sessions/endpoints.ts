@@ -24,6 +24,7 @@ import {
   setSandboxPhoneSessionRefunded
 } from '../_utils/dynamodb.js'
 import { valkeyClient } from '../../../utils/valkey-glide.js'
+import { resolveHoloUserId } from '../../../utils/holo-user-id.js'
 import {
   sessionStatusEnum,
   supportedChainIds,
@@ -1288,7 +1289,7 @@ function createGetSessions(config: GetSessionsConfig) {
     res: Response
   ): Promise<Response> {
     try {
-      const sigDigest = req.query.sigDigest as string
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest) as string
       const id = req.query.id as string
 
       if (!sigDigest && !id) {

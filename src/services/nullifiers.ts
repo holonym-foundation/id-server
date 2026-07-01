@@ -3,6 +3,7 @@ import { HydratedDocument } from "mongoose";
 import { IEncryptedNullifiers, ISandboxEncryptedNullifiers, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getRouteHandlerConfig } from "../init.js";
 import logger from "../utils/logger.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /nullifiers] " });
 
@@ -36,7 +37,7 @@ async function validatePutNullifierArgs(
  */
 function createGetNullifiersRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
-    const holoUserId = req?.query?.holoUserId;
+    const holoUserId = resolveHoloUserId(req, req?.query?.holoUserId);
 
     if (!holoUserId) {
       getEndpointLogger.error("No holoUserId specified.");
