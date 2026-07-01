@@ -5,6 +5,7 @@ import {
   sessionStatusEnum,
 } from "../../../constants/misc.js";
 import { pinoOptions, logger } from "../../../utils/logger.js";
+import { resolveHoloUserId } from "../../../utils/holo-user-id.js";
 import { v4 as uuidV4 } from "uuid";
 
 const postSessionsLogger = logger.child({
@@ -101,7 +102,7 @@ async function postSessionV2(req, res) {
  */
 async function getSessions(req, res) {
   try {
-    const sigDigest = req.query.sigDigest;
+    const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
     const id = req.query.id;
 
     if (!sigDigest && !id) {

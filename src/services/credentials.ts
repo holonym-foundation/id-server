@@ -5,6 +5,7 @@ const { ethers } = ethersPkg;
 // import { poseidon } from "circomlibjs-old";
 import { mongoose, UserCredentials, zokProvider } from "../init.js";
 import logger from "../utils/logger.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 import contractAddresses from "../constants/contractAddresses.js";
 import { holonymIssuers } from "../constants/misc.js";
 
@@ -98,7 +99,7 @@ async function storeOrUpdateUserCredentials(
  * Get user's encrypted credentials and symmetric key from document store.
  */
 async function getCredentials(req: Request, res: Response) {
-  const sigDigest = req?.query?.sigDigest;
+  const sigDigest = resolveHoloUserId(req, req?.query?.sigDigest);
 
   if (!sigDigest) {
     getEndpointLogger.error("No sigDigest specified.");

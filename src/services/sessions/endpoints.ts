@@ -14,6 +14,7 @@ import {
 } from "../../utils/paypal.js";
 import { createOnfidoSdkToken, createOnfidoCheck, createOnfidoWorkflowRun } from "../../utils/onfido.js";
 import { getSumsubAccessToken } from "../../utils/sumsub.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 import { SUMSUB_LEVEL_NAME } from "../../constants/sumsub.js";
 import {
   validateTxForSessionCreation,
@@ -1415,7 +1416,7 @@ async function refundV2(req: Request, res: Response) {
 function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = req.query.sigDigest;
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
       const id = req.query.id;
       const last5days = req.query.last5days === "true" || false;
 

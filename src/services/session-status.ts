@@ -12,6 +12,7 @@ import { getVeriffSessionDecision } from "../utils/veriff.js";
 // is kept for backward compat but its idenfy branch is now a stub.
 import { getOnfidoReports } from "../utils/onfido.js";
 import { getSumsubApplicantData } from "../utils/sumsub.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
@@ -189,7 +190,7 @@ async function getOnfidoSessionStatus(
 function createGetSessionStatus(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = req.query.sigDigest;
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
       const provider = req.query.provider; // not required
 
       if (!sigDigest) {

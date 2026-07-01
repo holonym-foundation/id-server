@@ -15,6 +15,7 @@ import { rateLimitByTier } from "../../utils/rate-limiting.js";
 import { getRateLimitTier } from "../../utils/whitelist.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { makeUnknownErrorLoggable } from "../../utils/errors.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import type { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 
@@ -183,7 +184,7 @@ export async function postZkPassportSessionSandbox(req: Request, res: Response) 
 function createListZkPassportSessionsHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = req.query?.sigDigest;
+      const sigDigest = resolveHoloUserId(req, req.query?.sigDigest);
       if (!sigDigest || typeof sigDigest !== "string") {
         return res.status(400).json({ error: "sigDigest is required" });
       }
@@ -247,7 +248,7 @@ function createGetZkPassportSessionHandler(config: SandboxVsLiveKYCRouteHandlerC
       const session = await config.ZkPassportSessionModel.findOne({ _id: objectId }).exec();
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      const holoUserId = req.query?.holoUserId;
+      const holoUserId = resolveHoloUserId(req, req.query?.holoUserId);
       if (
         typeof holoUserId === "string" &&
         holoUserId &&
