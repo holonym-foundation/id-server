@@ -55,7 +55,7 @@ function getStatusHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
 function findBySignDigestHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
+      const sigDigest = resolveHoloUserId(req);
 
       if (!sigDigest || typeof sigDigest !== "string") {
         return res
