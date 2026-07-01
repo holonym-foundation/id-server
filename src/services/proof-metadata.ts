@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { mongoose, UserCredentials, UserProofMetadata } from "../init.js";
 import logger from "../utils/logger.js";
+import { resolveHoloUserId } from "../utils/holo-user-id.js";
 
 const postEndpointLogger = logger.child({ msgPrefix: "[POST /proof-metadata] " });
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /proof-metadata] " });
@@ -9,7 +10,7 @@ const getEndpointLogger = logger.child({ msgPrefix: "[GET /proof-metadata] " });
  * Get user's encrypted proof metadata and symmetric key from document store.
  */
 async function getProofMetadata(req: Request, res: Response) {
-  const sigDigest = req?.query?.sigDigest;
+  const sigDigest = resolveHoloUserId(req, req?.query?.sigDigest);
 
   if (!sigDigest) {
     getEndpointLogger.error("No sigDigest specified.");

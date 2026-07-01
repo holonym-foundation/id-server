@@ -11,6 +11,7 @@ import {
   getOnfidoCheckAsync,
 } from "./functions.js";
 import { onfidoSDKTokenAndApplicantRateLimiter } from "../../utils/rate-limiting.js";
+import { resolveHoloUserId } from "../../utils/holo-user-id.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[Onfido Sessions Endpoints] ",
@@ -200,7 +201,7 @@ function getStatusHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
 function findBySignDigestHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { sigDigest } = req.query;
+      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
 
       if (!sigDigest || typeof sigDigest !== "string") {
         return res.status(400).json({ error: "sigDigest query parameter is required" });
