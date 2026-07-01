@@ -44,6 +44,12 @@ describe("resolveHoloUserId", () => {
     expect(resolveHoloUserId(req, undefined)).toBeUndefined();
   });
 
+  it("treats a duplicated (comma-joined) header as absent and falls back", () => {
+    // Express joins repeated headers with ", "; a real holoUserId never has a comma.
+    const req = makeReq({ [HOLO_USER_ID_HEADER]: "aaa, bbb" });
+    expect(resolveHoloUserId(req, "xyz")).toBe("xyz");
+  });
+
   it("is case-insensitive on the header name", () => {
     const req = makeReq({ "x-holo-user-id": "abc" });
     expect(resolveHoloUserId(req, "xyz")).toBe("abc");
