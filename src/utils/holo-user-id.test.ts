@@ -14,50 +14,40 @@ function makeReq(headers: Record<string, string> = {}): Request {
 }
 
 describe("resolveHoloUserId", () => {
-  it("returns the header value when present, ignoring the fallback", () => {
+  it("returns the header value when present", () => {
     const req = makeReq({ [HOLO_USER_ID_HEADER]: "abc" });
-    expect(resolveHoloUserId(req, "xyz")).toBe("abc");
+    expect(resolveHoloUserId(req)).toBe("abc");
   });
 
-  it("returns the fallback when the header is absent", () => {
+  it("returns undefined when the header is absent (no query fallback in Phase 3)", () => {
     const req = makeReq();
-    expect(resolveHoloUserId(req, "xyz")).toBe("xyz");
+    expect(resolveHoloUserId(req)).toBeUndefined();
   });
 
-  it("treats an empty-string header as absent and falls back", () => {
+  it("returns undefined for an empty-string header", () => {
     const req = makeReq({ [HOLO_USER_ID_HEADER]: "" });
-    expect(resolveHoloUserId(req, "xyz")).toBe("xyz");
+    expect(resolveHoloUserId(req)).toBeUndefined();
   });
 
-  it("treats a whitespace-only header as absent and falls back", () => {
+  it("returns undefined for a whitespace-only header", () => {
     const req = makeReq({ [HOLO_USER_ID_HEADER]: "   " });
-    expect(resolveHoloUserId(req, "xyz")).toBe("xyz");
+    expect(resolveHoloUserId(req)).toBeUndefined();
   });
 
-  it("returns the header value even when the fallback is undefined", () => {
-    const req = makeReq({ [HOLO_USER_ID_HEADER]: "abc" });
-    expect(resolveHoloUserId(req, undefined)).toBe("abc");
-  });
-
-  it("returns the (undefined) fallback when neither header nor query value exists", () => {
-    const req = makeReq();
-    expect(resolveHoloUserId(req, undefined)).toBeUndefined();
-  });
-
-  it("treats a duplicated (comma-joined) header as absent and falls back", () => {
+  it("returns undefined for a duplicated (comma-joined) header", () => {
     // Express joins repeated headers with ", "; a real holoUserId never has a comma.
     const req = makeReq({ [HOLO_USER_ID_HEADER]: "aaa, bbb" });
-    expect(resolveHoloUserId(req, "xyz")).toBe("xyz");
+    expect(resolveHoloUserId(req)).toBeUndefined();
   });
 
   it("is case-insensitive on the header name", () => {
     const req = makeReq({ "x-holo-user-id": "abc" });
-    expect(resolveHoloUserId(req, "xyz")).toBe("abc");
+    expect(resolveHoloUserId(req)).toBe("abc");
   });
 
   it("does not trim the returned value (preserves downstream length checks)", () => {
     const padded = " abc ";
     const req = makeReq({ [HOLO_USER_ID_HEADER]: padded });
-    expect(resolveHoloUserId(req, "xyz")).toBe(padded);
+    expect(resolveHoloUserId(req)).toBe(padded);
   });
 });

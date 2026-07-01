@@ -190,7 +190,7 @@ async function getOnfidoSessionStatus(
 function createGetSessionStatus(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
+      const sigDigest = resolveHoloUserId(req);
       const provider = req.query.provider; // not required
 
       if (!sigDigest) {

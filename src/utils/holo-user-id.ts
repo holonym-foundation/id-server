@@ -9,36 +9,27 @@ import type { Request } from "express";
  * NOTE: this literal is duplicated in the frontend at
  * frontend/src/lib/frontend/holoUserIdHeader.ts (the two repos deploy
  * independently and share no package). They MUST stay in sync — a silent
- * divergence would break resolution once the Phase 2/3 query fallback is
- * removed. Keep both in step when changing the header name.
+ * divergence would break resolution now that the query fallback is removed
+ * (Phase 3). Keep both in step when changing the header name.
  */
 export const HOLO_USER_ID_HEADER = "X-Holo-User-Id";
 
 /**
- * Resolve the caller's holoUserId / sigDigest, preferring the
- * `X-Holo-User-Id` request header and falling back to the value the handler
- * previously read from the query string.
+ * Resolve the caller's holoUserId / sigDigest from the `X-Holo-User-Id`
+ * request header.
  *
- * Phase 1 of the rollout is intentionally additive: the header takes
- * precedence when present, but requests that still send only the query param
- * continue to work unchanged. A present-but-empty (or whitespace-only) header
- * is treated as absent so a client cannot lock itself out by sending an empty
- * value.
+ * Phase 3 of the rollout: the header is now the only accepted source — the
+ * query-param fallback has been removed, so the identifier can never re-enter
+ * a URL. Returns `undefined` when the header is absent, empty/whitespace-only,
+ * or duplicated (Express joins repeated headers with ", ", and a legitimate
+ * holoUserId never contains a comma); callers treat `undefined` as a missing
+ * identifier and return their existing 400.
  *
  * The header value is returned as-is (untrimmed) so downstream validation
  * (length/type checks) and authorization comparisons against
- * `session.sigDigest` behave identically to the query-sourced value.
- *
- * A duplicated header is ignored: Express joins repeated header values with
- * ", ", and a legitimate holoUserId (64 hex chars) never contains a comma, so
- * a comma-bearing value is treated as absent and we fall back to the query
- * param. This mirrors how the query path rejects a duplicated `?sigDigest=a&b`
- * (an array) rather than trusting an ambiguous value.
+ * `session.sigDigest` are unchanged.
  */
-export function resolveHoloUserId<T>(
-  req: Request,
-  fallback: T
-): string | T {
+export function resolveHoloUserId(req: Request): string | undefined {
   const headerValue = req.header(HOLO_USER_ID_HEADER);
   if (
     typeof headerValue === "string" &&
@@ -47,5 +38,5 @@ export function resolveHoloUserId<T>(
   ) {
     return headerValue;
   }
-  return fallback;
+  return undefined;
 }
