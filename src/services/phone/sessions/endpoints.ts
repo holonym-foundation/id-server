@@ -1289,7 +1289,7 @@ function createGetSessions(config: GetSessionsConfig) {
     res: Response
   ): Promise<Response> {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query.sigDigest) as string
+      const sigDigest = resolveHoloUserId(req) as string
       const id = req.query.id as string
 
       if (!sigDigest && !id) {

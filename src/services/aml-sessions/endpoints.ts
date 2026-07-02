@@ -3379,7 +3379,7 @@ async function confirmStatementSandbox(req: Request, res: Response) {
 function createGetSessionsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query.sigDigest);
+      const sigDigest = resolveHoloUserId(req);
       const id = req.query.id;
 
       if (!sigDigest && !id) {

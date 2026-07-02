@@ -140,7 +140,7 @@ async function storeOrUpdatePaymentSecret(
  */
 function createGetPaymentSecrets(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
-    const holoUserId = resolveHoloUserId(req, req?.query?.holoUserId);
+    const holoUserId = resolveHoloUserId(req);
     const checkRedemptionParam = req?.query?.checkRedemption;
     const checkRedemption = checkRedemptionParam === "true" || String(checkRedemptionParam) === "true";
 

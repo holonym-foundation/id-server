@@ -184,7 +184,7 @@ export async function postZkPassportSessionSandbox(req: Request, res: Response) 
 function createListZkPassportSessionsHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const sigDigest = resolveHoloUserId(req, req.query?.sigDigest);
+      const sigDigest = resolveHoloUserId(req);
       if (!sigDigest || typeof sigDigest !== "string") {
         return res.status(400).json({ error: "sigDigest is required" });
       }
@@ -248,7 +248,7 @@ function createGetZkPassportSessionHandler(config: SandboxVsLiveKYCRouteHandlerC
       const session = await config.ZkPassportSessionModel.findOne({ _id: objectId }).exec();
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      const holoUserId = resolveHoloUserId(req, req.query?.holoUserId);
+      const holoUserId = resolveHoloUserId(req);
       if (
         typeof holoUserId === "string" &&
         holoUserId &&
