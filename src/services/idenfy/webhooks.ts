@@ -3,6 +3,7 @@ import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
 import { sessionStatusEnum } from "../../constants/misc.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { failSession } from "../../utils/sessions.js";
 import { verifyIdenfyWebhookSignature } from "./webhook-signature.js";
 
 export { verifyIdenfyWebhookSignature };
@@ -215,6 +216,36 @@ function createHandleIdenfyWebhookRouteHandler(
           },
           "Updated iDenfy session from webhook"
         );
+      }
+
+      // Propagate a DENIED decision to the parent session so the user gets an
+      // automated refund path. This webhook is the earliest and most reliable
+      // signal of a denial. Without this the parent session stays IN_PROGRESS:
+      // the frontend's "verification failed (status is denied)" screen only
+      // polls GET /session-status/v2 (historically a read-only endpoint) and
+      // never reaches the credentials endpoint that otherwise calls
+      // failSession(), leaving a dead-end state with no refund option
+      // (issue #1120). A single standalone iDenfy session may be referenced by
+      // a gov-id Session or a Clean Hands AMLChecksSession, so fail whichever
+      // in-progress parent points at it. Guarded to IN_PROGRESS so we never
+      // clobber ISSUED/REFUNDED/already-failed or fail an unpaid
+      // (NEEDS_PAYMENT) session.
+      if (overall === "DENIED") {
+        const parentFilter = {
+          idenfySessionId: idenfySession._id,
+          status: sessionStatusEnum.IN_PROGRESS,
+        };
+        const [govIdParents, amlParents] = await Promise.all([
+          config.SessionModel.find(parentFilter).exec(),
+          config.AMLChecksSessionModel.find(parentFilter).exec(),
+        ]);
+        for (const parent of [...govIdParents, ...amlParents]) {
+          await failSession(parent as any, failureReason ?? "iDenfy verification denied");
+          webhookLogger.info(
+            { scanRef, parentSessionId: parent._id?.toString() },
+            "Failed parent session from iDenfy DENIED webhook"
+          );
+        }
       }
 
       return res.status(200).json({ received: true });
