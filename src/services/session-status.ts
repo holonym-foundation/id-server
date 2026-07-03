@@ -13,6 +13,8 @@ import { getVeriffSessionDecision } from "../utils/veriff.js";
 import { getOnfidoReports } from "../utils/onfido.js";
 import { getSumsubApplicantData } from "../utils/sumsub.js";
 import { resolveHoloUserId } from "../utils/holo-user-id.js";
+import { failSession } from "../utils/sessions.js";
+import { sessionStatusEnum } from "../constants/misc.js";
 import { IIdvSessions, ISandboxSession, ISession, SandboxVsLiveKYCRouteHandlerConfig } from "../types.js";
 import { getOnfidoCheckAsync } from "./onfido/get-check-async.js";
 import { getOnfidoCheckAsync as getOnfidoCheckAsyncFromService, getOnfidoSessionById } from "./onfido-sessions/functions.js";
@@ -248,6 +250,19 @@ async function getSessionStatusSandbox(req: Request, res: Response) {
 
 /**
  * ENDPOINT
+ *
+ * GET /session-status/v2 — resolve the current IDV status for a session.
+ *
+ * NOTE: This is primarily a READ endpoint, but the iDenfy branch has an
+ * intentional WRITE side effect. When iDenfy has DENIED the verification, the
+ * parent session (gov-id `SessionModel` or Clean Hands `AMLChecksSessionModel`)
+ * is transitioned to `VERIFICATION_FAILED` here. This is required so denied
+ * users get a refund path: the frontend's "verification failed" screen polls
+ * only this endpoint and never hits the credentials endpoint that otherwise
+ * fails the session, so without this the parent session would stay IN_PROGRESS
+ * forever with no automated refund option (issue #1120). It complements the
+ * iDenfy webhook, covering the case where the webhook was not delivered. See
+ * the inline SIDE EFFECT comment in the idenfy branch below.
  */
 function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async function getSessionStatusV2(req: Request, res: Response) {
@@ -338,6 +353,27 @@ function createGetSessionStatusV2(config: SandboxVsLiveKYCRouteHandlerConfig) {
           config,
           idenfyDoc.toObject()
         );
+
+        // SIDE EFFECT (see the note on getSessionStatusV2 above). Although this
+        // endpoint is primarily a read, a resolved DENIED decision transitions
+        // the parent session to VERIFICATION_FAILED here. For a denied iDenfy
+        // verification the frontend polls only this endpoint (the denied screen
+        // never advances to the credentials endpoint, the other place that
+        // fails the session), so this is the sole reliable point at which the
+        // parent session — gov-id (SessionModel) or Clean Hands
+        // (AMLChecksSessionModel) — gets marked failed and the user becomes
+        // eligible for a refund (issue #1120). Guarded to IN_PROGRESS so we
+        // never overwrite ISSUED/REFUNDED/already-failed or fail an unpaid
+        // (NEEDS_PAYMENT) session.
+        if (
+          resolved?.idenfyVerificationStatus === "DENIED" &&
+          ambiguousSession.status === sessionStatusEnum.IN_PROGRESS
+        ) {
+          await failSession(
+            ambiguousSession,
+            resolved?.verificationFailureReason ?? "iDenfy verification denied"
+          );
+        }
 
         return res.status(200).json({
           idenfy: {
