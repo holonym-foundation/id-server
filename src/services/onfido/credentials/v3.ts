@@ -29,6 +29,7 @@ import {
   saveUserToDb,
   getSession,
   updateSessionStatus,
+  updateResolvedSessionStatus,
 } from "./utils.js"
 import { ISession, OnfidoDocumentReport, OnfidoReport, SandboxVsLiveKYCRouteHandlerConfig } from "../../../types.js";
 import { getOnfidoCheckAsync } from "../get-check-async.js";
@@ -167,7 +168,39 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
         endpointLoggerV3.info({ uuidV2: uuidNew, check_id: checkIdFromNullifier }, "Issuing credentials");
 
-        await updateSessionStatus(config.SessionModel, checkIdFromNullifier, sessionStatusEnum.ISSUED);
+        // The requested session can differ from the session that originally
+        // produced this nullifier. Mark the session that owns this check as
+        // issued, not the caller-selected session.
+        const onfidoSession = await config.OnfidoSessionModel.findOne({
+          check_id: checkIdFromNullifier,
+        }).exec();
+        if (onfidoSession) {
+          const issuingSession = await config.SessionModel.findById(
+            onfidoSession.createdBySessionId
+          ).exec();
+          if (issuingSession) {
+            await updateResolvedSessionStatus(
+              issuingSession,
+              sessionStatusEnum.ISSUED
+            );
+          } else {
+            endpointLoggerV3.error(
+              {
+                check_id: checkIdFromNullifier,
+                onfidoSessionId: onfidoSession._id,
+                createdBySessionId: onfidoSession.createdBySessionId,
+              },
+              "Unable to find parent session for standalone Onfido check"
+            );
+          }
+        } else {
+          // Legacy sessions store the check ID directly on ISession.
+          await updateSessionStatus(
+            config.SessionModel,
+            checkIdFromNullifier,
+            sessionStatusEnum.ISSUED
+          );
+        }
 
         return res.status(200).json(response);
       }
@@ -286,7 +319,7 @@ function createGetCredentialsV3(config: SandboxVsLiveKYCRouteHandlerConfig) {
       });
       await newNullifierAndCreds.save();
 
-      await updateSessionStatus(config.SessionModel, check_id, sessionStatusEnum.ISSUED);
+      await updateResolvedSessionStatus(session, sessionStatusEnum.ISSUED);
 
       return res.status(200).json(response);
     } catch (err: any) {
