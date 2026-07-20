@@ -1,7 +1,7 @@
 import ethersPkg from "ethers";
 const { ethers } = ethersPkg;
 import { poseidon } from "circomlibjs-old";
-import { Model } from "mongoose";
+import { HydratedDocument, Model } from "mongoose";
 import {
   Session,
   UserVerifications,
@@ -506,5 +506,25 @@ export async function updateSessionStatus(SessionModel: Model<ISession | ISandbo
     await metaSession.save();
   } catch (err) {
     console.log("onfido/credentials: Error updating session status", err);
+  }
+}
+
+/**
+ * Update a session that the caller has already resolved.
+ *
+ * Standalone Onfido sessions keep their check_id in IOnfidoSession rather than
+ * ISession, so looking up an ISession by check_id does not work for that flow.
+ */
+export async function updateResolvedSessionStatus(
+  metaSession: HydratedDocument<ISession | ISandboxSession>,
+  status: string,
+  failureReason?: string
+) {
+  try {
+    metaSession.status = status;
+    if (failureReason) metaSession.verificationFailureReason = failureReason;
+    await metaSession.save();
+  } catch (err) {
+    console.log("onfido/credentials: Error updating resolved session status", err);
   }
 }
