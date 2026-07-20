@@ -1041,9 +1041,9 @@ function createPayForSessionV4RouteHandler(config: SandboxVsLiveKYCRouteHandlerC
         return res.status(err.statusCode).json({ error: err.message });
       }
 
-      console.log(
-        "POST /aml-sessions/:_id/pay/v4: Error encountered",
-        makeUnknownErrorLoggable(err),
+      payForSessionV4Logger.error(
+        { error: makeUnknownErrorLoggable(err) },
+        "Error encountered",
       );
       return res.status(500).json({ error: "An unknown error occurred" });
     }
