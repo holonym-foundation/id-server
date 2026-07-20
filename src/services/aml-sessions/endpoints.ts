@@ -387,14 +387,17 @@ const postSessionsV4Logger = logger.child({
   },
 });
 
-const VALID_IDV_PROVIDERS = ["onfido", "zk-passport", "idenfy"] as const;
-type IdvProvider = (typeof VALID_IDV_PROVIDERS)[number];
+const VALID_IDV_PROVIDERS = ["onfido", "zk-passport"] as const;
+type NewIdvProvider = (typeof VALID_IDV_PROVIDERS)[number];
+// iDenfy remains a readable legacy value so paid historical sessions can be
+// recovered or migrated; it is not valid for creating a new v4 session.
+type IdvProvider = NewIdvProvider | "idenfy";
 
-function resolveIdvProvider(raw: unknown): IdvProvider | null {
+function resolveIdvProvider(raw: unknown): NewIdvProvider | null {
   if (raw === undefined || raw === null) return "onfido";
   if (typeof raw !== "string") return null;
   return (VALID_IDV_PROVIDERS as readonly string[]).includes(raw)
-    ? (raw as IdvProvider)
+    ? (raw as NewIdvProvider)
     : null;
 }
 
