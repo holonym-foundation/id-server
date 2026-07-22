@@ -44,17 +44,15 @@ export async function findUserVerification(
   }
 
   // The expiresAt field was added April 23, 2026. Documents created before
-  // then do not have it, so we include them via $exists: false rather than
-  // excluding them from the search.
+  // then do not have it. Any such document is now at least 3 months old —
+  // well past the 11-month validity window — so we no longer treat missing
+  // expiresAt as "still valid." This unblocks re-verification for users
+  // whose credentials expired but lacked the expiresAt field.
   if (opts.expiresAt?.after || opts.expiresAt?.before) {
     const expiresFilter: Record<string, any> = {};
     if (opts.expiresAt.after) expiresFilter.$gt = opts.expiresAt.after;
     if (opts.expiresAt.before) expiresFilter.$lt = opts.expiresAt.before;
-    query.$or = [
-      // TODO: After March 23, 2027, remove the $exists check
-      { [`${namespace}.expiresAt`]: { $exists: false } },
-      { [`${namespace}.expiresAt`]: expiresFilter },
-    ];
+    query[`${namespace}.expiresAt`] = expiresFilter;
   }
 
   return UserVerifications.findOne(query).sort({ _id: "desc" }).exec();
