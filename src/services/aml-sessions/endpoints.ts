@@ -2672,7 +2672,7 @@ function createVerifyAndIssueZkPassportRouteHandler(
         },
         "Verifying ZK Passport proofs (pre-verify diagnostic)",
       );
-      dumpZkPassportPayload("aml-sessions", { proofs, queryResult, sid: session._id });
+      // dumpZkPassportPayload("aml-sessions", { proofs, queryResult, sid: session._id });
 
       let verificationResult: any;
       try {
