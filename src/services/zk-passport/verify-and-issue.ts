@@ -433,7 +433,7 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
         },
         "Verifying ZK Passport proofs (pre-verify diagnostic)",
       );
-      dumpZkPassportPayload("verify-and-issue", { proofs, queryResult, sid: session._id });
+      //dumpZkPassportPayload("verify-and-issue", { proofs, queryResult, sid: session._id });
 
       let verificationResult;
       try {
