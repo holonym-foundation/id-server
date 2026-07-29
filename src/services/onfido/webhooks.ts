@@ -160,9 +160,9 @@ function createHandleOnfidoWebhookRouteHandler(config: SandboxVsLiveKYCRouteHand
       }
 
       // Parse the event - handle different payload structures
-      let eventType = body?.payload.resource_type;
-      let action = body?.payload.action;
-      let object = body?.payload.object;
+      let eventType = body?.payload?.resource_type;
+      let action = body?.payload?.action;
+      let object = body?.payload?.object;
 
       // Handle different event types
       switch (eventType) {
