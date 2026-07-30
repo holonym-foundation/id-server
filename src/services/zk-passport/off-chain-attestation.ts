@@ -7,6 +7,7 @@ import {
   classifyZkPassportError,
   formatDateOfBirth,
 } from "./verify-and-issue.js";
+import { extractDisclosedIdentity } from "./disclosed-identity.js";
 import { UserVerifications } from "../../init.js";
 import { govIdUUID, dateElevenMonthsAgo } from "../../utils/utils.js";
 import { countryCodeToPrime } from "../../utils/constants.js";
@@ -150,19 +151,17 @@ function createPostOffChainAttestation(config: SandboxVsLiveKYCRouteHandlerConfi
 
       // --- Extract disclosed fields ---
 
-      const firstName = queryResult.firstname?.disclose?.result;
-      const lastName = queryResult.lastname?.disclose?.result;
-      const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality = queryResult.nationality?.disclose?.result;
+      const { firstName, lastName, dobRaw, nationality, hasRequiredFields } =
+        extractDisclosedIdentity(queryResult);
 
-      if (!firstName || !lastName || !dobRaw) {
+      if (!hasRequiredFields) {
         endpointLogger.error(
           { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
           "ZK Passport proof does not disclose required fields"
         );
         return res.status(400).json({
           error:
-            "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.",
+            "ZK Passport proof must disclose a name (firstname or lastname) and dateOfBirth.",
         });
       }
 

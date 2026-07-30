@@ -38,6 +38,10 @@ import {
   dumpZkPassportPayload,
 } from "../zk-passport/verify-and-issue.js";
 import {
+  extractDisclosedIdentity,
+  formatDisclosedName,
+} from "../zk-passport/disclosed-identity.js";
+import {
   getDateAsInt,
   govIdUUID,
   dateElevenMonthsAgo,
@@ -2706,19 +2710,17 @@ function createVerifyAndIssueZkPassportRouteHandler(
 
       // --- Extract disclosed fields ---
 
-      const firstName = queryResult.firstname?.disclose?.result;
-      const lastName = queryResult.lastname?.disclose?.result;
-      const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality = queryResult.nationality?.disclose?.result;
+      const { firstName, lastName, dobRaw, nationality, hasRequiredFields } =
+        extractDisclosedIdentity(queryResult);
 
-      if (!firstName || !lastName || !dobRaw) {
+      if (!hasRequiredFields) {
         verifyAndIssueZkPassportLogger.error(
           { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
           "ZK Passport proof does not disclose required fields",
         );
         return res.status(400).json({
           error:
-            "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.",
+            "ZK Passport proof must disclose a name (firstname or lastname) and dateOfBirth.",
         });
       }
 
@@ -2796,7 +2798,7 @@ function createVerifyAndIssueZkPassportRouteHandler(
           `&data_source=${encodeURIComponent(
             "CAP,CCMC,CMIC,DPL,DTC,EL,FATF,FBI,FINCEN,FSE,INTERPOL,ISN,MEU,NONSDN,NS-MBS LIST,OFAC-COMPREHENSIVE,OFAC-MILITARY,OFAC-OTHERS,PEP,PLC,SDN,SSI,US-DOS-CRS",
           )}` +
-          `&name=${encodeURIComponent(`${firstName} ${lastName}`)}` +
+          `&name=${encodeURIComponent(formatDisclosedName(firstName, lastName))}` +
           `&date_of_birth=${encodeURIComponent(dateOfBirth)}` +
           "&entity_type=individual";
         const reqConfig = {

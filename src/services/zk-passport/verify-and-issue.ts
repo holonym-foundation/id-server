@@ -30,6 +30,7 @@ import { failZKPassportSession } from "../../utils/sessions.js";
 import { rateLimitOccurrencesPerSecs } from "../../utils/rate-limiting.js";
 import { getRouteHandlerConfig } from "../../init.js";
 import { SandboxVsLiveKYCRouteHandlerConfig } from "../../types.js";
+import { extractDisclosedIdentity } from "./disclosed-identity.js";
 
 const endpointLogger = logger.child({
   msgPrefix: "[POST /zk-passport/verify-and-issue] ",
@@ -468,18 +469,16 @@ function createVerifyAndIssue(config: SandboxVsLiveKYCRouteHandlerConfig) {
 
       // --- Extract disclosed fields ---
 
-      const firstName = queryResult.firstname?.disclose?.result;
-      const lastName = queryResult.lastname?.disclose?.result;
-      const dobRaw = queryResult.birthdate?.disclose?.result;
-      const nationality = queryResult.nationality?.disclose?.result;
+      const { firstName, lastName, dobRaw, nationality, hasRequiredFields } =
+        extractDisclosedIdentity(queryResult);
 
-      if (!firstName || !lastName || !dobRaw) {
+      if (!hasRequiredFields) {
         endpointLogger.error(
           { firstName: !!firstName, lastName: !!lastName, dob: !!dobRaw },
-          "ZK Passport proof does not disclose required fields (firstname, lastname, dateOfBirth)"
+          "ZK Passport proof does not disclose required fields (name, dateOfBirth)"
         );
         const errorMsg =
-          "ZK Passport proof must disclose at least firstname, lastname, and dateOfBirth.";
+          "ZK Passport proof must disclose a name (firstname or lastname) and dateOfBirth.";
         await failZKPassportSession(session, errorMsg);
         return res.status(400).json({ error: errorMsg });
       }
