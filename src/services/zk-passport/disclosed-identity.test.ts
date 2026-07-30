@@ -10,11 +10,15 @@ import {
  * The SDK discloses the single MRZ name zone and splits it on "<<", so the
  * firstname/lastname it reports are derived, not independent fields. Each
  * fixture below notes the MRZ name zone it corresponds to.
+ *
+ * birthdate is a `Date` in the fixtures because that is what the extraction
+ * actually sees: it arrives as an ISO string over the wire, and verify()
+ * mutates it back into a Date in place before we read it.
  */
 function queryResult(fields: {
   firstname?: string;
   lastname?: string;
-  birthdate?: string;
+  birthdate?: Date | string;
   nationality?: string;
 }) {
   const result: any = {};
@@ -27,11 +31,12 @@ function queryResult(fields: {
 describe("extractDisclosedIdentity", () => {
   it("accepts a conventional two-part name", () => {
     // MRZ name zone: DOE<<JOHN<PAUL<<<<<
+    const dob = new Date(Date.UTC(1990, 0, 1));
     const identity = extractDisclosedIdentity(
       queryResult({
         firstname: "JOHN",
         lastname: "DOE",
-        birthdate: "1990-01-01",
+        birthdate: dob,
         nationality: "USA",
       }),
     );
@@ -39,8 +44,23 @@ describe("extractDisclosedIdentity", () => {
     expect(identity.hasRequiredFields).toBe(true);
     expect(identity.firstName).toBe("JOHN");
     expect(identity.lastName).toBe("DOE");
-    expect(identity.dobRaw).toBe("1990-01-01");
+    expect(identity.dobRaw).toBe(dob);
     expect(identity.nationality).toBe("USA");
+  });
+
+  it("preserves the birthdate as the Date that verify() left in place", () => {
+    // verify() calls formatQueryResultDates(queryResult), which converts the
+    // over-the-wire ISO string into a Date by mutating the object in place.
+    // Extraction must hand that Date through untouched — formatDateOfBirth()
+    // returns strings unchanged, so a string here would put a timestamped
+    // birthdate into credentials and govIdUUID().
+    const dob = new Date(Date.UTC(1901, 5, 6));
+    const identity = extractDisclosedIdentity(
+      queryResult({ firstname: "", lastname: "SUKARNO", birthdate: dob }),
+    );
+
+    expect(identity.dobRaw).toBeInstanceOf(Date);
+    expect(identity.dobRaw).toBe(dob);
   });
 
   it("accepts a mononym holder, whose firstname is empty", () => {
@@ -53,7 +73,7 @@ describe("extractDisclosedIdentity", () => {
       queryResult({
         firstname: "",
         lastname: "SUKARNO",
-        birthdate: "1901-06-06",
+        birthdate: new Date(Date.UTC(1901, 5, 6)),
         nationality: "IDN",
       }),
     );
@@ -63,13 +83,15 @@ describe("extractDisclosedIdentity", () => {
     expect(identity.lastName).toBe("SUKARNO");
   });
 
-  it("accepts a name zone with no << separator, whose lastname is empty", () => {
-    // Everything parses into firstname when the separator is absent.
+  it("accepts a name carried by firstname alone", () => {
+    // Contract test, not an observed SDK shape: the guard is symmetric because
+    // nothing downstream cares which component carries the name. (The SDK's
+    // split cannot actually produce this — see the both-empty case below.)
     const identity = extractDisclosedIdentity(
       queryResult({
         firstname: "SUKARNO",
         lastname: "",
-        birthdate: "1901-06-06",
+        birthdate: new Date(Date.UTC(1901, 5, 6)),
       }),
     );
 
@@ -78,9 +100,15 @@ describe("extractDisclosedIdentity", () => {
     expect(identity.lastName).toBe("");
   });
 
-  it("rejects a proof that discloses no name at all", () => {
+  it("rejects a name zone with no << separator, which parses to both-empty", () => {
+    // When the name zone contains no "<<" the SDK's split yields "" for both
+    // components, so there is no name to key an identity on.
     const identity = extractDisclosedIdentity(
-      queryResult({ firstname: "", lastname: "", birthdate: "1990-01-01" }),
+      queryResult({
+        firstname: "",
+        lastname: "",
+        birthdate: new Date(Date.UTC(1990, 0, 1)),
+      }),
     );
 
     expect(identity.hasRequiredFields).toBe(false);
