@@ -19,7 +19,11 @@ import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { getProvider } from '../../utils/misc.js';
 import { IPaymentRedemption, IPaymentCommitment, IHumanIDCreditsPaymentSecret, ISandboxHumanIDCreditsPaymentSecret } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
-import { normalizeCommitment, INVALID_COMMITMENT_MESSAGE } from "./commitment.js";
+import {
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
+  createCommitmentRecord,
+} from "./commitment.js";
 
 const paymentsLogger = logger.child({
   base: {
@@ -328,9 +332,12 @@ export async function getRedemptionRecord(
 ): Promise<IPaymentRedemption | null> {
   // Use aggregation pipeline to join PaymentCommitment and PaymentRedemption in a single query
   const pipeline = [
-    // Stage 1: Match PaymentCommitment by commitment string
+    // Stage 1: Match PaymentCommitment by commitment string. Match on the
+    // lowercase form: redemptions only ever attach to lowercase rows (they are
+    // looked up via the derived commitment), so a legacy mixed-case row passed
+    // in here would otherwise miss its redemption and look unspent.
     {
-      $match: { commitment }
+      $match: { commitment: commitment.toLowerCase() }
     },
     // Stage 2: Lookup PaymentRedemption by commitmentId
     {
@@ -431,7 +438,7 @@ export function deriveCommitmentFromSecret(secret: string): string {
   return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(secret));
 }
 
-export { normalizeCommitment, INVALID_COMMITMENT_MESSAGE };
+export { normalizeCommitment, INVALID_COMMITMENT_MESSAGE, createCommitmentRecord };
 
 /**
  * Verify commitment secret by hashing it and comparing with commitment
@@ -472,32 +479,6 @@ export async function getCommitmentRecord(
   PaymentCommitmentModel: Model<IPaymentCommitment>
 ): Promise<IPaymentCommitment | null> {
   return await PaymentCommitmentModel.findOne({ commitment }).exec();
-}
-
-/**
- * Create commitment record in PaymentCommitments collection
- */
-export async function createCommitmentRecord(
-  commitment: string,
-  sourceType: 'user' | 'credits',
-  PaymentCommitmentModel: Model<IPaymentCommitment>
-): Promise<IPaymentCommitment> {
-  // Guard against ever persisting a non-lowercase or malformed commitment,
-  // which would bypass the case-sensitive unique index on `commitment`.
-  const normalized = normalizeCommitment(commitment);
-  if (!normalized) {
-    throw new Error(`Invalid commitment format: ${INVALID_COMMITMENT_MESSAGE}`);
-  }
-  // Check if commitment already exists
-  const existing = await PaymentCommitmentModel.findOne({ commitment: normalized }).exec();
-  if (existing) {
-    return existing;
-  }
-  return await PaymentCommitmentModel.create({
-    commitment: normalized,
-    sourceType,
-    createdAt: new Date(),
-  });
 }
 
 // ─── Extracted Redemption Business Logic ────────────────────────────────────

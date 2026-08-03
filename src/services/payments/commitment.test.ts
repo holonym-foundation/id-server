@@ -1,6 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { ethers } from "ethers";
-import { normalizeCommitment, INVALID_COMMITMENT_MESSAGE } from "./commitment.js";
+import {
+  normalizeCommitment,
+  createCommitmentRecord,
+  INVALID_COMMITMENT_MESSAGE,
+} from "./commitment.js";
 
 // Same derivation as deriveCommitmentFromSecret in ./functions.js (which can't
 // be imported here without dragging in env-dependent module init).
@@ -74,5 +78,56 @@ describe("normalizeCommitment", () => {
     expect(INVALID_COMMITMENT_MESSAGE).toBe(
       "commitment must be a 0x-prefixed 32-byte hex string"
     );
+  });
+});
+
+describe("createCommitmentRecord", () => {
+  function stubModel() {
+    const calls = { findOne: [] as any[], create: [] as any[] };
+    const model = {
+      findOne(query: any) {
+        calls.findOne.push(query);
+        return { exec: async () => null };
+      },
+      async create(doc: any) {
+        calls.create.push(doc);
+        return doc;
+      },
+    };
+    return { model: model as any, calls };
+  }
+
+  it("throws on a malformed commitment before touching the model", async () => {
+    const { model, calls } = stubModel();
+    await expect(
+      createCommitmentRecord("not-a-commitment", "user", model)
+    ).rejects.toThrow(INVALID_COMMITMENT_MESSAGE);
+    expect(calls.findOne).toHaveLength(0);
+    expect(calls.create).toHaveLength(0);
+  });
+
+  it("queries and persists the lowercased commitment", async () => {
+    const { model, calls } = stubModel();
+    const upper = "0x" + VALID_LOWERCASE.slice(2).toUpperCase();
+    const record = await createCommitmentRecord(upper, "user", model);
+    expect(calls.findOne[0]).toEqual({ commitment: VALID_LOWERCASE });
+    expect(calls.create[0].commitment).toBe(VALID_LOWERCASE);
+    expect(record.commitment).toBe(VALID_LOWERCASE);
+  });
+
+  it("returns an existing record without creating a duplicate", async () => {
+    const { model, calls } = stubModel();
+    const existing = {
+      commitment: VALID_LOWERCASE,
+      sourceType: "user" as const,
+      createdAt: new Date(0),
+    };
+    model.findOne = (query: any) => {
+      calls.findOne.push(query);
+      return { exec: async () => existing };
+    };
+    const record = await createCommitmentRecord(VALID_LOWERCASE, "user", model);
+    expect(record).toBe(existing);
+    expect(calls.create).toHaveLength(0);
   });
 });

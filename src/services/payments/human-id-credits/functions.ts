@@ -12,13 +12,7 @@ import {
   IHumanIDCreditsPaymentSecret,
   IHumanIDCreditsPriceOverride,
 } from '../../../types.js';
-import {
-  deriveCommitmentFromSecret,
-  normalizeCommitment,
-  INVALID_COMMITMENT_MESSAGE,
-  generatePaymentSignature,
-  calculatePriceInToken,
-} from '../functions.js';
+import { deriveCommitmentFromSecret, generatePaymentSignature, calculatePriceInToken } from '../functions.js';
 import {
   idvSessionUSDPrice,
   PAYMENT_SERVICE_SBT_MINT,
@@ -276,45 +270,6 @@ export async function commitmentExists(
 ): Promise<boolean> {
   const exists = await PaymentCommitmentModel.findOne({ commitment }).exec();
   return exists !== null;
-}
-
-/**
- * Get commitment record
- */
-export async function getCommitmentRecord(
-  commitment: string,
-  PaymentCommitmentModel: Model<IPaymentCommitment>
-): Promise<IPaymentCommitment | null> {
-  return await PaymentCommitmentModel.findOne({ commitment }).exec();
-}
-
-/**
- * Create commitment record
- */
-export async function createCommitmentRecord(
-  commitment: string,
-  sourceType: 'user' | 'credits',
-  PaymentCommitmentModel: Model<IPaymentCommitment>
-): Promise<Types.ObjectId> {
-  // Guard against ever persisting a non-lowercase or malformed commitment,
-  // which would bypass the case-sensitive unique index on `commitment`.
-  const normalized = normalizeCommitment(commitment);
-  if (!normalized) {
-    throw new Error(`Invalid commitment format: ${INVALID_COMMITMENT_MESSAGE}`);
-  }
-  // Check if commitment already exists
-  const existing = await PaymentCommitmentModel.findOne({ commitment: normalized }).exec();
-  if (existing) {
-    return existing._id!;
-  }
-
-  const commitmentRecord = await PaymentCommitmentModel.create({
-    commitment: normalized,
-    sourceType,
-    createdAt: new Date(),
-  });
-
-  return commitmentRecord._id!;
 }
 
 /**

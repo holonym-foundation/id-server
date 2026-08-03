@@ -1,3 +1,6 @@
+import type { Model } from "mongoose";
+import type { IPaymentCommitment } from "../../types.js";
+
 export const INVALID_COMMITMENT_MESSAGE =
   "commitment must be a 0x-prefixed 32-byte hex string";
 
@@ -12,4 +15,30 @@ export function normalizeCommitment(raw: unknown): string | null {
     return null;
   }
   return raw.toLowerCase();
+}
+
+/**
+ * Create commitment record in PaymentCommitments collection
+ */
+export async function createCommitmentRecord(
+  commitment: string,
+  sourceType: 'user' | 'credits',
+  PaymentCommitmentModel: Model<IPaymentCommitment>
+): Promise<IPaymentCommitment> {
+  // Guard against ever persisting a non-lowercase or malformed commitment,
+  // which would bypass the case-sensitive unique index on `commitment`.
+  const normalized = normalizeCommitment(commitment);
+  if (!normalized) {
+    throw new Error(`Invalid commitment format: ${INVALID_COMMITMENT_MESSAGE}`);
+  }
+  // Check if commitment already exists
+  const existing = await PaymentCommitmentModel.findOne({ commitment: normalized }).exec();
+  if (existing) {
+    return existing;
+  }
+  return await PaymentCommitmentModel.create({
+    commitment: normalized,
+    sourceType,
+    createdAt: new Date(),
+  });
 }
