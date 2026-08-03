@@ -9,7 +9,12 @@ import {
   IPaymentCommitment,
   SandboxVsLiveKYCRouteHandlerConfig
 } from "../types.js";
-import { getRedemptionRecord, createCommitmentRecord } from "./payments/functions.js";
+import {
+  getRedemptionRecord,
+  createCommitmentRecord,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
+} from "./payments/functions.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /payment-secrets] " });
 const putEndpointLogger = logger.child({ msgPrefix: "[PUT /payment-secrets] " });
@@ -248,17 +253,33 @@ async function getPaymentSecretsSandbox(req: Request, res: Response) {
 function createPutPaymentSecret(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     const holoUserId = req?.body?.holoUserId;
-    const commitment = req?.body?.commitment;
+    const rawCommitment = req?.body?.commitment;
     const encryptedSecret = req?.body?.encryptedSecret;
 
     const validationResult = await validatePutPaymentSecretArgs(
       holoUserId,
-      commitment,
+      rawCommitment,
       encryptedSecret
     );
     if (validationResult.error) {
       putEndpointLogger.error({ error: validationResult.error }, "Invalid request body");
       return res.status(400).json({ error: validationResult.error });
+    }
+
+    // Normalize before storage so a non-lowercase commitment can never be
+    // persisted (Mongo string matching is case-sensitive). Don't log the raw
+    // value: a client that transposes the commitment and secret fields would
+    // otherwise land a payment secret in the logs.
+    const commitment = normalizeCommitment(rawCommitment);
+    if (!commitment) {
+      putEndpointLogger.error(
+        {
+          commitmentType: typeof rawCommitment,
+          commitmentLength: typeof rawCommitment === "string" ? rawCommitment.length : null,
+        },
+        "Invalid commitment format"
+      );
+      return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE });
     }
 
     const storeOrUpdateResult = await storeOrUpdatePaymentSecret(

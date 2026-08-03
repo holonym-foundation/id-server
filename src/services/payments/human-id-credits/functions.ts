@@ -273,39 +273,6 @@ export async function commitmentExists(
 }
 
 /**
- * Get commitment record
- */
-export async function getCommitmentRecord(
-  commitment: string,
-  PaymentCommitmentModel: Model<IPaymentCommitment>
-): Promise<IPaymentCommitment | null> {
-  return await PaymentCommitmentModel.findOne({ commitment }).exec();
-}
-
-/**
- * Create commitment record
- */
-export async function createCommitmentRecord(
-  commitment: string,
-  sourceType: 'user' | 'credits',
-  PaymentCommitmentModel: Model<IPaymentCommitment>
-): Promise<Types.ObjectId> {
-  // Check if commitment already exists
-  const existing = await PaymentCommitmentModel.findOne({ commitment }).exec();
-  if (existing) {
-    return existing._id!;
-  }
-
-  const commitmentRecord = await PaymentCommitmentModel.create({
-    commitment,
-    sourceType,
-    createdAt: new Date(),
-  });
-
-  return commitmentRecord._id!;
-}
-
-/**
  * Rate limit secret generation by userId
  */
 export async function rateLimitSecretGeneration(userId: string,): Promise<{ allowed: boolean; error?: string }> {

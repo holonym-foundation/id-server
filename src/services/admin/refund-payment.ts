@@ -4,6 +4,8 @@ import {
   getRedemptionRecord,
   isPaymentRedeemed,
   isRedemptionPending,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
 } from "../payments/functions.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
 import { getRouteHandlerConfig } from "../../init.js";
@@ -101,7 +103,7 @@ export async function refundPayment(req: Request, res: Response) {
     const liveConfig = getRouteHandlerConfig("live");
     const sandboxConfig = getRouteHandlerConfig("sandbox");
 
-    const { commitment, chainId, allowRedeemed } = req.body;
+    const { commitment: rawCommitment, chainId, allowRedeemed } = req.body;
 
     const apiKey = req.headers["x-api-key"];
     if (!process.env.ADMIN_API_KEY_LOW_PRIVILEGE || !apiKey) {
@@ -111,8 +113,9 @@ export async function refundPayment(req: Request, res: Response) {
       return res.status(401).json({ error: "Invalid API key." });
     }
 
-    if (!commitment || typeof commitment !== "string") {
-      return res.status(400).json({ error: "commitment is required" });
+    const commitment = normalizeCommitment(rawCommitment);
+    if (!commitment) {
+      return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE });
     }
     if (chainId === undefined || chainId === null) {
       return res.status(400).json({ error: "chainId is required" });
@@ -122,18 +125,9 @@ export async function refundPayment(req: Request, res: Response) {
       return res.status(400).json({ error: "chainId must be a number" });
     }
 
-    // Every commitment we write today is lowercase (ethers-derived, or a
-    // client-supplied string that must match one to be redeemable), while the
-    // Mongo lookup is a case-sensitive string match — so lowercasing the input
-    // is what makes an uppercase commitment find its record instead of looking
-    // unredeemed. Note the schema does not enforce lowercase storage, so this
-    // does not help if a record was somehow stored uppercase; normalizing at
-    // every commitment boundary (fix 1 of internal-docs#236) is what would.
-    const normalizedCommitment = commitment.toLowerCase();
-
     const inspections = await Promise.all([
-      inspectRedemption(liveConfig, normalizedCommitment),
-      inspectRedemption(sandboxConfig, normalizedCommitment),
+      inspectRedemption(liveConfig, commitment),
+      inspectRedemption(sandboxConfig, commitment),
     ]);
     const redeemedIn = inspections.filter((i) => i.redeemed);
     const redeemed = redeemedIn.length > 0;
@@ -141,7 +135,7 @@ export async function refundPayment(req: Request, res: Response) {
     const overrideRequested = allowRedeemed === true || allowRedeemed === "true";
 
     const auditBase = {
-      commitment: normalizedCommitment,
+      commitment,
       chainId: chainIdNum,
       redeemed,
       redeemedIn: redeemedIn.map((i) => i.environment),
@@ -171,7 +165,7 @@ export async function refundPayment(req: Request, res: Response) {
     // A redemption in flight in either environment must also block the refund.
     // `forceRefundPayment` only checks the environment it is given, and the
     // pending keys are environment-prefixed.
-    if (await isRedemptionPending(normalizedCommitment, "sandbox")) {
+    if (await isRedemptionPending(commitment, "sandbox")) {
       adminRefundPaymentLogger.info(
         auditBase,
         "Admin force-refund rejected: redemption is pending in the sandbox environment"
@@ -194,7 +188,7 @@ export async function refundPayment(req: Request, res: Response) {
       );
     }
 
-    const result = await forceRefundPayment(normalizedCommitment, chainIdNum, {
+    const result = await forceRefundPayment(commitment, chainIdNum, {
       logger: adminRefundPaymentLogger,
       environment: liveConfig.environment,
     });
@@ -226,7 +220,7 @@ export async function refundPayment(req: Request, res: Response) {
 
     return res.status(200).json({
       message: "Refund processed successfully",
-      commitment: normalizedCommitment,
+      commitment,
       chainId: chainIdNum,
       contractAddress: result.contractAddress,
       txHash: result.txHash,
