@@ -12,7 +12,13 @@ import {
   IHumanIDCreditsPaymentSecret,
   IHumanIDCreditsPriceOverride,
 } from '../../../types.js';
-import { deriveCommitmentFromSecret, generatePaymentSignature, calculatePriceInToken } from '../functions.js';
+import {
+  deriveCommitmentFromSecret,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
+  generatePaymentSignature,
+  calculatePriceInToken,
+} from '../functions.js';
 import {
   idvSessionUSDPrice,
   PAYMENT_SERVICE_SBT_MINT,
@@ -290,14 +296,20 @@ export async function createCommitmentRecord(
   sourceType: 'user' | 'credits',
   PaymentCommitmentModel: Model<IPaymentCommitment>
 ): Promise<Types.ObjectId> {
+  // Guard against ever persisting a non-lowercase or malformed commitment,
+  // which would bypass the case-sensitive unique index on `commitment`.
+  const normalized = normalizeCommitment(commitment);
+  if (!normalized) {
+    throw new Error(`Invalid commitment format: ${INVALID_COMMITMENT_MESSAGE}`);
+  }
   // Check if commitment already exists
-  const existing = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  const existing = await PaymentCommitmentModel.findOne({ commitment: normalized }).exec();
   if (existing) {
     return existing._id!;
   }
 
   const commitmentRecord = await PaymentCommitmentModel.create({
-    commitment,
+    commitment: normalized,
     sourceType,
     createdAt: new Date(),
   });

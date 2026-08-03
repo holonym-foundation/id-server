@@ -9,7 +9,12 @@ import {
   IPaymentCommitment,
   SandboxVsLiveKYCRouteHandlerConfig
 } from "../types.js";
-import { getRedemptionRecord, createCommitmentRecord } from "./payments/functions.js";
+import {
+  getRedemptionRecord,
+  createCommitmentRecord,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
+} from "./payments/functions.js";
 
 const getEndpointLogger = logger.child({ msgPrefix: "[GET /payment-secrets] " });
 const putEndpointLogger = logger.child({ msgPrefix: "[PUT /payment-secrets] " });
@@ -248,8 +253,16 @@ async function getPaymentSecretsSandbox(req: Request, res: Response) {
 function createPutPaymentSecret(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     const holoUserId = req?.body?.holoUserId;
-    const commitment = req?.body?.commitment;
+    const rawCommitment = req?.body?.commitment;
     const encryptedSecret = req?.body?.encryptedSecret;
+
+    // Normalize before validation/storage so a non-lowercase commitment can
+    // never be persisted (Mongo string matching is case-sensitive).
+    const commitment = normalizeCommitment(rawCommitment);
+    if (!commitment) {
+      putEndpointLogger.error({ commitment: rawCommitment }, "Invalid commitment format");
+      return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE });
+    }
 
     const validationResult = await validatePutPaymentSecretArgs(
       holoUserId,

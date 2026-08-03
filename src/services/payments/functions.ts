@@ -19,6 +19,7 @@ import { usdToETH, usdToFTM, usdToAVAX } from "../../utils/cmc.js";
 import { getProvider } from '../../utils/misc.js';
 import { IPaymentRedemption, IPaymentCommitment, IHumanIDCreditsPaymentSecret, ISandboxHumanIDCreditsPaymentSecret } from "../../types.js";
 import { pinoOptions, logger } from "../../utils/logger.js";
+import { normalizeCommitment, INVALID_COMMITMENT_MESSAGE } from "./commitment.js";
 
 const paymentsLogger = logger.child({
   base: {
@@ -430,6 +431,8 @@ export function deriveCommitmentFromSecret(secret: string): string {
   return ethers.utils.keccak256(ethers.utils.toUtf8Bytes(secret));
 }
 
+export { normalizeCommitment, INVALID_COMMITMENT_MESSAGE };
+
 /**
  * Verify commitment secret by hashing it and comparing with commitment
  */
@@ -479,13 +482,19 @@ export async function createCommitmentRecord(
   sourceType: 'user' | 'credits',
   PaymentCommitmentModel: Model<IPaymentCommitment>
 ): Promise<IPaymentCommitment> {
+  // Guard against ever persisting a non-lowercase or malformed commitment,
+  // which would bypass the case-sensitive unique index on `commitment`.
+  const normalized = normalizeCommitment(commitment);
+  if (!normalized) {
+    throw new Error(`Invalid commitment format: ${INVALID_COMMITMENT_MESSAGE}`);
+  }
   // Check if commitment already exists
-  const existing = await PaymentCommitmentModel.findOne({ commitment }).exec();
+  const existing = await PaymentCommitmentModel.findOne({ commitment: normalized }).exec();
   if (existing) {
     return existing;
   }
   return await PaymentCommitmentModel.create({
-    commitment,
+    commitment: normalized,
     sourceType,
     createdAt: new Date(),
   });

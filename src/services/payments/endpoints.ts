@@ -11,6 +11,8 @@ import {
   isPaymentRedeemed,
   findRedemptionRecord,
   deriveCommitmentFromSecret,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
@@ -42,10 +44,11 @@ const paymentsLogger = logger.child({
 function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { commitment, service, chainId } = req.query;
+      const { commitment: rawCommitment, service, chainId } = req.query;
 
-      if (!commitment || typeof commitment !== "string") {
-        return res.status(400).json({ error: "commitment is required" });
+      const commitment = normalizeCommitment(rawCommitment);
+      if (!commitment) {
+        return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE });
       }
       if (!service || typeof service !== "string") {
         return res.status(400).json({ error: "service is required" });
@@ -386,10 +389,11 @@ function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
   return async (req: Request, res: Response) => {
     const environment = config.environment;
     try {
-      const { commitment, chainId } = req.query;
+      const { commitment: rawCommitment, chainId } = req.query;
 
-      if (!commitment || typeof commitment !== "string") {
-        return res.status(400).json({ error: "commitment is required", environment });
+      const commitment = normalizeCommitment(rawCommitment);
+      if (!commitment) {
+        return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE, environment });
       }
       if (chainId === undefined || chainId === null) {
         return res.status(400).json({ error: "chainId is required", environment });
