@@ -9,6 +9,7 @@ import {
   isRefundPending,
   isRedemptionPending,
   isPaymentRedeemed,
+  findRedemptionRecord,
   deriveCommitmentFromSecret,
   reserveRedemption,
   completeRedemption,
@@ -375,6 +376,11 @@ async function requestRefundSandbox(req: Request, res: Response) {
  * collections but the same real chains, so a live payment queried through
  * /sandbox/payments/status looks like a genuine "unredeemed" payment. Labeling
  * the environment makes that mistake self-evident to whoever reads the response.
+ *
+ * Every 200 response also includes "commitmentRecordFound", which is false when
+ * the payment exists onchain but we have no PaymentCommitment record for it —
+ * the sandbox case above, or a commitment queried with different hex casing. The
+ * status is then derived from onchain data alone and cannot rule out redemption.
  */
 function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
@@ -409,29 +415,60 @@ function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerCon
         return res.status(404).json({ error: "Payment not found onchain", environment });
       }
 
+      const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
+      // Every legitimate flow creates a PaymentCommitment (via PUT /payment-secrets) before the
+      // user pays, so a missing record means we cannot know whether this payment was redeemed --
+      // it is not evidence that the payment is unredeemed. Report it on every response so that
+      // callers (e.g. support checking before a refund) can tell the two apart.
+      const commitmentRecordFound = commitmentRecord !== null;
+
       if (payment.refunded) {
-        return res.status(200).json({ status: "refunded", payment, environment })
+        return res
+          .status(200)
+          .json({ status: "refunded", commitmentRecordFound, payment, environment })
       }
 
-      const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
-
       // Check if already redeemed
-      if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(200).json({ status: "redeemed", payment, environment });
+      const redemptionRecord = await findRedemptionRecord(commitmentRecord, config.PaymentRedemptionModel);
+      if (redemptionRecord) {
+        return res.status(200).json({
+          status: "redeemed",
+          commitmentRecordFound,
+          payment,
+          redemption: {
+            redeemedAt: redemptionRecord.redeemedAt ?? null,
+            service: redemptionRecord.service ?? null,
+            fulfillmentReceipt: redemptionRecord.fulfillmentReceipt ?? null,
+          },
+          environment,
+        });
       }
 
       // Check if redemption is pending
       if (await isRedemptionPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-redemption", payment, environment });
+        return res
+          .status(200)
+          .json({ status: "pending-redemption", commitmentRecordFound, payment, environment });
       }
 
       // Check if refund is pending
       if (await isRefundPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-refund", payment, environment });
+        return res
+          .status(200)
+          .json({ status: "pending-refund", commitmentRecordFound, payment, environment });
+      }
+
+      if (!commitmentRecordFound) {
+        paymentsLogger.warn(
+          { commitment, chainId: chainIdNum, environment },
+          "Payment exists onchain but has no PaymentCommitment record"
+        );
       }
 
       // Payment exists but no redemption or pending operations
-      return res.status(200).json({ status: "unredeemed", payment, environment });
+      return res
+        .status(200)
+        .json({ status: "unredeemed", commitmentRecordFound, payment, environment });
     } catch (error: any) {
       paymentsLogger.error({ error: error.message, environment }, "Error checking payment status");
       return res

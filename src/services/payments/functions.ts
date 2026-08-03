@@ -358,6 +358,26 @@ export async function getRedemptionRecord(
 }
 
 /**
+ * Find the redemption record for a commitment record, if the payment has been redeemed.
+ * Returns the document (not just a boolean) so callers can surface details such as
+ * service and fulfillmentReceipt.
+ */
+export async function findRedemptionRecord(
+  commitmentRecord: HydratedDocument<IPaymentCommitment> | null,
+  PaymentRedemptionModel: any
+): Promise<IPaymentRedemption | null> {
+  if (!commitmentRecord || !commitmentRecord._id) {
+    return null;
+  }
+
+  // Query PaymentRedemption by commitmentId
+  return await PaymentRedemptionModel.findOne({
+    commitmentId: commitmentRecord._id,
+    redeemedAt: { $exists: true, $ne: null }
+  }).exec();
+}
+
+/**
  * Check if payment is redeemed
  * Uses PaymentCommitment collection to look up commitmentId, then queries PaymentRedemption
  */
@@ -365,16 +385,8 @@ export async function isPaymentRedeemed(
   commitmentRecord: HydratedDocument<IPaymentCommitment> | null,
   PaymentRedemptionModel: any
 ): Promise<boolean> {
-  if (!commitmentRecord || !commitmentRecord._id) {
-    return false;
-  }
+  const redemption = await findRedemptionRecord(commitmentRecord, PaymentRedemptionModel);
 
-  // Query PaymentRedemption by commitmentId
-  const redemption = await PaymentRedemptionModel.findOne({ 
-    commitmentId: commitmentRecord._id,
-    redeemedAt: { $exists: true, $ne: null }
-  }).exec();
-  
   return redemption !== null;
 }
 
