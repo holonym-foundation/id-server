@@ -9,7 +9,10 @@ import {
   isRefundPending,
   isRedemptionPending,
   isPaymentRedeemed,
+  findRedemptionRecord,
   deriveCommitmentFromSecret,
+  normalizeCommitment,
+  INVALID_COMMITMENT_MESSAGE,
   reserveRedemption,
   completeRedemption,
   cancelRedemption,
@@ -41,10 +44,11 @@ const paymentsLogger = logger.child({
 function createCreatePaymentParamsRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
     try {
-      const { commitment, service, chainId } = req.query;
+      const { commitment: rawCommitment, service, chainId } = req.query;
 
-      if (!commitment || typeof commitment !== "string") {
-        return res.status(400).json({ error: "commitment is required" });
+      const commitment = normalizeCommitment(rawCommitment);
+      if (!commitment) {
+        return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE });
       }
       if (!service || typeof service !== "string") {
         return res.status(400).json({ error: "service is required" });
@@ -369,63 +373,111 @@ async function requestRefundSandbox(req: Request, res: Response) {
 /**
  * GET /payments/status
  * Check payment status (redeemed, unredeemed, pending-redemption, pending-refund, refunded)
+ *
+ * Every response—including errors—includes the "environment" of the route that
+ * served it ("live" or "sandbox"). The sandbox route reads sandbox DB
+ * collections but the same real chains, so a live payment queried through
+ * /sandbox/payments/status looks like a genuine "unredeemed" payment. Labeling
+ * the environment makes that mistake self-evident to whoever reads the response.
+ *
+ * Every 200 response also includes "commitmentRecordFound", which is false when
+ * the payment exists onchain but we have no PaymentCommitment record for it —
+ * the sandbox case above, or a commitment queried with different hex casing. The
+ * status is then derived from onchain data alone and cannot rule out redemption.
  */
 function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
+    const environment = config.environment;
     try {
-      const { commitment, chainId } = req.query;
+      const { commitment: rawCommitment, chainId } = req.query;
 
-      if (!commitment || typeof commitment !== "string") {
-        return res.status(400).json({ error: "commitment is required" });
+      const commitment = normalizeCommitment(rawCommitment);
+      if (!commitment) {
+        return res.status(400).json({ error: INVALID_COMMITMENT_MESSAGE, environment });
       }
       if (chainId === undefined || chainId === null) {
-        return res.status(400).json({ error: "chainId is required" });
+        return res.status(400).json({ error: "chainId is required", environment });
       }
 
       const chainIdNum = typeof chainId === "number" ? chainId : Number(chainId);
       if (isNaN(chainIdNum)) {
-        return res.status(400).json({ error: "chainId must be a number" });
+        return res.status(400).json({ error: "chainId must be a number", environment });
       }
 
       // Validate chainId and get contract address
       const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
       if (!contractAddress) {
-        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+        return res
+          .status(400)
+          .json({ error: `Unsupported chain ID: ${chainIdNum}`, environment });
       }
 
       // Check if payment exists onchain
       const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
 
       if (!payment) {
-        return res.status(404).json({ error: "Payment not found onchain" });
-      }
-
-      if (payment.refunded) {
-        return res.status(200).json({ status: "refunded", payment })
+        return res.status(404).json({ error: "Payment not found onchain", environment });
       }
 
       const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
+      // Every legitimate flow creates a PaymentCommitment (via PUT /payment-secrets) before the
+      // user pays, so a missing record means we cannot know whether this payment was redeemed --
+      // it is not evidence that the payment is unredeemed. Report it on every response so that
+      // callers (e.g. support checking before a refund) can tell the two apart.
+      const commitmentRecordFound = commitmentRecord !== null;
+
+      if (payment.refunded) {
+        return res
+          .status(200)
+          .json({ status: "refunded", commitmentRecordFound, payment, environment })
+      }
 
       // Check if already redeemed
-      if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(200).json({ status: "redeemed", payment });
+      const redemptionRecord = await findRedemptionRecord(commitmentRecord, config.PaymentRedemptionModel);
+      if (redemptionRecord) {
+        return res.status(200).json({
+          status: "redeemed",
+          commitmentRecordFound,
+          payment,
+          redemption: {
+            redeemedAt: redemptionRecord.redeemedAt ?? null,
+            service: redemptionRecord.service ?? null,
+            fulfillmentReceipt: redemptionRecord.fulfillmentReceipt ?? null,
+          },
+          environment,
+        });
       }
 
       // Check if redemption is pending
       if (await isRedemptionPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-redemption", payment });
+        return res
+          .status(200)
+          .json({ status: "pending-redemption", commitmentRecordFound, payment, environment });
       }
 
       // Check if refund is pending
       if (await isRefundPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-refund", payment });
+        return res
+          .status(200)
+          .json({ status: "pending-refund", commitmentRecordFound, payment, environment });
+      }
+
+      if (!commitmentRecordFound) {
+        paymentsLogger.warn(
+          { commitment, chainId: chainIdNum, environment },
+          "Payment exists onchain but has no PaymentCommitment record"
+        );
       }
 
       // Payment exists but no redemption or pending operations
-      return res.status(200).json({ status: "unredeemed", payment });
+      return res
+        .status(200)
+        .json({ status: "unredeemed", commitmentRecordFound, payment, environment });
     } catch (error: any) {
-      paymentsLogger.error({ error: error.message }, "Error checking payment status");
-      return res.status(500).json({ error: error.message || "An unknown error occurred" });
+      paymentsLogger.error({ error: error.message, environment }, "Error checking payment status");
+      return res
+        .status(500)
+        .json({ error: error.message || "An unknown error occurred", environment });
     }
   };
 }
