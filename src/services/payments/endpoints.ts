@@ -369,63 +369,74 @@ async function requestRefundSandbox(req: Request, res: Response) {
 /**
  * GET /payments/status
  * Check payment status (redeemed, unredeemed, pending-redemption, pending-refund, refunded)
+ *
+ * Every response—including errors—includes the "environment" of the route that
+ * served it ("live" or "sandbox"). The sandbox route reads sandbox DB
+ * collections but the same real chains, so a live payment queried through
+ * /sandbox/payments/status looks like a genuine "unredeemed" payment. Labeling
+ * the environment makes that mistake self-evident to whoever reads the response.
  */
 function createPaymentStatusRouteHandler(config: SandboxVsLiveKYCRouteHandlerConfig) {
   return async (req: Request, res: Response) => {
+    const environment = config.environment;
     try {
       const { commitment, chainId } = req.query;
 
       if (!commitment || typeof commitment !== "string") {
-        return res.status(400).json({ error: "commitment is required" });
+        return res.status(400).json({ error: "commitment is required", environment });
       }
       if (chainId === undefined || chainId === null) {
-        return res.status(400).json({ error: "chainId is required" });
+        return res.status(400).json({ error: "chainId is required", environment });
       }
 
       const chainIdNum = typeof chainId === "number" ? chainId : Number(chainId);
       if (isNaN(chainIdNum)) {
-        return res.status(400).json({ error: "chainId must be a number" });
+        return res.status(400).json({ error: "chainId must be a number", environment });
       }
 
       // Validate chainId and get contract address
       const contractAddress = humanIDPaymentsContractAddresses[chainIdNum];
       if (!contractAddress) {
-        return res.status(400).json({ error: `Unsupported chain ID: ${chainIdNum}` });
+        return res
+          .status(400)
+          .json({ error: `Unsupported chain ID: ${chainIdNum}`, environment });
       }
 
       // Check if payment exists onchain
       const payment = await getPaymentFromContract(commitment, chainIdNum, contractAddress);
 
       if (!payment) {
-        return res.status(404).json({ error: "Payment not found onchain" });
+        return res.status(404).json({ error: "Payment not found onchain", environment });
       }
 
       if (payment.refunded) {
-        return res.status(200).json({ status: "refunded", payment })
+        return res.status(200).json({ status: "refunded", payment, environment })
       }
 
       const commitmentRecord = await config.PaymentCommitmentModel.findOne({ commitment }).exec();
 
       // Check if already redeemed
       if (await isPaymentRedeemed(commitmentRecord, config.PaymentRedemptionModel)) {
-        return res.status(200).json({ status: "redeemed", payment });
+        return res.status(200).json({ status: "redeemed", payment, environment });
       }
 
       // Check if redemption is pending
       if (await isRedemptionPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-redemption", payment });
+        return res.status(200).json({ status: "pending-redemption", payment, environment });
       }
 
       // Check if refund is pending
       if (await isRefundPending(commitment, config.environment)) {
-        return res.status(200).json({ status: "pending-refund", payment });
+        return res.status(200).json({ status: "pending-refund", payment, environment });
       }
 
       // Payment exists but no redemption or pending operations
-      return res.status(200).json({ status: "unredeemed", payment });
+      return res.status(200).json({ status: "unredeemed", payment, environment });
     } catch (error: any) {
-      paymentsLogger.error({ error: error.message }, "Error checking payment status");
-      return res.status(500).json({ error: error.message || "An unknown error occurred" });
+      paymentsLogger.error({ error: error.message, environment }, "Error checking payment status");
+      return res
+        .status(500)
+        .json({ error: error.message || "An unknown error occurred", environment });
     }
   };
 }
