@@ -97,23 +97,10 @@ export async function enrollment3dAllowSybils(req, res) {
     // --- Forward request to FaceTec server ---
 
     let data = null;
-    // TODO: For rate limiting, allow the user to enroll up to 5 times.
-    // Once the user has reached this limit, do not allow them to create any more
-    // facetec session tokens; also, obviously, do not let them enroll anymore.
-
-    // Increment num_facetec_liveness_checks.
-    // TODO: Make this atomic. Right now, this endpoint is subject to a
-    // time-of-check-time-of-use attack. It's not a big deal since we only
-    // care about a loose upper bound on the number of FaceTec checks per
-    // user, but atomicity would be nice.
-    await BiometricsAllowSybilsSession.updateOne(
-      { _id: objectId },
-      { $inc: { num_facetec_liveness_checks: 1 } }
-    );
 
     try {
       faceTecParams.storeAsFaceVector = true;
-      
+
       req.app.locals.sseManager.sendToClient(sid, {
         status: "in_progress",
         message: "liveness check: sending to server",
@@ -132,12 +119,18 @@ export async function enrollment3dAllowSybils(req, res) {
         }
       );
 
+      // Only increment once FaceTec responds — network errors and SDK failures
+      // don't count against the cap.
+      await BiometricsAllowSybilsSession.updateOne(
+        { _id: objectId },
+        { $inc: { num_facetec_liveness_checks: 1 } }
+      );
+
       // check for enrollment success
       if (!enrollmentResponse.data.success) {
         // YES, session is still IN_PROGRESS
-        // TODO: facetec: user should be able to retry enrollment
         let falseChecks = 0;
-        
+
         if (enrollmentResponse.data.faceScanSecurityChecks) {
           falseChecks = Object.values(
             enrollmentResponse.data.faceScanSecurityChecks
@@ -147,11 +140,6 @@ export async function enrollment3dAllowSybils(req, res) {
         if (falseChecks > 0) {
           return res.status(400).json({
             error: true,
-            // errorMessage: `liveness check failed. ${falseChecks} out of ${
-            //   enrollmentResponse.data.faceScanSecurityChecks 
-            //     ? Object.keys(enrollmentResponse.data.faceScanSecurityChecks).length 
-            //     : 0
-            // } checks failed`,
             errorMessage: `Liveness check failed`,
             instructions: "Try again with better lighting and face clearly visible.\nStill having trouble? Use mobile instead.",
             triggerRetry: true,
