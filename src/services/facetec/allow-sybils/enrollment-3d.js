@@ -121,10 +121,16 @@ export async function enrollment3dAllowSybils(req, res) {
 
       // Only increment once FaceTec responds — network errors and SDK failures
       // don't count against the cap.
-      await BiometricsAllowSybilsSession.updateOne(
-        { _id: objectId },
-        { $inc: { num_facetec_liveness_checks: 1 } }
-      );
+      // Isolated try-catch so a transient MongoDB failure here doesn't get swallowed
+      // by the FaceTec catch below and silently skip the increment.
+      try {
+        await BiometricsAllowSybilsSession.updateOne(
+          { _id: objectId },
+          { $inc: { num_facetec_liveness_checks: 1 } }
+        );
+      } catch (dbErr) {
+        console.error({ error: dbErr }, "Failed to increment num_facetec_liveness_checks — counter may be understated for this session");
+      }
 
       // check for enrollment success
       if (!enrollmentResponse.data.success) {

@@ -145,16 +145,22 @@ export async function enrollment3d(req, res) {
       // Only increment the liveness check counter once the FaceTec server actually
       // responds. Network errors, SDK timeouts, and cancelled scans don't count
       // against the user's cap — they had no control over those failures.
-      if(sessionType === "biometrics") {
-        await BiometricsSession.updateOne(
-          { _id: objectId },
-          { $inc: { num_facetec_liveness_checks: 1 } }
-        );
-      } else {
-        await Session.updateOne(
-          { _id: objectId },
-          { $inc: { num_facetec_liveness_checks: 1 } }
-        );
+      // Isolated try-catch so a transient MongoDB failure here doesn't get swallowed
+      // by the FaceTec catch below and silently skip the increment.
+      try {
+        if(sessionType === "biometrics") {
+          await BiometricsSession.updateOne(
+            { _id: objectId },
+            { $inc: { num_facetec_liveness_checks: 1 } }
+          );
+        } else {
+          await Session.updateOne(
+            { _id: objectId },
+            { $inc: { num_facetec_liveness_checks: 1 } }
+          );
+        }
+      } catch (dbErr) {
+        console.error({ error: dbErr }, "Failed to increment num_facetec_liveness_checks — counter may be understated for this session");
       }
 
       // check for enrollment success
