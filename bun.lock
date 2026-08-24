@@ -12,7 +12,7 @@
         "@stellar/stellar-sdk": "^13.3.0",
         "@valkey/valkey-glide": "^2.0.1",
         "@verax-attestation-registry/verax-sdk": "^2.2.1",
-        "@zkpassport/sdk": "^0.16.0",
+        "@zkpassport/sdk": "^0.16.2",
         "aws-sdk": "^2.1295.0",
         "axios": "^1.13.2",
         "big-integer": "^1.6.51",
@@ -693,9 +693,9 @@
 
     "@zkpassport/registry": ["@zkpassport/registry@0.14.0", "", { "dependencies": { "@zkpassport/poseidon2": "^0.6.2", "@zkpassport/utils": "0.36.0", "debug": "^4.4.0", "tslib": "^2.8.1" }, "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-6E6740NYx3wYIPZyWyIpNgnExJFHzSdZ4jzspTGHfKJalfpIQ8QMpTPSAruuHEymWD0c8qtz1kL9ioTjAp7GBA=="],
 
-    "@zkpassport/sdk": ["@zkpassport/sdk@0.16.1", "", { "dependencies": { "@aztec/bb.js": "5.0.0", "@aztec/bb.js-v4": "npm:@aztec/bb.js@4.2.0-aztecnr-rc.2", "@noble/ciphers": "^1.2.1", "@noble/hashes": "^2.0.1", "@noble/secp256k1": "^2.2.3", "@obsidion/bridge": "^0.11.2", "@zkpassport/registry": "0.14.0", "@zkpassport/utils": "0.37.3", "buffer": "^6.0.3", "i18n-iso-countries": "^7.12.0", "pako": "^2.1.0", "tslib": "^2.8.1", "viem": "^2.27.2", "ws": "^8.18.0" }, "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-ZcuO58vYphYNHysLPKBK9ISKoJ02sLWXGQ5jYhZzbj3DijL3U+tGVaPPotLfpQaVgEYIy9/Uv0xKh5fC3qC0zQ=="],
+    "@zkpassport/sdk": ["@zkpassport/sdk@0.16.2", "", { "dependencies": { "@aztec/bb.js": "5.0.0", "@aztec/bb.js-v4": "npm:@aztec/bb.js@4.2.0-aztecnr-rc.2", "@noble/ciphers": "^1.2.1", "@noble/hashes": "^2.0.1", "@noble/secp256k1": "^2.2.3", "@obsidion/bridge": "^0.11.2", "@zkpassport/registry": "0.14.0", "@zkpassport/utils": "0.37.5", "buffer": "^6.0.3", "i18n-iso-countries": "^7.12.0", "pako": "^2.1.0", "tslib": "^2.8.1", "viem": "^2.27.2", "ws": "^8.18.0" }, "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-LsPrQrMndf9WNIXDeT+Q6culdgx2s9rTWAkTsPId0IZPT6PaISGi5YWAu7SbFbtTRw+tgTyRLNA6c3ulmyzA2g=="],
 
-    "@zkpassport/utils": ["@zkpassport/utils@0.37.3", "", { "dependencies": { "@lapo/asn1js": "^2.0.4", "@noble/ciphers": "^1.0.0", "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@noble/secp256k1": "^2.1.0", "@peculiar/asn1-cms": "^2.3.15", "@peculiar/asn1-ecc": "^2.3.15", "@peculiar/asn1-rsa": "^2.3.15", "@peculiar/asn1-schema": "^2.3.15", "@peculiar/asn1-x509": "^2.3.15", "@peculiar/x509": "^1.12.3", "@taceo/oprf-client": "^0.9.0", "@taceo/oprf-core": "^0.4.0", "@zk-kit/utils": "^1.2.1", "@zkpassport/poseidon2": "^0.6.2", "date-fns": "^4.1.0", "i18n-iso-countries": "^7.13.0", "tslib": "^2.8.1" }, "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-vqlFPm1SCjgG1kVX/IDN702c/tmB7XNCeP/MN+jaxg0sr2STMsQhXxTebqvvP3r6CdalDYV2m2IaCkWV0I47Nw=="],
+    "@zkpassport/utils": ["@zkpassport/utils@0.37.5", "", { "dependencies": { "@lapo/asn1js": "^2.0.4", "@noble/ciphers": "^1.0.0", "@noble/curves": "^2.0.1", "@noble/hashes": "^2.0.1", "@noble/secp256k1": "^2.1.0", "@peculiar/asn1-cms": "^2.3.15", "@peculiar/asn1-ecc": "^2.3.15", "@peculiar/asn1-rsa": "^2.3.15", "@peculiar/asn1-schema": "^2.3.15", "@peculiar/asn1-x509": "^2.3.15", "@peculiar/x509": "^1.12.3", "@taceo/oprf-client": "^0.9.0", "@taceo/oprf-core": "^0.4.0", "@zk-kit/utils": "^1.2.1", "@zkpassport/poseidon2": "^0.6.2", "date-fns": "^4.1.0", "i18n-iso-countries": "^7.13.0", "tslib": "^2.8.1" }, "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-4zJEGybhN+t+QxlTkF3UJleK3eijhb1QyJ0LNLDTBqjcXY6drnXG2hkXak2I8clSq7gAeey7C/+1bJ1IdNiZdw=="],
 
     "abitype": ["abitype@1.0.7", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3 >=3.22.0" }, "optionalPeers": ["zod"] }, "sha512-ZfYYSktDQUwc2eduYu8C4wOs+RDPmnRYMh7zNfzeMtGGgb0U+6tLGjixUic6mXf5xKKCcgT5Qp6cv39tOARVFw=="],
 
