@@ -120,6 +120,14 @@ export async function enrollment3d(req, res) {
     // --- Forward request to FaceTec server ---
 
     let data = null;
+    // TODO: For rate limiting, allow the user to enroll up to 5 times.
+    // Once the user has reached this limit, do not allow them to create any more
+    // facetec session tokens; also, obviously, do not let them enroll anymore.
+
+    // TODO: Make this atomic. Right now, this endpoint is subject to a
+    // time-of-check-time-of-use attack. It's not a big deal since we only
+    // care about a loose upper bound on the number of FaceTec checks per
+    // user, but atomicity would be nice.
 
     try {
       if (sessionType === "biometrics") faceTecParams.storeAsFaceVector = true;
@@ -166,6 +174,7 @@ export async function enrollment3d(req, res) {
       // check for enrollment success
       if (!enrollmentResponse.data.success) {
         // YES, session is still IN_PROGRESS
+        // TODO: facetec: user should be able to retry enrollment
         let falseChecks = 0;
 
         if (enrollmentResponse.data.faceScanSecurityChecks) {
