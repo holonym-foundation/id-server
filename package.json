@@ -32,7 +32,6 @@
     "holonym-wasm-issuer-v2": "npm:holonym-wasm-issuer@^2.0.0",
     "jsonwebtoken": "^9.0.3",
     "libphonenumber-js": "^1.10.44",
-    "messente_api": "^1.5.0",
     "moment": "^2.30.1",
     "mongodb": "^4.11.0",
     "mongoose": "^6.7.2",
@@ -44,6 +43,7 @@
     "secp256k1": "^4.0.4",
     "siwe": "^3.0.0",
     "snarkjs": "^0.7.3",
+    "twilio": "^6.1.0",
     "uuid": "^9.0.0",
     "zokrates-js": "^1.1.4"
   },
